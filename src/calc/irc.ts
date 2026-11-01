@@ -1,8 +1,9 @@
-import { dist, pointAlong, polygonArea, wallLength } from '../model/geometry.ts';
+import { dist, pointAlong, wallLength } from '../model/geometry.ts';
 import { HABITABLE, studFor, type Opening, type Point, type Project, type Room, type Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { ceilingInfo } from './ceilings.ts';
-import { roomRuns, spacingGaps } from './electrical.ts';
+import { roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
+import { exclusiveArea } from './regions.ts';
 import { framingTakeoff } from './framing.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
@@ -98,7 +99,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   const add = (c: CodeCheck) => checks.push(c);
 
   for (const room of project.rooms) {
-    const area = polygonArea(room.points) / SQFT;
+    const area = exclusiveArea(project, room) / SQFT;
     const habitable = HABITABLE.has(room.type);
     const label = room.name || room.type;
 
@@ -195,14 +196,14 @@ export function ircChecks(project: Project): CodeCheck[] {
     for (const room of project.rooms) {
       const label = room.name || room.type;
       if (room.type === 'bath') {
-        const has = project.outlets.some((o) => o.kind === 'gfci' && onRoomFace(project, room, o));
+        const has = roomOutletCount(project, room, 'gfci') > 0;
         add({ rule: 'Bathroom GFCI receptacle near the basin', section: 'E3901.6 / E3902', status: has ? 'pass' : 'fail', message: `${label}: ${has ? 'GFCI present — confirm it is within 36" of the basin' : 'needs a GFCI receptacle within 36" of each basin'}`, targetId: room.id });
         continue;
       }
       if (room.type === 'hall') {
-        const long = roomRuns(project, room).runs.some((r) => r.length >= 120);
+        const long = roomRuns(project, room).some((r) => r.length >= 120);
         if (long) {
-          const has = project.outlets.some((o) => onRoomFace(project, room, o));
+          const has = roomOutletCount(project, room) > 0;
           add({ rule: 'Hallway receptacle (10 ft or longer)', section: 'E3901.10', status: has ? 'pass' : 'fail', message: `${label}`, targetId: room.id });
         }
         continue;
@@ -219,7 +220,7 @@ export function ircChecks(project: Project): CodeCheck[] {
         targetId: room.id,
       });
       if (['kitchen', 'garage', 'utility'].includes(room.type)) {
-        const bad = project.outlets.filter((o) => onRoomFace(project, room, o) && o.kind === 'duplex').length;
+        const bad = roomOutletCount(project, room, 'duplex');
         if (bad) add({ rule: 'GFCI protection', section: 'E3902', status: 'warn', message: `${label}: ${bad} receptacle(s) not marked GFCI`, targetId: room.id });
       }
     }
@@ -307,11 +308,6 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const f of takeoff.walls) for (const n of f.notes) add({ rule: 'Framing', section: 'R602.7', status: 'warn', message: n, targetId: f.wallId });
 
   return checks;
-}
-
-function onRoomFace(project: Project, room: Room, o: { wallId: string; offset: number }): boolean {
-  const w = project.walls.find((x) => x.id === o.wallId);
-  return !!w && onPolygonEdge(room.points, pointAlong(w, o.offset), w.thickness / 2 + 1);
 }
 
 /** Things this checker does not look at — shown so nobody mistakes silence for compliance. */

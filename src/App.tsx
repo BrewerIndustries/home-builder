@@ -7,6 +7,7 @@ import { PlanCanvas, type PlanCanvasHandle, type Tool } from './editor/PlanCanva
 import { downloadJson, loadSaved, readProjectFile, readUnderlay, save } from './model/persist.ts';
 import { historyReducer, initHistory } from './model/store.ts';
 import { emptyProject, type WallKind } from './model/types.ts';
+import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
 
 type Tab = 'plan' | 'framing' | 'materials' | 'code';
@@ -140,6 +141,9 @@ export function App() {
             ↷
           </button>
           <button onClick={() => imageFile.current?.click()}>Import floorplan image</button>
+          <button onClick={() => window.print()} disabled={!project.walls.length} title="Print or save as PDF — the Plan tab prints a to-scale sheet">
+            Print / PDF
+          </button>
           <details className="menu">
             <summary>File</summary>
             <div className="menu-body">
@@ -165,6 +169,7 @@ export function App() {
       {saveError && <div className="banner error">{saveError}</div>}
       {notice && <div className="toast">{notice}</div>}
 
+      {tab === 'plan' && <PrintSheet project={project} />}
       {tab === 'plan' ? (
         <main className="workspace">
           <div className="toolbar">

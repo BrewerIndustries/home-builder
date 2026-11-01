@@ -43,3 +43,13 @@ test('a low vault is a review flag, a low flat ceiling is a fail', () => {
   const flat = ircChecks(project(box(240, 144), [], { rooms: [room({ type: 'flat', height: 80 })] }));
   assert.equal(flat.find((c) => c.rule.startsWith('Minimum ceiling'))!.status, 'fail');
 });
+
+test('nested rooms are not double counted in floor area or ceiling drywall', async () => {
+  const { totalFloorArea } = await import('../src/calc/regions.ts');
+  const { wallAreas } = await import('../src/calc/materials.ts');
+  const outer = { ...room(), id: 'outer' };
+  const inner: Room = { id: 'in', name: 'In', type: 'bedroom', points: [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 144 }, { x: 0, y: 144 }] };
+  const p = project(box(240, 144), [], { rooms: [outer, inner] });
+  assert.equal(totalFloorArea(p), 240 * 144);
+  assert.equal(wallAreas(p).ceilings, (240 * 144) / 144);
+});

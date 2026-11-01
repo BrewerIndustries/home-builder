@@ -1,6 +1,7 @@
 import { polygonArea, wallLength } from '../model/geometry.ts';
 import { studFor, type LumberSize, type Project } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
+import { exclusiveArea, totalFloorArea } from './regions.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
@@ -66,10 +67,16 @@ export function wallAreas(project: Project): WallAreas {
       drywallWalls += net * 2;
     }
   }
-  const floor = project.rooms.reduce((s, r) => s + polygonArea(r.points), 0) / 144;
-  const ceils = project.rooms.map((r) => ceilingInfo(project, r));
-  const ceilings = ceils.reduce((s, c) => s + c.surface, 0) / 144;
-  const ceilingBeams = ceils.reduce((s, c) => s + c.beamLength, 0) / 12;
+  const floor = totalFloorArea(project) / 144;
+  // A nested room's ceiling replaces that part of its parent's.
+  let ceilings = 0;
+  let ceilingBeams = 0;
+  for (const r of project.rooms) {
+    const c = ceilingInfo(project, r);
+    const own = polygonArea(r.points) ? exclusiveArea(project, r) / polygonArea(r.points) : 0;
+    ceilings += (c.surface * own) / 144;
+    ceilingBeams += (c.beamLength * own) / 12;
+  }
   return { exteriorNet, exteriorByStud, ceilingBeams, drywallWalls, ceilings, floor };
 }
 

@@ -335,6 +335,9 @@ svg.plan {
 .dim {
   fill: var(--muted);
 }
+.dims .dim-line {
+  stroke: var(--muted);
+}
 .handle {
   fill: var(--panel);
   stroke: var(--accent);
@@ -744,4 +747,101 @@ input.price:not(.sample) {
 }
 tr.no-pick {
   cursor: default;
+}
+
+/* ---------- print ---------- */
+
+.print-only {
+  display: none;
+}
+
+@page {
+  size: letter landscape;
+  margin: 0.5in;
+}
+
+@media print {
+  :root {
+    --bg: #fff;
+    --panel: #fff;
+    --text: #000;
+    --muted: #444;
+    --border: #bbb;
+    --canvas: #fff;
+    --wall-ext: #000;
+    --wall-int: #333;
+    --opening: #000;
+    --outlet: #000;
+    --outlet-gfci: #ddd;
+    --room: transparent;
+    --room-sel: transparent;
+    --accent: #000;
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+  }
+  .topbar,
+  .toolbar,
+  .inspector,
+  .canvas-wrap,
+  .banner,
+  .toast,
+  .report-head button,
+  .report-head select {
+    display: none !important;
+  }
+  .app {
+    display: block;
+    height: auto;
+  }
+  .workspace {
+    display: none;
+  }
+  .print-only {
+    display: block;
+  }
+  .print-sheet {
+    color: #000;
+    height: 7.4in;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .report-page {
+    overflow: visible;
+  }
+  .elevation-wrap,
+  section {
+    break-inside: avoid;
+  }
+  svg.elevation {
+    max-height: none;
+  }
+}
+
+.title-block {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto 2.6in;
+  gap: 0.25in;
+  border-top: 1.5pt solid #000;
+  padding-top: 6pt;
+  font-size: 9pt;
+  align-items: end;
+}
+.tb-name {
+  font-size: 13pt;
+  font-weight: 700;
+}
+.tb-label {
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #555;
+}
+.tb-note {
+  font-size: 7.5pt;
+  color: #555;
 }

@@ -2,8 +2,9 @@ import type { Dispatch, ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
 import { frameWall, studCount } from '../calc/framing.ts';
 import { netClearOpening } from '../calc/irc.ts';
+import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
-import { polygonArea, wallLength } from '../model/geometry.ts';
+import { wallLength } from '../model/geometry.ts';
 import type { Action } from '../model/store.ts';
 import {
   LUMBER_SIZES,
@@ -198,7 +199,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </select>
         </Field>
         <div className="stat-grid">
-          <Stat label="Floor" value={formatSqFt(polygonArea(r.points))} />
+          <Stat label="Floor" value={formatSqFt(exclusiveArea(project, r))} />
           <Stat label="Ceiling surface" value={formatSqFt(info.surface)} />
         </div>
         <h4>Ceiling</h4>

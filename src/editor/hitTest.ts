@@ -1,4 +1,4 @@
-import { dist, projectOnWall, wallLength } from '../model/geometry.ts';
+import { dist, pointInPolygon, projectOnWall, wallLength } from '../model/geometry.ts';
 import { outletPosition } from './outletGeometry.ts';
 import type { Point, Project } from '../model/types.ts';
 
@@ -35,16 +35,6 @@ export function hitTest(project: Project, p: Point, slop: number): Hit | null {
     return { kind: 'room', id: rooms[0].id };
   }
   return null;
-}
-
-export function pointInPolygon(p: Point, pts: Point[]): boolean {
-  let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const a = pts[i];
-    const b = pts[j];
-    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
 }
 
 function bboxArea(pts: Point[]): number {
