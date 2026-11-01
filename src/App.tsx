@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { AccountDialog, ProjectsDialog } from './account/Dialogs.tsx';
+import { useWorkspace } from './account/useWorkspace.ts';
 import { autoOutlets } from './calc/electrical.ts';
 import { ircChecks } from './calc/irc.ts';
 import { siteChecks } from './calc/site.ts';
@@ -7,7 +9,7 @@ import { Inspector } from './editor/Inspector.tsx';
 import { PlanCanvas, type PlanCanvasHandle, type Tool } from './editor/PlanCanvas.tsx';
 import { downloadJson, loadSaved, readProjectFile, readUnderlay, save } from './model/persist.ts';
 import { historyReducer, initHistory } from './model/store.ts';
-import { emptyProject, type WallKind } from './model/types.ts';
+import type { WallKind } from './model/types.ts';
 import { SiteView } from './site/SiteView.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
@@ -40,6 +42,21 @@ export function App() {
   const canvas = useRef<PlanCanvasHandle>(null);
   const projectFile = useRef<HTMLInputElement>(null);
   const imageFile = useRef<HTMLInputElement>(null);
+  const [dialog, setDialog] = useState<'projects' | 'account' | null>(null);
+  const [invite, setInvite] = useState(() => new URLSearchParams(location.search).get('invite') ?? undefined);
+
+  const flash = useCallback((msg: string) => {
+    setNotice(msg);
+    setTimeout(() => setNotice(null), 3500);
+  }, []);
+  const ws = useWorkspace(project, dispatch, flash);
+
+  // An invite link opens the sign-up form; drop the code from the address bar.
+  useEffect(() => {
+    if (!invite) return;
+    setDialog('account');
+    window.history.replaceState(null, '', location.pathname);
+  }, [invite]);
 
   // Autosave, debounced so drags don't hammer storage.
   useEffect(() => {
@@ -87,11 +104,6 @@ export function App() {
 
   const fails = useMemo(() => [...ircChecks(project), ...siteChecks(project)].filter((c) => c.status === 'fail').length, [project]);
 
-  function flash(msg: string) {
-    setNotice(msg);
-    setTimeout(() => setNotice(null), 3500);
-  }
-
   async function onImportProject(file: File | undefined) {
     if (!file) return;
     try {
@@ -131,7 +143,11 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">🏠</div>
+        <button className="projects-btn" onClick={() => setDialog('projects')} title="Your projects">
+          ☰
+        </button>
         <input className="project-name" value={project.name} onChange={(e) => dispatch({ type: 'rename', name: e.target.value })} aria-label="Project name" />
+        <SyncChip ws={ws} />
         <nav className="tabs">
           {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
@@ -154,26 +170,44 @@ export function App() {
           <details className="menu">
             <summary>File</summary>
             <div className="menu-body">
-              <button
-                onClick={() => {
-                  if (confirm('Start a new, empty project? Export first if you want to keep this one.')) {
-                    dispatch({ type: 'load', project: emptyProject() });
-                    setWallKind('exterior');
-                  }
-                }}
-              >
-                New project
-              </button>
+              <button onClick={() => setDialog('projects')}>Projects…</button>
               <button onClick={() => projectFile.current?.click()}>Open project file…</button>
               <button onClick={() => downloadJson(project)}>Save project file</button>
             </div>
           </details>
+          <button className="account-btn" onClick={() => setDialog('account')} title={ws.user ? ws.user.email : 'Sign in'}>
+            {ws.user ? (ws.user.display_name || ws.user.email).slice(0, 1).toUpperCase() : 'Sign in'}
+          </button>
         </div>
         <input ref={projectFile} type="file" accept=".json,application/json" hidden onChange={(e) => (onImportProject(e.target.files?.[0]), (e.target.value = ''))} />
         <input ref={imageFile} type="file" accept="image/*" hidden onChange={(e) => (onImportImage(e.target.files?.[0]), (e.target.value = ''))} />
       </header>
 
       {saveError && <div className="banner error">{saveError}</div>}
+      {ws.status === 'conflict' && (
+        <div className="banner error">
+          This project was changed on another device since you opened it.{' '}
+          <button className="link" onClick={() => ws.resolveConflict('theirs')}>
+            Load that version
+          </button>{' '}
+          ·{' '}
+          <button className="link" onClick={() => ws.resolveConflict('mine')}>
+            Keep mine (overwrite)
+          </button>
+        </div>
+      )}
+      {ws.status === 'error' && ws.syncError && <div className="banner error">Not saved to your account: {ws.syncError}</div>}
+      {dialog === 'projects' && <ProjectsDialog ws={ws} onClose={() => setDialog(null)} onSignIn={() => setDialog('account')} />}
+      {dialog === 'account' && (
+        <AccountDialog
+          ws={ws}
+          invite={invite}
+          onClose={() => {
+            setDialog(null);
+            setInvite(undefined);
+          }}
+        />
+      )}
       {notice && <div className="toast">{notice}</div>}
 
       {tab === 'plan' && <PrintSheet project={project} />}
@@ -249,5 +283,15 @@ export function App() {
         </main>
       )}
     </div>
+  );
+}
+
+function SyncChip({ ws }: { ws: ReturnType<typeof useWorkspace> }) {
+  if (ws.current.source === 'local') return <span className="sync-chip muted" title="Saved in this browser">This device</span>;
+  const label = { idle: 'Account', pending: 'Saving…', saving: 'Saving…', saved: 'Saved', error: 'Not saved', conflict: 'Conflict' }[ws.status];
+  return (
+    <span className={`sync-chip ${ws.status === 'error' || ws.status === 'conflict' ? 'bad' : ''}`} title="Saved to your account">
+      ☁ {label}
+    </span>
   );
 }

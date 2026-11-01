@@ -5,8 +5,26 @@ app derives everything downstream from it: wall framing, a materials list,
 receptacle layout and International Residential Code checks. Floorplanning came
 first; framing, materials, structure and landscape grow out from the same model.
 
-Everything runs client-side. Projects autosave to the browser and can be saved /
-opened as `.homebuilder.json` files.
+The editor runs client-side. **Projects** (☰ in the top bar) keeps any number of
+projects on this device (IndexedDB) and, for invited users who sign in, in their
+account so they open on any device. Everything autosaves; projects can also be
+saved / opened as `.homebuilder.json` files.
+
+### Accounts (invite-only)
+
+A small Cloudflare Worker in `api/` (Hono + D1 + private R2, the Brookeslist /
+Voice Studio flavor): PBKDF2 passwords, HMAC'd session tokens in an HttpOnly
+cookie, login lockout, single-use invite codes. Project metadata is in D1; each
+project's JSON (which can include a floorplan image) is an R2 object.
+
+- Account projects autosave ~1.5 s after an edit. If another device saved a newer
+  copy, the editor stops and asks: load that version, or keep yours.
+- Signing out closes an account project, so it doesn't stay on a shared screen.
+- Admins mint invite codes in Account → Invite someone; the link opens the
+  sign-up form with the code filled in. Without an admin yet:
+  `cd api && npm run invite -- --env dev`. Make the first admin with
+  `npm run create-user -- --env dev --role admin --email … --password '…'`
+  (run it yourself; the password goes on the command line).
 
 ## Run it
 
@@ -15,6 +33,10 @@ npm install
 npm run dev      # http://localhost:5180
 npm test         # calc tests (node --test, no browser)
 npm run build    # typecheck + production build to dist/
+
+cd api && npm install
+npm run migrate:local && npm run dev   # API on http://localhost:8787 (the app's default in dev)
+npm run invite -- --local              # a sign-up code for the local DB
 ```
 
 From the umbrella folder the desktop app's preview config is `home-builder` in
@@ -54,7 +76,10 @@ Flat, **vaulted** (single slope across the short side), **cathedral** (ridge dow
 ## Code layout
 
 ```
-src/model/     types (the Project document), geometry, units (ft-in parse/format), store (reducer + undo), persist
+src/model/     types (the Project document), geometry, units (ft-in parse/format), store (reducer + undo), persist,
+               library (IndexedDB projects + which one is open), cloud (API client)
+src/account/   useWorkspace (open/save/sync), Projects + Account dialogs
+api/           Cloudflare Worker: auth, invites, project storage (wrangler.toml has dev + prod envs)
 src/calc/      framing, materials, pricing, ceilings, electrical, regions, irc, roof, site, sheet, model3d — pure functions of Project, unit-tested in test/
 src/data/      plant library
 src/editor/    PlanCanvas (SVG editor), PlanDrawing (shared with print), Inspector, hit testing
@@ -80,6 +105,15 @@ store a derived value. All lengths are inches.
 GitHub Pages flavor (see `jarvis-dashboard/NEW-PROJECT.md`): `.github/workflows/pages.yml`
 on `dev` publishes `main` → `homebuilder.dabrewer.dev/` and `dev` → `/dev/`. Needs a
 **public** repo (free-plan Pages), the `github-pages` environment allowing `dev`, and a
-DNS-only CNAME `homebuilder.dabrewer.dev` → `brewerindustries.github.io`.
+DNS-only CNAME `homebuilder.dabrewer.dev` → `brewerindustries.github.io`. Each build
+gets `VITE_API_BASE` (dev → `homebuilder-api-dev.dabrewer.dev`, prod →
+`homebuilder-api.dabrewer.dev`).
+
+API: `cd api && npm run deploy:dev` (custom domain + cert are created by wrangler).
+Dev D1 `home-builder-dev`, R2 `home-builder-projects-dev`, `SESSION_SECRET` set.
+**Prod is not set up yet:** D1 `home-builder-prod` and R2 `home-builder-projects-prod`
+exist but still need `npm run migrate:prod`, `wrangler secret put SESSION_SECRET`
+and `npm run deploy`. Wrangler uses its OAuth login. Unset `CLOUDFLARE_API_TOKEN`
+(the DNS-only token) when you run it.
 
 Roadmap: [BACKLOG.md](BACKLOG.md).

@@ -47,4 +47,7 @@ Ordered roughly by value. Competitor research behind these lives in
 
 - [x] Public GitHub repo, Pages (dev + main branch policies), CNAME DNS, HTTPS — dev live 2026-11-01
 - [ ] Create `main` (prod) via the first approved dev → main PR; prod URL shows a placeholder until then
+- [x] Invite-only accounts + multiple projects (device library + account sync), dev API live 2026-11-01
+- [ ] Prod API: migrate prod D1, set SESSION_SECRET, deploy the Worker (before/with the first main promotion)
+- [ ] Accounts follow-ups: share a project read-only by link, project thumbnails, password reset by email, cache account projects for offline
 - [ ] Code-edition picker (2018 / 2021 / 2024) once a rule actually differs between editions

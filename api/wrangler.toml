@@ -1,0 +1,43 @@
+# Home Builder API — Cloudflare Worker (prod = default env, dev = [env.dev]).
+# Secret (per env, never in this file):
+#   wrangler secret put SESSION_SECRET [--env dev]
+
+name = "home-builder-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-06"
+
+# ---------------- PROD (default) ----------------
+routes = [
+  { pattern = "homebuilder-api.dabrewer.dev", custom_domain = true }
+]
+
+[vars]
+ALLOWED_ORIGIN = "https://homebuilder.dabrewer.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "home-builder-prod"
+database_id = "b86fdd8d-c583-44a7-8b0f-01f5696d2598"
+
+[[r2_buckets]]
+binding = "PROJECTS"
+bucket_name = "home-builder-projects-prod"
+
+# ---------------- DEV ----------------
+[env.dev]
+name = "home-builder-api-dev"
+routes = [
+  { pattern = "homebuilder-api-dev.dabrewer.dev", custom_domain = true }
+]
+
+[env.dev.vars]
+ALLOWED_ORIGIN = "https://homebuilder.dabrewer.dev"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "home-builder-dev"
+database_id = "faa55276-c5e7-4547-97a0-85d156c99316"
+
+[[env.dev.r2_buckets]]
+binding = "PROJECTS"
+bucket_name = "home-builder-projects-dev"

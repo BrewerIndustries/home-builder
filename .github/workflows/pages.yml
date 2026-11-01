@@ -4,7 +4,7 @@ name: Deploy to GitHub Pages
 #   main -> /        (prod)   https://homebuilder.dabrewer.dev/
 #   dev  -> /dev/    (dev)    https://homebuilder.dabrewer.dev/dev/
 # Lives on the dev branch only; it checks out both branches itself and builds the
-# Vite app for each with the matching base path. A push to either branch
+# Vite app for each with the matching base path and accounts API (api/ Worker). A push to either branch
 # redeploys both; the workflow file itself must exist on dev.
 #
 # Requires a PUBLIC repo (Pages is not available for private repos on the free plan).
@@ -46,6 +46,7 @@ jobs:
         working-directory: prod-src
         env:
           BASE_PATH: /
+          VITE_API_BASE: https://homebuilder-api.dabrewer.dev
         run: |
           npm install
           npm test
@@ -71,6 +72,7 @@ jobs:
         working-directory: dev-src
         env:
           BASE_PATH: /dev/
+          VITE_API_BASE: https://homebuilder-api-dev.dabrewer.dev
         run: |
           npm install
           npm test
