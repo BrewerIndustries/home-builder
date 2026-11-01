@@ -1,0 +1,94 @@
+name: Deploy to GitHub Pages
+
+# Publishes BOTH versions to one Pages site:
+#   main -> /        (prod)   https://homebuilder.dabrewer.dev/
+#   dev  -> /dev/    (dev)    https://homebuilder.dabrewer.dev/dev/
+# Lives on the dev branch only; it checks out both branches itself and builds the
+# Vite app for each with the matching base path. A push to either branch
+# redeploys both; the workflow file itself must exist on dev.
+#
+# Requires a PUBLIC repo (Pages is not available for private repos on the free plan).
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # ---------- PROD (main -> /) ----------
+      - name: Checkout main (prod)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: prod-src
+        continue-on-error: true
+      - name: Build prod
+        id: prod
+        working-directory: prod-src
+        env:
+          BASE_PATH: /
+        run: |
+          npm install
+          npm test
+          npm run build
+        continue-on-error: true
+      - name: Assemble prod into site root
+        run: |
+          mkdir -p _site
+          if [ -d prod-src/dist ]; then
+            cp -r prod-src/dist/. _site/
+            cp _site/index.html _site/404.html
+          else
+            echo "main has no build yet — dev-only deploy" > _site/index.html
+          fi
+
+      # ---------- DEV (dev -> /dev/) ----------
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev-src
+      - name: Build dev
+        working-directory: dev-src
+        env:
+          BASE_PATH: /dev/
+        run: |
+          npm install
+          npm test
+          npm run build
+      - name: Assemble dev into /dev
+        run: |
+          mkdir -p _site/dev
+          cp -r dev-src/dist/. _site/dev/
+          cp _site/dev/index.html _site/dev/404.html
+
+      - name: Set custom domain
+        run: echo "homebuilder.dabrewer.dev" > _site/CNAME
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

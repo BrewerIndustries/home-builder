@@ -1,0 +1,178 @@
+// The project document. Everything downstream (framing, materials, later costing)
+// is derived from this — nothing derived is ever stored here.
+//
+// All lengths are in INCHES. Plan coordinates are inches too: x grows right,
+// y grows down (screen convention), origin is arbitrary.
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export type WallKind = 'exterior' | 'interior';
+
+export interface Wall {
+  id: string;
+  a: Point;
+  b: Point;
+  kind: WallKind;
+  /** Stud size for this wall; unset = the project default for its kind. */
+  stud?: LumberSize;
+  /**
+   * Finished thickness used for drawing — derived from the stud depth plus
+   * finishes (see finishedThickness); the store keeps it in sync.
+   */
+  thickness: number;
+  /** Plate-to-plate height (floor to ceiling framing). */
+  height: number;
+}
+
+export type OpeningKind = 'door' | 'window';
+
+export interface Opening {
+  id: string;
+  wallId: string;
+  kind: OpeningKind;
+  /** Distance from wall.a to the opening's centre, along the wall. */
+  offset: number;
+  /** Nominal unit width (a "3068" door is 36" wide). */
+  width: number;
+  /** Nominal unit height. */
+  height: number;
+  /** Floor to bottom of the unit. 0 for doors. */
+  sill: number;
+  /** Door swing side: which side of the wall the leaf opens toward, and hinge end. */
+  swing?: { side: 1 | -1; hinge: 'a' | 'b' };
+  /** Window operation — drives the estimated net clear opening for egress checks. */
+  style?: WindowStyle;
+}
+
+export type WindowStyle = 'single-hung' | 'slider' | 'casement' | 'fixed';
+
+export type RoomType = 'bedroom' | 'living' | 'kitchen' | 'bath' | 'hall' | 'garage' | 'utility' | 'other';
+
+/** Room types the IRC treats as habitable space (R202): sleeping, living, eating, cooking. */
+export const HABITABLE: ReadonlySet<RoomType> = new Set(['bedroom', 'living', 'kitchen']);
+
+export type OutletKind = 'duplex' | 'gfci' | 'dedicated' | '240v';
+
+export interface Outlet {
+  id: string;
+  wallId: string;
+  /** Distance from wall.a along the wall. */
+  offset: number;
+  /** Which face of the wall: +1 = the wallNormal side, -1 = the other. */
+  side: 1 | -1;
+  kind: OutletKind;
+  /** Centre height above the floor. */
+  height: number;
+  /** Placed by auto-layout; re-running auto-layout replaces these but never manual ones. */
+  auto: boolean;
+}
+
+export type CeilingType = 'flat' | 'vaulted' | 'cathedral' | 'tray' | 'coffered';
+
+export interface Ceiling {
+  type: CeilingType;
+  /** Flat height, or the LOW side of a vault. Unset = the room's wall height. */
+  height?: number;
+  /** vaulted (single slope) / cathedral (ridge down the middle): height at the top. */
+  peak?: number;
+  /** tray: how far the raised centre goes up, and how far in from the walls it starts. */
+  trayDepth?: number;
+  trayInset?: number;
+  /** coffered: beam grid spacing and beam drop below the ceiling. */
+  cofferSpacing?: number;
+  cofferDepth?: number;
+}
+
+export interface Room {
+  id: string;
+  name: string;
+  type: RoomType;
+  /** Closed polygon, in order. */
+  points: Point[];
+  ceiling?: Ceiling;
+}
+
+export interface FramingSettings {
+  /** On-centre stud spacing. */
+  studSpacing: 16 | 24;
+  exteriorStud: LumberSize;
+  interiorStud: LumberSize;
+  /** Height given to newly drawn walls. */
+  wallHeight: number;
+  /** Waste factor applied to lumber and sheet goods (0.1 = 10%). */
+  waste: number;
+}
+
+export type LumberSize = '2x4' | '2x6' | '2x8';
+
+export const LUMBER_SIZES: LumberSize[] = ['2x4', '2x6', '2x8'];
+
+/** Dressed depth of a stud, inches. */
+export const STUD_DEPTH: Record<LumberSize, number> = { '2x4': 3.5, '2x6': 5.5, '2x8': 7.25 };
+
+/** A traced-over picture of an existing floorplan, placed in plan space. */
+export interface Underlay {
+  /** Data URL (downscaled JPEG) so it saves with the project. */
+  src: string;
+  /** Natural pixel size of `src`. */
+  pxWidth: number;
+  pxHeight: number;
+  /** Plan position of the image's top-left corner. */
+  x: number;
+  y: number;
+  /** Inches per image pixel — set by calibrating against a known dimension. */
+  scale: number;
+  opacity: number;
+  visible: boolean;
+}
+
+export interface Project {
+  version: 1;
+  name: string;
+  walls: Wall[];
+  openings: Opening[];
+  rooms: Room[];
+  outlets: Outlet[];
+  framing: FramingSettings;
+  underlay?: Underlay;
+}
+
+export const DEFAULT_FRAMING: FramingSettings = {
+  studSpacing: 16,
+  exteriorStud: '2x6',
+  interiorStud: '2x4',
+  wallHeight: 97.125,
+  waste: 0.1,
+};
+
+export function studFor(wall: Wall, framing: FramingSettings): LumberSize {
+  return wall.stud ?? (wall.kind === 'exterior' ? framing.exteriorStud : framing.interiorStud);
+}
+
+/**
+ * Stud depth + finishes: exterior gets 7/16" sheathing + 1/2" drywall, interior
+ * 1/2" drywall each side — both round to +1". So 2x6 exterior = 6-1/2", 2x4 interior = 4-1/2".
+ */
+export function finishedThickness(stud: LumberSize): number {
+  return STUD_DEPTH[stud] + 1;
+}
+
+// 97-1/8" is the standard "8 foot" wall: three 1-1/2" plates + a 92-5/8" precut stud,
+// leaving room for 96" of drywall plus the floor and ceiling finishes.
+export const WALL_DEFAULTS: Record<WallKind, { thickness: number; height: number }> = {
+  exterior: { thickness: 6.5, height: 97.125 },
+  interior: { thickness: 4.5, height: 97.125 },
+};
+
+export function emptyProject(name = 'Untitled house'): Project {
+  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], framing: { ...DEFAULT_FRAMING } };
+}
+
+let counter = 0;
+export function uid(prefix: string): string {
+  counter += 1;
+  return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+}

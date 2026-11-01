@@ -1,0 +1,13 @@
+{
+  "id": "home-builder",
+  "name": "Home Builder",
+  "description": "Browser home-planning tool: draw floorplans (or trace a photo of one), then get a wall framing takeoff, a materials list, auto-placed outlets and IRC plan checks. Landscape design is next.",
+  "category": "standalone",
+  "tech": ["React 19", "TypeScript", "Vite", "SVG", "localStorage", "GitHub Pages"],
+  "status": { "prod": "in_progress", "dev": "in_progress" },
+  "deploy": {
+    "prod": { "url": "https://homebuilder.dabrewer.dev/" },
+    "dev": { "url": "https://homebuilder.dabrewer.dev/dev/" }
+  },
+  "repo": "https://github.com/BrewerIndustries/home-builder"
+}
