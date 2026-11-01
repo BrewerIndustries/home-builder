@@ -2,6 +2,7 @@ import { pointAlong, polygonArea, wallDir, wallLength } from '../model/geometry.
 import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { childRooms } from './regions.ts';
+import { roofFaces } from './roof.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
 // Axes: plan x → X, plan y → Z, height → Y (up). Inches throughout.
@@ -29,8 +30,10 @@ export interface FlatSurface {
 
 /** An arbitrary planar polygon in 3D (sloped ceilings, gable infill, tray bands). */
 export interface Face {
-  kind: 'ceiling' | 'gable';
+  kind: 'ceiling' | 'gable' | 'roof';
   pts: V3[];
+  /** Part of the roof (its surfaces and gable-end walls), not a room ceiling. */
+  roofPart?: boolean;
 }
 
 export interface Scene3D {
@@ -174,6 +177,7 @@ export function buildScene(project: Project): Scene3D {
     faces.push(...c.faces);
     boxes.push(...c.boxes);
   }
+  faces.push(...roofFaces(project).map((f) => ({ ...f, roofPart: true })));
   const pts = project.walls.flatMap((w) => [w.a, w.b]);
   const maxH = Math.max(0, ...project.walls.map((w) => w.height), ...faces.flatMap((f) => f.pts.map((p) => p[1])));
   const b = pts.length ? bbox(pts) : { x0: 0, x1: 0, y0: 0, y1: 0 };

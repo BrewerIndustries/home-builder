@@ -576,6 +576,11 @@ table.mini .num {
 
 /* ---------- reports ---------- */
 
+.roof-stats {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  max-width: 720px;
+}
+
 .report-page {
   flex: 1;
   overflow-y: auto;

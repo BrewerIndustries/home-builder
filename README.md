@@ -28,8 +28,8 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 | **Floorplan image** | *Import floorplan image* drops a picture under the plan (downscaled JPEG, saved with the project). *Calibrate scale*: click both ends of a known dimension and type its real length. Then trace over it. |
 | **Site** | Lot outline (quick rectangle around the house or draw any polygon) with per-edge setbacks → dashed buildable envelope; hardscape / bed areas (pavers, concrete, gravel, mulch, sod, deck) with depth; ~40-species plant library drawn at mature spread; lot coverage and impervious %. Quantities roll into the Estimate. |
 | **3D** | Orbitable three.js model (lazy-loaded): walls cut around doors and windows, glass, floors, and every ceiling type. Cut-away at 4 ft. |
-| **Framing** | Per-wall takeoff and a dimensioned framing elevation (commons on layout, 3-stud corners, ladder backing at tees, king/jack studs, headers, cripples, sills, plates, rough openings). |
-| **Estimate** | Materials list priced from editable unit prices (sample US big-box defaults until you type your own), markup and tax, by category; CSV with prices. Lumber, sheathing, wrap, batts, drywall incl. vaulted/tray/coffered ceilings, receptacles + boxes, door/window schedule, and landscape (pavers + base + sand + edging + polymeric sand, concrete yd³, gravel tons + fabric, mulch yd³, sod pallets, plant schedule). |
+| **Framing** | Per-wall takeoff and a dimensioned framing elevation (commons on layout, 3-stud corners, ladder backing at tees, king/jack studs, headers, cripples, sills, plates, rough openings), plus a roof summary (area, squares, rise, truss/rafter count and length, ridge, hips). |
+| **Estimate** | Materials list priced from editable unit prices (sample US big-box defaults until you type your own), markup and tax, by category; CSV with prices. Lumber, sheathing, wrap, batts, drywall incl. vaulted/tray/coffered ceilings, receptacles + boxes, door/window schedule, gable-end infill studs above the plate (vaulted/cathedral rooms, rafter gable ends), roof (trusses or rafters + ridge + ceiling joists, hurricane ties, sheathing, underlayment, shingles, starter, ridge cap, drip edge, fascia, soffit), and landscape (pavers + base + sand + edging + polymeric sand, concrete yd³, gravel tons + fabric, mulch yd³, sod pallets, plant schedule). |
 | **Print / PDF** | From the Plan tab: a Letter-landscape sheet at the largest architectural scale that fits, with dimension strings, scale bar and title block. |
 | **Code check** | IRC rules with section refs and click-to-locate: R303.1 light/vent, R304 room size, R305 ceiling height (incl. R305.1.1 sloped), R308.4 safety glazing, R310 bedroom escape openings, R311.2 egress door, R602.3 wall height/spacing, R602.7 header reminder, E3901 receptacle spacing, E3902 GFCI. Plus site checks: house inside the setback envelope, coverage, plant hardiness zone, trees too close to the foundation, plants overlapping at maturity. Lists what is *not* checked. |
 
@@ -38,6 +38,10 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 - New walls take the **Ext / Int** toggle in the toolbar. The first room you draw on an empty plan is exterior (the house outline); after that it flips to interior.
 - Stud size: project defaults for exterior (2x6) and interior (2x4), overridable per wall (2x4 / 2x6 / 2x8). Finished thickness follows the stud: depth + 1" of finishes.
 - Height: project default for new walls (97-1/8" — the standard "8 ft" wall that takes a 92-5/8" precut), per-wall override, and "apply to every wall".
+
+### Roof
+
+Set under **Roof** in the Plan tab's project panel (nothing selected): gable, hip, shed or none; pitch; eave and rake overhangs; ridge direction; trusses or rafters (size, spacing). It shows in 3D (toggle *Roof*), on the Framing tab and in the Estimate, and feeds the R905.2.2 shingle-slope check.
 
 ### Ceilings (per room)
 
@@ -51,7 +55,7 @@ Flat, **vaulted** (single slope across the short side), **cathedral** (ridge dow
 
 ```
 src/model/     types (the Project document), geometry, units (ft-in parse/format), store (reducer + undo), persist
-src/calc/      framing, materials, pricing, ceilings, electrical, regions, irc, site, sheet, model3d — pure functions of Project, unit-tested in test/
+src/calc/      framing, materials, pricing, ceilings, electrical, regions, irc, roof, site, sheet, model3d — pure functions of Project, unit-tested in test/
 src/data/      plant library
 src/editor/    PlanCanvas (SVG editor), PlanDrawing (shared with print), Inspector, hit testing
 src/site/      Site tab (lot, areas, plants)
@@ -69,7 +73,7 @@ store a derived value. All lengths are inches.
 - **IRC checks are a design aid, not a plan review.** Values match the 2018/2021/2024 IRC for the rules implemented; jurisdictions adopt with amendments. Window net-clear openings are estimated from nominal size + operation type. Only numeric requirements are encoded — no ICC code text is reproduced.
 - Rooms are drawn as rectangles; ceiling slopes and min-dimension checks use the room's bounding box.
 - Setbacks are local zoning, entered by you; the envelope inset is exact for convex lots, approximate for concave ones. Plant sizes are typical figures, not cultivar-specific.
-- Gable-end wall framing above the plate for vaulted/cathedral rooms isn't in the takeoff yet.
+- The roof covers the exterior walls' bounding rectangle — an L-shaped plan gets one roof over its whole box (no valleys yet). Rafters, ceiling joists and trusses are counted, not sized: check IRC R802 span tables or the truss supplier.
 
 ## Deploy
 

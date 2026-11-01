@@ -19,6 +19,7 @@ function palette(dark: boolean) {
     gable: dark ? 0xd6dbe4 : 0xf4f1ea,
     beam: dark ? 0xc9b08a : 0xe9dcc6,
     glass: 0x7fb3e6,
+    roof: dark ? 0x5a4f4a : 0x6e5f58,
   };
 }
 
@@ -27,6 +28,7 @@ export default function View3D({ project }: { project: Project }) {
   const world = useRef<{ group: THREE.Group; fit(s: Scene3D): void } | null>(null);
   const [ceilings, setCeilings] = useState(false);
   const [cutaway, setCutaway] = useState(false);
+  const [showRoof, setShowRoof] = useState(true);
   const scene3d = useMemo(() => buildScene(project), [project]);
   const fitted = useRef(false);
 
@@ -146,24 +148,30 @@ export default function View3D({ project }: { project: Project }) {
     }
 
     for (const f of scene3d.faces) {
-      if (!ceilings || cutaway) continue;
+      if (cutaway) continue;
+      // Roof faces (and the roof's gable-end walls) belong to the roof toggle; the rest to ceilings.
+      const isRoof = f.kind === 'roof' || f.roofPart;
+      if (isRoof ? !showRoof : !ceilings) continue;
       const g = new THREE.BufferGeometry();
       const v: number[] = [];
       for (let i = 1; i < f.pts.length - 1; i++) v.push(...f.pts[0], ...f.pts[i], ...f.pts[i + 1]);
       g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
       g.computeVertexNormals();
-      w.group.add(new THREE.Mesh(g, mat(f.kind === 'gable' ? c.gable : c.ceiling)));
+      w.group.add(new THREE.Mesh(g, mat(f.kind === 'roof' ? c.roof : f.kind === 'gable' ? c.gable : c.ceiling)));
     }
 
     if (!fitted.current && scene3d.boxes.length) {
       fitted.current = true;
       w.fit(scene3d);
     }
-  }, [scene3d, ceilings, cutaway]);
+  }, [scene3d, ceilings, cutaway, showRoof]);
 
   return (
     <div className="view3d">
       <div className="view3d-bar">
+        <label>
+          <input type="checkbox" checked={showRoof} onChange={(e) => setShowRoof(e.target.checked)} /> Roof
+        </label>
         <label>
           <input type="checkbox" checked={ceilings} onChange={(e) => setCeilings(e.target.checked)} /> Ceilings
         </label>

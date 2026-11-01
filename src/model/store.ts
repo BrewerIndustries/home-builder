@@ -1,5 +1,5 @@
 import { clampOpeningOffset, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof } from './types.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -25,6 +25,7 @@ export type Action =
   | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>> }
   | { type: 'delete'; ids: string[] }
   | { type: 'setFraming'; patch: Partial<FramingSettings> }
+  | { type: 'setRoof'; patch: Partial<Roof> }
   | { type: 'setPricing'; pricing: Pricing }
   | { type: 'setSite'; patch: Partial<Site>; transient?: boolean }
   | { type: 'addArea'; area: SiteArea }
@@ -168,6 +169,9 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'updatePlant':
       return { ...p, site: { ...site(p), plants: site(p).plants.map((x) => (x.id === action.id ? { ...x, ...action.patch } : x)) } };
 
+    case 'setRoof':
+      return { ...p, roof: { ...DEFAULT_ROOF, ...p.roof, ...action.patch } };
+
     case 'setPricing':
       return { ...p, pricing: action.pricing };
 
@@ -193,6 +197,7 @@ export function migrate(p: Project): Project {
     outlets: p.outlets ?? [],
     rooms: p.rooms.map((r) => ({ ...r, type: r.type ?? 'other' })),
     framing: { ...DEFAULT_FRAMING, ...p.framing },
+    roof: { ...DEFAULT_ROOF, ...p.roof },
   };
 }
 

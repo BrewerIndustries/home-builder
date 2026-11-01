@@ -178,8 +178,31 @@ export interface Project {
   framing: FramingSettings;
   pricing?: Pricing;
   site?: Site;
+  roof?: Roof;
   underlay?: Underlay;
 }
+
+export type RoofType = 'gable' | 'hip' | 'shed' | 'none';
+export type RafterSize = '2x6' | '2x8' | '2x10' | '2x12';
+export const RAFTER_SIZES: RafterSize[] = ['2x6', '2x8', '2x10', '2x12'];
+
+/** One roof over the whole house (v1: over the exterior walls' bounding rectangle). */
+export interface Roof {
+  type: RoofType;
+  /** Rise per 12 of run. */
+  pitch: number;
+  /** Eave overhang, horizontal inches past the wall face. */
+  overhang: number;
+  /** Rake (gable-end) overhang, inches. */
+  rake: number;
+  /** Ridge direction: along plan x, plan y, or the long side. */
+  ridge: 'auto' | 'x' | 'y';
+  framing: 'trusses' | 'rafters';
+  rafterSize: RafterSize;
+  spacing: 16 | 24;
+}
+
+export const DEFAULT_ROOF: Roof = { type: 'gable', pitch: 6, overhang: 12, rake: 12, ridge: 'auto', framing: 'trusses', rafterSize: '2x8', spacing: 24 };
 
 export const EMPTY_SITE: Site = { setbacks: [], areas: [], plants: [] };
 

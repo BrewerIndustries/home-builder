@@ -4,10 +4,15 @@ import { frameWall, studCount } from '../calc/framing.ts';
 import { netClearOpening } from '../calc/irc.ts';
 import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
+import { roofOf } from '../calc/roof.ts';
 import { wallLength } from '../model/geometry.ts';
 import type { Action } from '../model/store.ts';
 import {
   LUMBER_SIZES,
+  RAFTER_SIZES,
+  type RafterSize,
+  type Roof,
+  type RoofType,
   studFor,
   type Ceiling,
   type CeilingType,
@@ -313,6 +318,8 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </p>
       )}
 
+      <RoofFields roof={roofOf(project)} set={(patch) => dispatch({ type: 'setRoof', patch })} />
+
       {u && (
         <>
           <h4>Floorplan image</h4>
@@ -335,7 +342,86 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
   );
 }
 
-export function Stat({ label, value }: { label: string; value: ReactNode }) {
+const ROOF_TYPES: { value: RoofType; label: string }[] = [
+  { value: 'gable', label: 'Gable' },
+  { value: 'hip', label: 'Hip' },
+  { value: 'shed', label: 'Shed' },
+  { value: 'none', label: 'None' },
+];
+
+function RoofFields({ roof, set }: { roof: Roof; set(patch: Partial<Roof>): void }) {
+  return (
+    <>
+      <h4>Roof</h4>
+      <div className="row">
+        <Field label="Type">
+          <select value={roof.type} onChange={(e) => set({ type: e.target.value as RoofType })}>
+            {ROOF_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Pitch">
+          <select value={roof.pitch} onChange={(e) => set({ pitch: Number(e.target.value) })} disabled={roof.type === 'none'}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14].map((p) => (
+              <option key={p} value={p}>
+                {p}/12
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {roof.type !== 'none' && (
+        <>
+          <div className="row">
+            <Field label="Eave overhang">
+              <LengthInput value={roof.overhang} onChange={(v) => set({ overhang: v })} />
+            </Field>
+            {roof.type !== 'hip' && (
+              <Field label="Rake overhang">
+                <LengthInput value={roof.rake} onChange={(v) => set({ rake: v })} />
+              </Field>
+            )}
+          </div>
+          <Field label={roof.type === 'shed' ? 'Slope runs' : 'Ridge'}>
+            <select value={roof.ridge} onChange={(e) => set({ ridge: e.target.value as Roof['ridge'] })}>
+              <option value="auto">Along the long side</option>
+              <option value="x">Left–right</option>
+              <option value="y">Top–bottom</option>
+            </select>
+          </Field>
+          <div className="row">
+            <Field label="Framing">
+              <select value={roof.framing} onChange={(e) => set({ framing: e.target.value as Roof['framing'] })}>
+                <option value="trusses">Trusses</option>
+                <option value="rafters">Rafters</option>
+              </select>
+            </Field>
+            <Field label="Spacing">
+              <select value={roof.spacing} onChange={(e) => set({ spacing: Number(e.target.value) as 16 | 24 })}>
+                <option value={16}>16" o.c.</option>
+                <option value={24}>24" o.c.</option>
+              </select>
+            </Field>
+          </div>
+          {roof.framing === 'rafters' && (
+            <Field label="Rafter size" hint="Counted, not sized — check IRC R802 span tables.">
+              <select value={roof.rafterSize} onChange={(e) => set({ rafterSize: e.target.value as RafterSize })}>
+                {RAFTER_SIZES.map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+export function Stat({ label, value }: { label: ReactNode; value: ReactNode }) {
   return (
     <div className="stat">
       <div className="stat-value">{value}</div>

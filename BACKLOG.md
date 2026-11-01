@@ -16,7 +16,8 @@ Ordered roughly by value. Competitor research behind these lives in
 
 ## Structure & takeoff
 
-- [ ] Roof model (gable / hip / shed): squares, sheathing, trim, rafter or truss layout; gable-end wall framing above the plate for vaulted rooms
+- [x] Roof model (gable / hip / shed): squares, sheathing, trim, rafter or truss counts; gable-end wall framing above the plate for vaulted rooms
+- [ ] Roof v2: per-wing roofs with valleys for L/T plans, dormers, roof on the print sheet, attic ventilation (R806)
 - [ ] Foundation / concrete takeoff: footings, slab, stem wall, anchor bolts, sill plate
 - [ ] Floor joist layout + subfloor sheet layout
 - [ ] Cut lists optimised to stock lengths, with waste report

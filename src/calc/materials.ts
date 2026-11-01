@@ -1,7 +1,9 @@
 import { polygonArea, wallLength } from '../model/geometry.ts';
-import { studFor, type LumberSize, type Project } from '../model/types.ts';
+import { studFor, type LumberSize, type Point, type Project } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { exclusiveArea, totalFloorArea } from './regions.ts';
+import { roomCeiling } from './model3d.ts';
+import { roofCalc, roofLines, stockFeet } from './roof.ts';
 import { siteLines } from './site.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
@@ -9,7 +11,7 @@ import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Landscape';
+  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Roof' | 'Landscape';
   item: string;
   qty: number;
   unit: string;
@@ -198,6 +200,20 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
     lines.push({ category: 'Openings', item, qty, unit: 'ea', basis: 'from the plan' });
   }
 
+  // Gable-end framing above the plate: vaulted / cathedral room ends, and a
+  // rafter-framed roof's gable ends (trusses bring their own gable-end truss).
+  for (const [size, g] of gableInfill(project)) {
+    const stock = stockFeet(g.height);
+    lines.push({
+      category: 'Lumber',
+      item: `${size} stud, ${stock}'`,
+      qty: Math.ceil((g.lf * waste) / (stock * 12)),
+      unit: 'ea',
+      basis: `gable-end infill above the plate: ${Math.round(g.lf / 12)} LF of studs (${g.sources.join(', ')}) ${wastePct}`,
+    });
+  }
+
+  lines.push(...roofLines(project, project.framing.waste));
   lines.push(...siteLines(project, project.framing.waste));
 
   return lines;
@@ -208,4 +224,54 @@ export function sizeCode(inches: number): string {
   const ft = Math.floor(inches / 12);
   const inch = Math.round(inches - ft * 12);
   return `${ft}${inch}`;
+}
+
+/** Area of a planar 3D polygon (Newell's method). */
+function faceArea(pts: [number, number, number][]): number {
+  let nx = 0;
+  let ny = 0;
+  let nz = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1, z1] = pts[i];
+    const [x2, y2, z2] = pts[(i + 1) % pts.length];
+    nx += (y1 - y2) * (z1 + z2);
+    ny += (z1 - z2) * (x1 + x2);
+    nz += (x1 - x2) * (y1 + y2);
+  }
+  return Math.hypot(nx, ny, nz) / 2;
+}
+
+function distToSegment(p: Point, a: Point, b: Point): number {
+  const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len2));
+  return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+}
+
+/** Stud linear feet needed to fill wall above the plate, by stud size. */
+export function gableInfill(project: Project): Map<LumberSize, { lf: number; height: number; sources: string[] }> {
+  const out = new Map<LumberSize, { lf: number; height: number; sources: string[] }>();
+  const spacing = project.framing.studSpacing;
+  const add = (size: LumberSize, area: number, height: number, source: string) => {
+    const g = out.get(size) ?? { lf: 0, height: 0, sources: [] };
+    g.lf += area / spacing;
+    g.height = Math.max(g.height, height);
+    if (!g.sources.includes(source)) g.sources.push(source);
+    out.set(size, g);
+  };
+  const roof = roofCalc(project);
+  // A rafter roof's gable ends already fill the exterior end walls up to the roof.
+  const roofGables = !!roof && roof.roof.framing === 'rafters' && roof.gableArea > 0;
+  for (const room of project.rooms) {
+    for (const f of roomCeiling(project, room).faces) {
+      if (f.kind !== 'gable') continue;
+      const ys = f.pts.map((p) => p[1]);
+      const low = Math.min(...ys);
+      const base = f.pts.filter((p) => p[1] - low < 0.01).map((p) => ({ x: p[0], y: p[2] }));
+      const wall = project.walls.find((w) => base.every((p) => distToSegment(p, w.a, w.b) <= w.thickness));
+      if (roofGables && wall?.kind === 'exterior') continue;
+      add(wall ? studFor(wall, project.framing) : project.framing.interiorStud, faceArea(f.pts), Math.max(...ys) - low, room.name);
+    }
+  }
+  if (roof && roofGables) add(project.framing.exteriorStud, roof.gableArea, roof.rise, 'roof gable ends');
+  return out;
 }

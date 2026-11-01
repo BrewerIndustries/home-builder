@@ -50,6 +50,19 @@ const SAMPLE: [RegExp, number][] = [
   [/dedicated receptacle/, 4],
   [/240V receptacle/, 14],
   [/new-work box/, 1.2],
+  [/^Roof truss|^Gable-end truss|^Mono \(shed\) truss/, 150],
+  [/^Hip truss package/, 190],
+  [/^2x10 ridge|^2x10 hip/, 25],
+  [/^2x12 ridge|^2x12 hip/, 34],
+  [/^LVL ridge|^LVL hip/, 120],
+  [/^Hurricane tie/, 1.2],
+  [/Synthetic underlayment/, 95],
+  [/^Architectural shingles/, 38],
+  [/^Starter strip/, 40],
+  [/^Hip & ridge cap/, 55],
+  [/^Drip edge/, 9],
+  [/^2x6 fascia/, 16],
+  [/^Vented soffit/, 3],
   [/^Pavers$/, 4.5],
   [/^Paver base gravel/, 45],
   [/^Bedding sand/, 40],
@@ -69,11 +82,11 @@ const SAMPLE: [RegExp, number][] = [
 ];
 
 /** Per-foot fallback for studs bought at stock lengths (8', 10', …). */
-const PER_FOOT: Record<string, number> = { '2x4': 0.6, '2x6': 0.95, '2x8': 1.35 };
+const PER_FOOT: Record<string, number> = { '2x4': 0.6, '2x6': 0.95, '2x8': 1.35, '2x10': 1.9, '2x12': 2.6 };
 
 export function samplePrice(item: string): number {
   for (const [re, price] of SAMPLE) if (re.test(item)) return price;
-  const stock = item.match(/^(2x\d) stud, (\d+)'/);
+  const stock = item.match(/^(2x\d+) (?:stud|rafter|ceiling joist|ridge board|hip rafter), (\d+)'/);
   if (stock) return Math.round(PER_FOOT[stock[1]] * Number(stock[2]) * 100) / 100;
   return 0;
 }
