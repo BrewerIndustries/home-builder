@@ -85,6 +85,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
     const u = project.underlay;
     if (u?.visible) pts.push({ x: u.x, y: u.y }, { x: u.x + u.pxWidth * u.scale, y: u.y + u.pxHeight * u.scale });
     const { width, height } = svg.getBoundingClientRect();
+    if (width < 200 || height < 200) return; // not laid out yet (hidden tab, print, first paint)
     if (!pts.length) {
       setView({ scale: 1.2, ox: 80, oy: 80 });
       return;
@@ -95,7 +96,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
     const minY = Math.min(...ys);
     const w = Math.max(Math.max(...xs) - minX, 48);
     const h = Math.max(Math.max(...ys) - minY, 48);
-    const scale = Math.min((width - 120) / w, (height - 120) / h, 8);
+    const scale = Math.max(0.05, Math.min((width - 120) / w, (height - 120) / h, 8));
     setView({ scale, ox: (width - w * scale) / 2 - minX * scale, oy: (height - h * scale) / 2 - minY * scale });
   }, [project.walls, project.underlay]);
 

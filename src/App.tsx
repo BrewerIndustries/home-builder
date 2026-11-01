@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { autoOutlets } from './calc/electrical.ts';
 import { ircChecks } from './calc/irc.ts';
 import type { Hit } from './editor/hitTest.ts';
@@ -10,7 +10,12 @@ import { emptyProject, type WallKind } from './model/types.ts';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
 
-type Tab = 'plan' | 'framing' | 'materials' | 'code';
+type Tab = 'plan' | '3d' | 'framing' | 'materials' | 'code';
+
+// three.js is most of the 3D tab's weight — load it only when the tab opens.
+const View3D = lazy(() => import('./views/View3D.tsx'));
+
+const TAB_LABEL: Record<Tab, string> = { plan: 'Plan', '3d': '3D', framing: 'Framing', materials: 'Estimate', code: 'Code check' };
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Select', key: 'v', icon: '↖' },
@@ -126,9 +131,9 @@ export function App() {
         <div className="brand">🏠</div>
         <input className="project-name" value={project.name} onChange={(e) => dispatch({ type: 'rename', name: e.target.value })} aria-label="Project name" />
         <nav className="tabs">
-          {(['plan', 'framing', 'materials', 'code'] as Tab[]).map((t) => (
+          {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-              {t === 'plan' ? 'Plan' : t === 'framing' ? 'Framing' : t === 'materials' ? 'Estimate' : 'Code check'}
+              {TAB_LABEL[t]}
               {t === 'code' && fails > 0 && <span className="count">{fails}</span>}
             </button>
           ))}
@@ -216,6 +221,12 @@ export function App() {
             onRoomCreated={() => wallKind === 'exterior' && setWallKind('interior')}
           />
           <Inspector project={project} dispatch={dispatch} selection={selection} setSelection={setSelection} setTool={setTool} />
+        </main>
+      ) : tab === '3d' ? (
+        <main className="report-page full">
+          <Suspense fallback={<p className="muted center">Loading 3D…</p>}>
+            <View3D project={project} />
+          </Suspense>
         </main>
       ) : (
         <main className="report-page">
