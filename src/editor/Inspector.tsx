@@ -328,6 +328,9 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </Field>
           <div className="row">
             <button onClick={() => setTool('calibrate')}>Calibrate scale</button>
+            <button onClick={() => setTool('straighten')} title="Fix a photo taken at an angle">
+              Straighten
+            </button>
             <button onClick={() => setTool('moveImage')}>Move</button>
           </div>
           <div className="row">

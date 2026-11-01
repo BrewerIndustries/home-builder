@@ -1,30 +1,10 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { cloud, inviteLink, type CloudProject, type Invite, type User } from '../model/cloud.ts';
 import { listLocal } from '../model/library.ts';
+import { Modal } from '../ui/Modal.tsx';
 import type { Workspace } from './useWorkspace.ts';
 
 // Project library and account dialogs.
-
-function Modal({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-label={title}>
-        <div className="modal-head">
-          <h2>{title}</h2>
-          <button className="link" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 const when = (t: number) => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const size = (b: number) => (b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);

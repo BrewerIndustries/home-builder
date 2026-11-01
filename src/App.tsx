@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AccountDialog, ProjectsDialog } from './account/Dialogs.tsx';
 import { useWorkspace } from './account/useWorkspace.ts';
+import { PdfImport } from './editor/PdfImport.tsx';
+import { openPdf } from './model/imaging.ts';
 import { autoOutlets } from './calc/electrical.ts';
 import { ircChecks } from './calc/irc.ts';
 import { siteChecks } from './calc/site.ts';
@@ -43,6 +45,7 @@ export function App() {
   const projectFile = useRef<HTMLInputElement>(null);
   const imageFile = useRef<HTMLInputElement>(null);
   const [dialog, setDialog] = useState<'projects' | 'account' | null>(null);
+  const [pdf, setPdf] = useState<{ doc: Awaited<ReturnType<typeof openPdf>>; at: { x: number; y: number } } | null>(null);
   const [invite, setInvite] = useState(() => new URLSearchParams(location.search).get('invite') ?? undefined);
 
   const flash = useCallback((msg: string) => {
@@ -120,6 +123,10 @@ export function App() {
     try {
       setTab('plan');
       const at = canvas.current?.center() ?? { x: 300, y: 200 };
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        setPdf({ doc: await openPdf(file), at });
+        return;
+      }
       dispatch({ type: 'setUnderlay', underlay: await readUnderlay(file, at) });
       setSelection(null);
       setTool('calibrate');
@@ -163,7 +170,7 @@ export function App() {
           <button onClick={() => dispatch({ type: 'redo' })} disabled={!history.future.length} title="Redo (⇧⌘Z)">
             ↷
           </button>
-          <button onClick={() => imageFile.current?.click()}>Import floorplan image</button>
+          <button onClick={() => imageFile.current?.click()} title="A photo, scan or PDF of a floor plan to trace over">Import floorplan</button>
           <button onClick={() => window.print()} disabled={!project.walls.length} title="Print or save as PDF — the Plan tab prints a to-scale sheet">
             Print / PDF
           </button>
@@ -180,7 +187,7 @@ export function App() {
           </button>
         </div>
         <input ref={projectFile} type="file" accept=".json,application/json" hidden onChange={(e) => (onImportProject(e.target.files?.[0]), (e.target.value = ''))} />
-        <input ref={imageFile} type="file" accept="image/*" hidden onChange={(e) => (onImportImage(e.target.files?.[0]), (e.target.value = ''))} />
+        <input ref={imageFile} type="file" accept="image/*,application/pdf,.pdf" hidden onChange={(e) => (onImportImage(e.target.files?.[0]), (e.target.value = ''))} />
       </header>
 
       {saveError && <div className="banner error">{saveError}</div>}
@@ -197,6 +204,21 @@ export function App() {
         </div>
       )}
       {ws.status === 'error' && ws.syncError && <div className="banner error">Not saved to your account: {ws.syncError}</div>}
+      {pdf && (
+        <PdfImport
+          doc={pdf.doc}
+          at={pdf.at}
+          onClose={() => setPdf(null)}
+          onImport={(underlay, calibrated) => {
+            dispatch({ type: 'setUnderlay', underlay });
+            setPdf(null);
+            setSelection(null);
+            setTool(calibrated ? 'select' : 'calibrate');
+            if (calibrated) flash('Placed at the drawing scale — check one known dimension, then trace over it.');
+            requestAnimationFrame(() => canvas.current?.fit());
+          }}
+        />
+      )}
       {dialog === 'projects' && <ProjectsDialog ws={ws} onClose={() => setDialog(null)} onSignIn={() => setDialog('account')} />}
       {dialog === 'account' && (
         <AccountDialog

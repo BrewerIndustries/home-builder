@@ -15,10 +15,11 @@ import {
 import { rectangleWalls, type Action } from '../model/store.ts';
 import { finishedThickness, uid, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
 import { OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
+import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'calibrate' | 'moveImage';
+export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'calibrate' | 'straighten' | 'moveImage';
 
 interface View {
   /** Screen pixels per inch. */
@@ -65,6 +66,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
   const [roomDrag, setRoomDrag] = useState<{ a: Point; b: Point } | null>(null);
   const [calPoints, setCalPoints] = useState<Point[]>([]);
   const [calText, setCalText] = useState('');
+  const [realW, setRealW] = useState('');
+  const [realH, setRealH] = useState('');
+  const [straightening, setStraightening] = useState(false);
   const [lengthText, setLengthText] = useState('');
   const [shift, setShift] = useState(false);
   const [space, setSpace] = useState(false);
@@ -316,6 +320,10 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         setCalPoints((prev) => (prev.length >= 2 ? [raw] : [...prev, raw]));
         return;
       }
+      case 'straighten': {
+        setCalPoints((prev) => (prev.length >= 4 ? [raw] : [...prev, raw]));
+        return;
+      }
       case 'moveImage': {
         if (!project.underlay) return;
         dispatch({ type: 'checkpoint' });
@@ -418,6 +426,26 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
     requestAnimationFrame(fit);
   }
 
+  async function finishStraighten() {
+    const u = project.underlay;
+    if (!u || calPoints.length !== 4) return;
+    const w = parseFtIn(realW);
+    const h = parseFtIn(realH);
+    setStraightening(true);
+    try {
+      dispatch({ type: 'setUnderlay', underlay: await straightenUnderlay(u, calPoints, w && h ? { w, h } : undefined) });
+      setCalPoints([]);
+      setRealW('');
+      setRealH('');
+      setTool(w && h ? 'select' : 'calibrate');
+      requestAnimationFrame(fit);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setStraightening(false);
+    }
+  }
+
   const s = view.scale;
   const px = (n: number) => n / s; // screen px → world inches, for strokes and fonts
   const cursorStyle = space || drag.current?.kind === 'pan' ? 'grab' : tool === 'select' ? 'default' : tool === 'moveImage' ? 'move' : 'crosshair';
@@ -490,8 +518,11 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
           {calPoints.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={px(5)} className="cal-point" />
           ))}
-          {calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(2)} />}
-          {calPoints.length === 2 && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={calPoints[1].x} y2={calPoints[1].y} className="cal-line" strokeWidth={px(2)} />}
+          {tool === 'straighten' && calPoints.length > 1 && (
+            <polyline points={[...calPoints, ...(calPoints.length === 4 ? [calPoints[0]] : cursor ? [cursor.p] : [])].map((p) => `${p.x},${p.y}`).join(' ')} fill="none" className="cal-line" strokeWidth={px(2)} />
+          )}
+          {tool === 'calibrate' && calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(2)} />}
+          {tool === 'calibrate' && calPoints.length === 2 && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={calPoints[1].x} y2={calPoints[1].y} className="cal-line" strokeWidth={px(2)} />}
 
           {cursor?.snapped === 'endpoint' && <circle cx={cursor.p.x} cy={cursor.p.y} r={px(7)} className="snap" strokeWidth={px(2)} />}
         </g>
@@ -528,6 +559,36 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         </div>
       )}
 
+      {tool === 'straighten' && (
+        <div className="float-panel">
+          {calPoints.length < 4 ? (
+            <p>
+              <strong>Straighten a photo.</strong> Click the four corners of something that is really a rectangle — the house outline or the sheet border ({calPoints.length}/4).
+            </p>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                finishStraighten();
+              }}
+            >
+              <p className="small muted">If you know that rectangle's real size, enter it to set the scale too (optional).</p>
+              <label>
+                Width (top edge)
+                <input autoFocus value={realW} onChange={(e) => setRealW(e.target.value)} placeholder={`e.g. 40'`} />
+              </label>
+              <label>
+                Depth (left edge)
+                <input value={realH} onChange={(e) => setRealH(e.target.value)} placeholder={`e.g. 28' 6"`} />
+              </label>
+              <button type="submit" className="primary" disabled={straightening}>
+                {straightening ? 'Straightening…' : 'Straighten'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
       <div className="hint">{hintFor(tool, !!chain)}</div>
     </div>
   );
@@ -548,6 +609,8 @@ function hintFor(tool: Tool, drawing: boolean): string {
       return 'Click beside a wall to add a receptacle on that face';
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
+    case 'straighten':
+      return 'Click four corners of a rectangle in the photo, in any order';
     case 'moveImage':
       return 'Drag to line the picture up with your walls';
   }

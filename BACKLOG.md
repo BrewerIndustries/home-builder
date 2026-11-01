@@ -11,7 +11,7 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] **Dimension strings + to-scale PDF export with a title block.**
 - [x] **Price catalog → priced estimate** — editable unit prices, markup, tax, CSV. (XLSX still open.)
 - [ ] **IRC span tables** — headers R602.7(1) (needs snow load + building width inputs), joists R502, rafters R802; replace the header rule of thumb.
-- [ ] **PDF underlay + perspective correction** for phone photos of plans.
+- [x] **PDF underlay + perspective correction** — pdf.js page picker with drawing-scale presets; four-corner straighten with optional real size. (Vector PDFs could later yield walls directly.)
 - [x] **3D view** (three.js) incl. vaulted / cathedral / tray / coffered ceilings. (Rooms with nested rooms still get a flat ceiling.)
 
 ## Structure & takeoff
