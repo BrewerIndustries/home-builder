@@ -98,3 +98,20 @@ test('per-wall stud size overrides the default and drives thickness', () => {
   p = syncThickness(p);
   assert.equal(p.walls[0].thickness, 8.25);
 });
+
+test('elevation geometry: jacks carry the header, kings flank it, nothing framed through the opening', () => {
+  const w = wall(0, 0, 144, 0);
+  const f = frameWall(w, project([w], [door(w.id, 72)]));
+  const header = f.members.find((m) => m.kind === 'header')!;
+  const jacks = f.members.filter((m) => m.kind === 'jack');
+  const kings = f.members.filter((m) => m.kind === 'king');
+  const ro = f.openings[0];
+  assert.equal(ro.w, 38);
+  for (const j of jacks) assert.equal(j.y + j.h, header.y); // jack top = header bottom
+  assert.equal(header.y, ro.y + ro.h);
+  assert.equal(kings[0].x + kings[0].w, header.x); // king hugs the header end
+  assert.equal(header.x + header.w, kings[1].x);
+  const fullHeight = f.members.filter((m) => m.kind === 'common' || m.kind === 'king');
+  for (const m of fullHeight) assert.ok(m.x + m.w <= ro.x || m.x >= ro.x + ro.w, 'no full stud through the RO');
+  for (const c of f.members.filter((m) => m.kind === 'cripple')) assert.ok(c.y >= header.y + header.h);
+});

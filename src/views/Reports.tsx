@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
 import { materialsList, studStock } from '../calc/materials.ts';
@@ -6,13 +6,43 @@ import type { Hit } from '../editor/hitTest.ts';
 import { downloadBlob, slug } from '../model/persist.ts';
 import type { Project } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
+import { MEMBER_LEGEND, WallElevation } from './WallElevation.tsx';
 
 export function FramingView({ project }: { project: Project }) {
   const t = useMemo(() => framingTakeoff(project), [project]);
+  const [picked, setPicked] = useState<string | 'all'>('');
   if (!project.walls.length) return <Empty />;
+  const current = picked === 'all' ? t.walls : [t.walls.find((f) => f.wallId === picked) ?? t.walls[0]];
+  const labelOf = (id: string) => `W${t.walls.findIndex((f) => f.wallId === id) + 1}`;
   return (
     <div className="report">
-      <h2>Framing takeoff</h2>
+      <div className="report-head">
+        <h2>Framing</h2>
+        <div className="row">
+          <select value={picked || t.walls[0].wallId} onChange={(e) => setPicked(e.target.value)} aria-label="Wall to show">
+            {t.walls.map((f, i) => (
+              <option key={f.wallId} value={f.wallId}>
+                W{i + 1} — {f.kind}, {formatFtIn(f.length)}
+              </option>
+            ))}
+            <option value="all">All walls</option>
+          </select>
+        </div>
+      </div>
+      <div className="legend">
+        {MEMBER_LEGEND.map((l) => (
+          <span key={l.kind}>
+            <i className={`sw m-${l.kind}`} />
+            {l.label}
+          </span>
+        ))}
+      </div>
+      {current.map((f) => (
+        <div key={f.wallId} className="elevation-wrap">
+          <WallElevation f={f} label={labelOf(f.wallId)} />
+        </div>
+      ))}
+      <h3>Takeoff</h3>
       <p className="muted">
         {project.framing.studSpacing}" o.c. · single bottom + double top plate · kings, jacks and doubled headers at openings · 3-stud corners, ladder backing at tees.
         Header sizes are a single-storey rule of thumb — confirm against IRC Table R602.7(1).
@@ -37,7 +67,7 @@ export function FramingView({ project }: { project: Project }) {
           </thead>
           <tbody>
             {t.walls.map((f, i) => (
-              <tr key={f.wallId}>
+              <tr key={f.wallId} className={current.length === 1 && current[0].wallId === f.wallId ? 'picked' : undefined} onClick={() => setPicked(f.wallId)}>
                 <td>W{i + 1}</td>
                 <td>{f.kind}</td>
                 <td>

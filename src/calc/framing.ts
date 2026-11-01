@@ -36,6 +36,20 @@ export interface HeaderPiece {
   length: number;
 }
 
+export type MemberKind = 'plate' | 'common' | 'corner' | 'king' | 'jack' | 'cripple' | 'header' | 'sill';
+
+/**
+ * One framing member in wall elevation: x along the wall from wall.a, y up from the
+ * underside of the bottom plate. Studs are drawn on their 1-1/2" face.
+ */
+export interface Member {
+  kind: MemberKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface WallFraming {
   wallId: string;
   kind: Wall['kind'];
@@ -53,6 +67,10 @@ export interface WallFraming {
   /** Linear inches of plate stock: bottom + 2 × top, plus flat window sills. */
   plateLength: number;
   headers: HeaderPiece[];
+  /** Every member, for the elevation drawing. Counts above are derived from this. */
+  members: Member[];
+  /** Rough openings in elevation, for drawing. */
+  openings: { id: string; kind: Opening['kind']; x: number; y: number; w: number; h: number }[];
   notes: string[];
 }
 
@@ -99,13 +117,20 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
   const bearing = wall.kind === 'exterior';
   const notes: string[] = [];
 
+  const T = PLATE_THICKNESS;
+  const members: Member[] = [];
+  const stud = (kind: MemberKind, x: number, y = T, h = studLength) => members.push({ kind, x: x - T / 2, y, w: T, h });
+
+  // Plates: one bottom, two top. (The bottom plate is cut out at doors on site; it's still bought.)
+  members.push({ kind: 'plate', x: 0, y: 0, w: length, h: T });
+  members.push({ kind: 'plate', x: 0, y: height - 2 * T, w: length, h: T });
+  members.push({ kind: 'plate', x: 0, y: height - T, w: length, h: T });
+
   const layout = studLayout(length, framing.studSpacing);
   const removed = new Set<number>();
-  let king = 0;
-  let jack = 0;
-  let cripple = 0;
   let sillLength = 0;
   const headers: HeaderPiece[] = [];
+  const roRects: WallFraming['openings'] = [];
 
   const openings = project.openings.filter((o) => o.wallId === wall.id).sort((p, q) => p.offset - q.offset);
   for (const o of openings) {
@@ -115,52 +140,79 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
     const end = o.offset + ro.width / 2;
     // Layout studs that land inside the opening (or where its kings/jacks go) are
     // dropped; the ones inside the rough opening come back as cripples.
-    const framedStart = start - PLATE_THICKNESS * (jacksPerSide + 1);
-    const framedEnd = end + PLATE_THICKNESS * (jacksPerSide + 1);
-    let inside = 0;
+    const framedStart = start - T * (jacksPerSide + 1);
+    const framedEnd = end + T * (jacksPerSide + 1);
+    const inside: number[] = [];
     layout.forEach((x, i) => {
       if (x > framedStart && x < framedEnd) removed.add(i);
-      if (x > start && x < end) inside += 1;
+      if (x > start && x < end) inside.push(x);
     });
+    // At least `min` cripples; fall back to even spacing across the opening.
+    const cripplesAt = (min: number) =>
+      inside.length >= min ? inside : Array.from({ length: min }, (_, i) => start + T / 2 + ((ro.width - T) * (min === 1 ? 0.5 : i / (min - 1))));
 
-    king += 2;
-    jack += 2 * jacksPerSide;
+    const roBottom = o.kind === 'door' ? 0 : o.sill;
+    const roTop = roBottom + ro.height;
+    roRects.push({ id: o.id, kind: o.kind, x: start, y: roBottom, w: ro.width, h: ro.height });
+
+    for (let j = 0; j < jacksPerSide; j++) {
+      stud('jack', start - T * (j + 0.5), T, roTop - T);
+      stud('jack', end + T * (j + 0.5), T, roTop - T);
+    }
+    stud('king', start - T * (jacksPerSide + 0.5));
+    stud('king', end + T * (jacksPerSide + 0.5));
 
     const size = headerSizeFor(ro.width, bearing);
     if (size === 'LVL') notes.push(`${o.kind} ${Math.round(o.width)}" wide: header needs an engineered (LVL) span check`);
-    headers.push({ openingId: o.id, size, plies: 2, length: ro.width + 2 * PLATE_THICKNESS * jacksPerSide });
+    const headerLen = ro.width + 2 * T * jacksPerSide;
+    headers.push({ openingId: o.id, size, plies: 2, length: headerLen });
+    members.push({ kind: 'header', x: start - T * jacksPerSide, y: roTop, w: headerLen, h: HEADER_DEPTH[size] });
 
-    const headerTop = o.sill + ro.height + HEADER_DEPTH[size];
-    if (headerTop > studLength + 0.01) {
-      notes.push(`${o.kind} at ${Math.round(o.offset)}": header top (${headerTop.toFixed(1)}") is above the top plate — lower the unit or raise the wall`);
-    } else if (studLength - headerTop >= 2) {
-      cripple += Math.max(inside, 1);
+    const headerTop = roTop + HEADER_DEPTH[size];
+    const plateUnderside = height - 2 * T;
+    if (headerTop > plateUnderside + 0.01) {
+      notes.push(`${o.kind} at ${Math.round(o.offset)}": header top (${(headerTop - T).toFixed(1)}") is above the top plate — lower the unit or raise the wall`);
+    } else if (plateUnderside - headerTop >= 2) {
+      for (const x of cripplesAt(1)) stud('cripple', x, headerTop, plateUnderside - headerTop);
     }
     if (o.kind === 'window') {
       sillLength += ro.width;
-      if (o.sill >= 3) cripple += Math.max(inside, 2);
+      members.push({ kind: 'sill', x: start, y: roBottom - T, w: ro.width, h: T });
+      if (o.sill >= 3) for (const x of cripplesAt(2)) stud('cripple', x, T, roBottom - 2 * T);
     }
   }
 
-  const common = layout.length - removed.size;
+  layout.forEach((x, i) => {
+    if (!removed.has(i)) stud('common', x);
+  });
 
   // Corners: at a vertex shared by n walls, add n-1 backer studs, booked to the
   // first wall there (by id) so each corner is counted once. Tees: a wall that
   // dies into the middle of this one needs ladder backing — 2 studs here.
-  let corner = 0;
-  for (const end of [wall.a, wall.b]) {
+  [wall.a, wall.b].forEach((end, e) => {
     const atVertex = project.walls.filter((w) => samePoint(w.a, end) || samePoint(w.b, end));
     if (atVertex.length > 1 && [...atVertex].sort((p, q) => p.id.localeCompare(q.id))[0].id === wall.id) {
-      corner += atVertex.length - 1;
+      for (let k = 1; k < atVertex.length; k++) stud('corner', e === 0 ? T * (k + 0.5) : length - T * (k + 0.5));
     }
-  }
+  });
   for (const other of project.walls) {
     if (other.id === wall.id) continue;
     for (const end of [other.a, other.b]) {
       const { along, perp } = projectOnWall(wall, end);
-      if (perp < 1 && along > PLATE_THICKNESS && along < length - PLATE_THICKNESS) corner += 2;
+      if (perp < 1 && along > T && along < length - T) {
+        const half = other.thickness / 2;
+        stud('corner', along - half - T / 2);
+        stud('corner', along + half + T / 2);
+      }
     }
   }
+
+  const count = (k: MemberKind) => members.filter((m) => m.kind === k).length;
+  const common = count('common');
+  const corner = count('corner');
+  const king = count('king');
+  const jack = count('jack');
+  const cripple = count('cripple');
 
   return {
     wallId: wall.id,
@@ -176,6 +228,8 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
     cripple,
     plateLength: length * 3 + sillLength,
     headers,
+    members,
+    openings: roRects,
     notes,
   };
 }

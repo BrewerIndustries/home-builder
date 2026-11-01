@@ -17,6 +17,13 @@
   --outlet-gfci: #fde7c7;
   --room: rgba(37, 99, 235, 0.04);
   --room-sel: rgba(37, 99, 235, 0.12);
+  --m-stud: #e8c99a;
+  --m-corner: #d9a86a;
+  --m-king: #c98f4a;
+  --m-jack: #8fb3d9;
+  --m-cripple: #b9d39a;
+  --m-header: #a77b4f;
+  --m-plate: #cfae80;
   --pass: #15803d;
   --fail: #c2372e;
   --warn: #b45309;
@@ -46,6 +53,13 @@
     --outlet-gfci: #4a3410;
     --room: rgba(96, 165, 250, 0.05);
     --room-sel: rgba(96, 165, 250, 0.16);
+    --m-stud: #8a6e45;
+    --m-corner: #9c7542;
+    --m-king: #b07b3a;
+    --m-jack: #3f6a96;
+    --m-cripple: #5d7d3b;
+    --m-header: #c08a55;
+    --m-plate: #7d6440;
     --pass: #4ade80;
     --fail: #f87171;
     --warn: #fbbf24;
@@ -611,4 +625,82 @@ tfoot td {
   .actions {
     margin-left: 0;
   }
+}
+
+/* ---------- framing elevations ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+.m-common { background: var(--m-stud); }
+.m-corner { background: var(--m-corner); }
+.m-king { background: var(--m-king); }
+.m-jack { background: var(--m-jack); }
+.m-cripple { background: var(--m-cripple); }
+.m-header { background: var(--m-header); }
+.m-plate { background: var(--m-plate); }
+.elevation-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+svg.elevation {
+  display: block;
+  width: 100%;
+  min-width: 560px;
+  height: auto;
+  max-height: 60vh;
+}
+.member {
+  stroke: var(--text);
+  stroke-width: 0.25;
+  stroke-opacity: 0.6;
+}
+.ro {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.6;
+  stroke-dasharray: 3 2;
+}
+.ro-label,
+.dim-text {
+  fill: var(--muted);
+}
+.header-label {
+  fill: #1d2330;
+  font-weight: 600;
+}
+.elev-title {
+  fill: var(--text);
+  font-weight: 600;
+}
+.tick,
+.dim-line {
+  stroke: var(--muted);
+  stroke-width: 0.4;
+}
+tr.picked td {
+  background: var(--accent-soft);
+}
+tbody tr {
+  cursor: pointer;
 }
