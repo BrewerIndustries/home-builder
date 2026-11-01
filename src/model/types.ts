@@ -113,6 +113,15 @@ export const LUMBER_SIZES: LumberSize[] = ['2x4', '2x6', '2x8'];
 /** Dressed depth of a stud, inches. */
 export const STUD_DEPTH: Record<LumberSize, number> = { '2x4': 3.5, '2x6': 5.5, '2x8': 7.25 };
 
+export interface Pricing {
+  /** Unit price by materials-list item text. Missing items use the sample price. */
+  prices: Record<string, number>;
+  /** Overhead + profit, fraction of materials subtotal. */
+  markup: number;
+  /** Sales tax on materials, fraction. */
+  tax: number;
+}
+
 /** A traced-over picture of an existing floorplan, placed in plan space. */
 export interface Underlay {
   /** Data URL (downscaled JPEG) so it saves with the project. */
@@ -137,6 +146,7 @@ export interface Project {
   rooms: Room[];
   outlets: Outlet[];
   framing: FramingSettings;
+  pricing?: Pricing;
   underlay?: Underlay;
 }
 

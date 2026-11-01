@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type Dispatch } from 'react';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
-import { materialsList, studStock } from '../calc/materials.ts';
+import { materialsList, studStock, wallAreas } from '../calc/materials.ts';
+import { DEFAULT_PRICING, estimate, money } from '../calc/pricing.ts';
 import type { Hit } from '../editor/hitTest.ts';
 import { downloadBlob, slug } from '../model/persist.ts';
-import type { Project } from '../model/types.ts';
+import type { Action } from '../model/store.ts';
+import type { Pricing, Project } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { MEMBER_LEGEND, WallElevation } from './WallElevation.tsx';
 
@@ -98,35 +100,94 @@ export function FramingView({ project }: { project: Project }) {
   );
 }
 
-export function MaterialsView({ project }: { project: Project }) {
-  const lines = useMemo(() => materialsList(project), [project]);
+export function MaterialsView({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
+  const est = useMemo(() => estimate(materialsList(project), project.pricing ?? DEFAULT_PRICING), [project]);
   if (!project.walls.length) return <Empty />;
-  const groups = [...new Set(lines.map((l) => l.category))];
+  const pricing = project.pricing ?? DEFAULT_PRICING;
+  const setPricing = (patch: Partial<Pricing>) => dispatch({ type: 'setPricing', pricing: { ...pricing, ...patch } });
+  const setPrice = (item: string, value: string) => {
+    const prices = { ...pricing.prices };
+    const n = Number(value);
+    if (value.trim() === '' || !Number.isFinite(n)) delete prices[item];
+    else prices[item] = n;
+    setPricing({ prices });
+  };
+  const floor = wallAreas(project).floor;
+  const groups = est.byCategory;
   const csv = () => {
     const esc = (s: string | number) => `"${String(s).replace(/"/g, '""')}"`;
-    const rows = [['Category', 'Item', 'Qty', 'Unit', 'Basis'], ...lines.map((l) => [l.category, l.item, l.qty, l.unit, l.basis])];
-    downloadBlob(new Blob([rows.map((r) => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }), `${slug(project.name)}-materials.csv`);
+    const rows = [
+      ['Category', 'Item', 'Qty', 'Unit', 'Unit price', 'Total', 'Basis'],
+      ...est.lines.map((l) => [l.category, l.item, l.qty, l.unit, l.unitPrice.toFixed(2), l.total.toFixed(2), l.basis]),
+      [],
+      ['', 'Materials subtotal', '', '', '', est.subtotal.toFixed(2)],
+      ['', `Sales tax ${pct(pricing.tax)}`, '', '', '', est.tax.toFixed(2)],
+      ['', `Markup ${pct(pricing.markup)}`, '', '', '', est.markup.toFixed(2)],
+      ['', 'Total', '', '', '', est.total.toFixed(2)],
+    ];
+    downloadBlob(new Blob([rows.map((r) => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }), `${slug(project.name)}-estimate.csv`);
   };
   return (
     <div className="report">
       <div className="report-head">
-        <h2>Materials</h2>
+        <h2>Materials &amp; estimate</h2>
         <button onClick={csv}>Download CSV</button>
       </div>
-      <p className="muted">Walls, sheathing, drywall, insulation, rough electrical and openings. Floor, roof and foundation systems aren't in the takeoff yet.</p>
+      <p className="muted">
+        Walls, sheathing, drywall, insulation, rough electrical and openings. Floor, roof and foundation systems aren't in the takeoff yet. Prices in grey are
+        sample ballpark figures — type your supplier's price to replace one.
+      </p>
+
+      <div className="estimate-summary">
+        <div>
+          <div className="stat-label">Materials</div>
+          <div className="big">{money(est.subtotal)}</div>
+        </div>
+        <label>
+          <span className="stat-label">Sales tax %</span>
+          <PctInput value={pricing.tax} onChange={(tax) => setPricing({ tax })} />
+          <span>{money(est.tax)}</span>
+        </label>
+        <label>
+          <span className="stat-label">Markup %</span>
+          <PctInput value={pricing.markup} onChange={(markup) => setPricing({ markup })} />
+          <span>{money(est.markup)}</span>
+        </label>
+        <div>
+          <div className="stat-label">Total</div>
+          <div className="big strong">{money(est.total)}</div>
+          {floor > 0 && <div className="muted small">{money(est.total / floor)} / sq ft of floor (these trades only)</div>}
+        </div>
+      </div>
+
       {groups.map((g) => (
-        <section key={g}>
-          <h3>{g}</h3>
+        <section key={g.category}>
+          <h3>
+            {g.category} <span className="muted">{money(g.total)}</span>
+          </h3>
           <div className="table-wrap">
             <table>
               <tbody>
-                {lines
-                  .filter((l) => l.category === g)
+                {est.lines
+                  .filter((l) => l.category === g.category)
                   .map((l) => (
-                    <tr key={l.item}>
+                    <tr key={l.item} className="no-pick">
                       <td>{l.item}</td>
                       <td className="num strong">{l.qty.toLocaleString()}</td>
                       <td>{l.unit}</td>
+                      <td className="num">
+                        <input
+                          key={`${l.custom ? l.unitPrice : ''}`}
+                          className={`price${l.custom ? '' : ' sample'}`}
+                          inputMode="decimal"
+                          defaultValue={l.custom ? String(l.unitPrice) : ''}
+                          placeholder={l.unitPrice.toFixed(2)}
+                          aria-label={`Unit price for ${l.item}`}
+                          onBlur={(e) => setPrice(l.item, e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                        />
+                      </td>
+                      <td className="num strong">{money(l.total)}</td>
                       <td className="muted">{l.basis}</td>
                     </tr>
                   ))}
@@ -136,6 +197,25 @@ export function MaterialsView({ project }: { project: Project }) {
         </section>
       ))}
     </div>
+  );
+}
+
+function pct(n: number): string {
+  return `${Math.round(n * 1000) / 10}%`;
+}
+
+function PctInput({ value, onChange }: { value: number; onChange(v: number): void }) {
+  return (
+    <input
+      className="price"
+      inputMode="decimal"
+      defaultValue={String(Math.round(value * 1000) / 10)}
+      onBlur={(e) => {
+        const n = Number(e.target.value);
+        if (Number.isFinite(n) && n >= 0) onChange(n / 100);
+      }}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+    />
   );
 }
 

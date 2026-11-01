@@ -704,3 +704,44 @@ tr.picked td {
 tbody tr {
   cursor: pointer;
 }
+
+/* ---------- estimate ---------- */
+
+.estimate-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  align-items: end;
+}
+.estimate-summary label {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 2px 8px;
+  align-items: center;
+}
+.estimate-summary label .stat-label {
+  grid-column: 1 / -1;
+}
+.big {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+input.price {
+  width: 84px;
+  text-align: right;
+  padding: 3px 6px;
+}
+input.price.sample::placeholder {
+  color: var(--muted);
+}
+input.price:not(.sample) {
+  border-color: var(--accent);
+}
+tr.no-pick {
+  cursor: default;
+}

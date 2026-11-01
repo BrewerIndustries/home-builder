@@ -127,7 +127,7 @@ export function App() {
         <nav className="tabs">
           {(['plan', 'framing', 'materials', 'code'] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-              {t === 'plan' ? 'Plan' : t === 'framing' ? 'Framing' : t === 'materials' ? 'Materials' : 'Code check'}
+              {t === 'plan' ? 'Plan' : t === 'framing' ? 'Framing' : t === 'materials' ? 'Estimate' : 'Code check'}
               {t === 'code' && fails > 0 && <span className="count">{fails}</span>}
             </button>
           ))}
@@ -215,7 +215,7 @@ export function App() {
       ) : (
         <main className="report-page">
           {tab === 'framing' && <FramingView project={project} />}
-          {tab === 'materials' && <MaterialsView project={project} />}
+          {tab === 'materials' && <MaterialsView project={project} dispatch={dispatch} />}
           {tab === 'code' && (
             <CodeView
               project={project}

@@ -1,5 +1,5 @@
 import { clampOpeningOffset, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Point, type Project, type Room, type Underlay, type Wall } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Pricing, type Point, type Project, type Room, type Underlay, type Wall } from './types.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -25,6 +25,7 @@ export type Action =
   | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>> }
   | { type: 'delete'; ids: string[] }
   | { type: 'setFraming'; patch: Partial<FramingSettings> }
+  | { type: 'setPricing'; pricing: Pricing }
   | { type: 'addOutlet'; outlet: Outlet }
   | { type: 'updateOutlet'; id: string; patch: Partial<Omit<Outlet, 'id'>>; transient?: boolean }
   | { type: 'replaceAutoOutlets'; outlets: Outlet[] }
@@ -139,6 +140,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'replaceAutoOutlets':
       return { ...p, outlets: [...p.outlets.filter((o) => !o.auto), ...action.outlets] };
+
+    case 'setPricing':
+      return { ...p, pricing: action.pricing };
 
     case 'setUnderlay':
       return { ...p, underlay: action.underlay };
