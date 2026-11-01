@@ -43,5 +43,6 @@ Ordered roughly by value. Competitor research behind these lives in
 
 ## Housekeeping
 
-- [ ] Create GitHub repo (must be public for free Pages), Pages env branch policy for `dev`, CNAME DNS record
+- [x] Public GitHub repo, Pages (dev + main branch policies), CNAME DNS, HTTPS — dev live 2026-11-01
+- [ ] Create `main` (prod) via the first approved dev → main PR; prod URL shows a placeholder until then
 - [ ] Code-edition picker (2018 / 2021 / 2024) once a rule actually differs between editions
