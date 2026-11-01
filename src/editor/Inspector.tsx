@@ -39,7 +39,7 @@ const CEILINGS: { value: CeilingType; label: string }[] = [
   { value: 'coffered', label: 'Coffered' },
 ];
 
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="field">
       <span>{label}</span>
@@ -335,7 +335,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
   );
 }
 
-function Stat({ label, value }: { label: string; value: ReactNode }) {
+export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="stat">
       <div className="stat-value">{value}</div>

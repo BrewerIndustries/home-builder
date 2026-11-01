@@ -1,6 +1,7 @@
 import { useMemo, useState, type Dispatch } from 'react';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
+import { siteChecks } from '../calc/site.ts';
 import { materialsList, studStock, wallAreas } from '../calc/materials.ts';
 import { DEFAULT_PRICING, estimate, money } from '../calc/pricing.ts';
 import type { Hit } from '../editor/hitTest.ts';
@@ -228,6 +229,7 @@ const STATUS: Record<CheckStatus, { label: string; cls: string }> = {
 
 export function CodeView({ project, onSelect }: { project: Project; onSelect(h: Hit): void }) {
   const checks = useMemo(() => ircChecks(project), [project]);
+  const site = useMemo(() => siteChecks(project), [project]);
   if (!project.walls.length) return <Empty />;
   const order: CheckStatus[] = ['fail', 'warn', 'info', 'pass'];
   const kindOf = (id?: string): Hit | null => {
@@ -277,6 +279,28 @@ export function CodeView({ project, onSelect }: { project: Project; onSelect(h: 
             }),
         )}
       </ul>
+      {site.length > 0 && (
+        <>
+          <h3>Site &amp; planting</h3>
+          <ul className="checks">
+            {order.flatMap((s) =>
+              site
+                .filter((c) => c.status === s)
+                .map((c, i) => (
+                  <li key={`site${s}${i}`} className={STATUS[s].cls}>
+                    <span className="st">{STATUS[s].label}</span>
+                    <div>
+                      <div>
+                        <strong>{c.rule}</strong> <span className="muted">{c.section}</span>
+                      </div>
+                      <div className="muted">{c.message}</div>
+                    </div>
+                  </li>
+                )),
+            )}
+          </ul>
+        </>
+      )}
       <h3>Not checked yet</h3>
       <ul className="muted not-checked">
         {NOT_CHECKED.map((n) => (

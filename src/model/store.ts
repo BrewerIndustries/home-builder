@@ -1,5 +1,5 @@
 import { clampOpeningOffset, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Pricing, type Point, type Project, type Room, type Underlay, type Wall } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall } from './types.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -26,6 +26,11 @@ export type Action =
   | { type: 'delete'; ids: string[] }
   | { type: 'setFraming'; patch: Partial<FramingSettings> }
   | { type: 'setPricing'; pricing: Pricing }
+  | { type: 'setSite'; patch: Partial<Site>; transient?: boolean }
+  | { type: 'addArea'; area: SiteArea }
+  | { type: 'updateArea'; id: string; patch: Partial<Omit<SiteArea, 'id'>>; transient?: boolean }
+  | { type: 'addPlant'; plant: Plant }
+  | { type: 'updatePlant'; id: string; patch: Partial<Omit<Plant, 'id'>>; transient?: boolean }
   | { type: 'addOutlet'; outlet: Outlet }
   | { type: 'updateOutlet'; id: string; patch: Partial<Omit<Outlet, 'id'>>; transient?: boolean }
   | { type: 'replaceAutoOutlets'; outlets: Outlet[] }
@@ -126,6 +131,13 @@ export function projectReducer(p: Project, action: Action): Project {
         openings: p.openings.filter((o) => !ids.has(o.id) && wallIds.has(o.wallId)),
         outlets: p.outlets.filter((o) => !ids.has(o.id) && wallIds.has(o.wallId)),
         rooms: p.rooms.filter((r) => !ids.has(r.id)),
+        site: p.site && {
+          ...p.site,
+          lot: ids.has('lot') ? undefined : p.site.lot,
+          setbacks: ids.has('lot') ? [] : p.site.setbacks,
+          areas: p.site.areas.filter((a) => !ids.has(a.id)),
+          plants: p.site.plants.filter((x) => !ids.has(x.id)),
+        },
       };
     }
 
@@ -141,6 +153,21 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'replaceAutoOutlets':
       return { ...p, outlets: [...p.outlets.filter((o) => !o.auto), ...action.outlets] };
 
+    case 'setSite':
+      return { ...p, site: { ...site(p), ...action.patch } };
+
+    case 'addArea':
+      return { ...p, site: { ...site(p), areas: [...site(p).areas, action.area] } };
+
+    case 'updateArea':
+      return { ...p, site: { ...site(p), areas: site(p).areas.map((a) => (a.id === action.id ? { ...a, ...action.patch } : a)) } };
+
+    case 'addPlant':
+      return { ...p, site: { ...site(p), plants: [...site(p).plants, action.plant] } };
+
+    case 'updatePlant':
+      return { ...p, site: { ...site(p), plants: site(p).plants.map((x) => (x.id === action.id ? { ...x, ...action.patch } : x)) } };
+
     case 'setPricing':
       return { ...p, pricing: action.pricing };
 
@@ -153,6 +180,10 @@ export function projectReducer(p: Project, action: Action): Project {
     default:
       return p;
   }
+}
+
+function site(p: Project): Site {
+  return p.site ?? EMPTY_SITE;
 }
 
 /** Fill fields added after a project was saved, so old saves keep loading. */

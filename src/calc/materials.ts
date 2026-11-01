@@ -2,13 +2,14 @@ import { polygonArea, wallLength } from '../model/geometry.ts';
 import { studFor, type LumberSize, type Project } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { exclusiveArea, totalFloorArea } from './regions.ts';
+import { siteLines } from './site.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings';
+  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Landscape';
   item: string;
   qty: number;
   unit: string;
@@ -196,6 +197,8 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   for (const [item, qty] of [...units].sort()) {
     lines.push({ category: 'Openings', item, qty, unit: 'ea', basis: 'from the plan' });
   }
+
+  lines.push(...siteLines(project, project.framing.waste));
 
   return lines;
 }

@@ -26,9 +26,12 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 |---|---|
 | **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (drag a rectangle — walls already on the plan are reused, never doubled), Door, Window, Outlet tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; undo/redo; per-wall stud size and height; per-room use and ceiling. |
 | **Floorplan image** | *Import floorplan image* drops a picture under the plan (downscaled JPEG, saved with the project). *Calibrate scale*: click both ends of a known dimension and type its real length. Then trace over it. |
-| **Framing** | Per-wall takeoff: commons on layout, 3-stud corners, ladder backing at tees, king/jack studs, doubled headers, cripples, plates. |
-| **Materials** | Studs (as precuts where the height matches), plates, header stock, OSB, house wrap, batts by cavity depth, drywall incl. vaulted/tray/coffered ceiling surface, receptacles + boxes, door/window schedule. CSV download. |
-| **Code check** | IRC rules with section refs and click-to-locate: R303.1 light/vent, R304 room size, R305 ceiling height (incl. R305.1.1 sloped), R308.4 safety glazing, R310 bedroom escape openings, R311.2 egress door, R602.3 wall height/spacing, R602.7 header reminder, E3901 receptacle spacing, E3902 GFCI. Lists what is *not* checked. |
+| **Site** | Lot outline (quick rectangle around the house or draw any polygon) with per-edge setbacks → dashed buildable envelope; hardscape / bed areas (pavers, concrete, gravel, mulch, sod, deck) with depth; ~40-species plant library drawn at mature spread; lot coverage and impervious %. Quantities roll into the Estimate. |
+| **3D** | Orbitable three.js model (lazy-loaded): walls cut around doors and windows, glass, floors, and every ceiling type. Cut-away at 4 ft. |
+| **Framing** | Per-wall takeoff and a dimensioned framing elevation (commons on layout, 3-stud corners, ladder backing at tees, king/jack studs, headers, cripples, sills, plates, rough openings). |
+| **Estimate** | Materials list priced from editable unit prices (sample US big-box defaults until you type your own), markup and tax, by category; CSV with prices. Lumber, sheathing, wrap, batts, drywall incl. vaulted/tray/coffered ceilings, receptacles + boxes, door/window schedule, and landscape (pavers + base + sand + edging + polymeric sand, concrete yd³, gravel tons + fabric, mulch yd³, sod pallets, plant schedule). |
+| **Print / PDF** | From the Plan tab: a Letter-landscape sheet at the largest architectural scale that fits, with dimension strings, scale bar and title block. |
+| **Code check** | IRC rules with section refs and click-to-locate: R303.1 light/vent, R304 room size, R305 ceiling height (incl. R305.1.1 sloped), R308.4 safety glazing, R310 bedroom escape openings, R311.2 egress door, R602.3 wall height/spacing, R602.7 header reminder, E3901 receptacle spacing, E3902 GFCI. Plus site checks: house inside the setback envelope, coverage, plant hardiness zone, trees too close to the foundation, plants overlapping at maturity. Lists what is *not* checked. |
 
 ### Walls
 
@@ -48,9 +51,11 @@ Flat, **vaulted** (single slope across the short side), **cathedral** (ridge dow
 
 ```
 src/model/     types (the Project document), geometry, units (ft-in parse/format), store (reducer + undo), persist
-src/calc/      framing, materials, ceilings, electrical, irc — pure functions of Project, unit-tested in test/
-src/editor/    PlanCanvas (SVG editor), Inspector, hit testing
-src/views/     Framing / Materials / Code check reports
+src/calc/      framing, materials, pricing, ceilings, electrical, regions, irc, site, sheet, model3d — pure functions of Project, unit-tested in test/
+src/data/      plant library
+src/editor/    PlanCanvas (SVG editor), PlanDrawing (shared with print), Inspector, hit testing
+src/site/      Site tab (lot, areas, plants)
+src/views/     Framing / Estimate / Code check reports, print sheet, 3D view
 docs/research/ competitor research that feeds BACKLOG.md
 ```
 
@@ -63,6 +68,7 @@ store a derived value. All lengths are inches.
 - **Estimating, not engineering.** Header sizes are a single-storey rule of thumb, *not* IRC Table R602.7(1) (which needs ground snow load and building width). The Code check tab says so on every plan.
 - **IRC checks are a design aid, not a plan review.** Values match the 2018/2021/2024 IRC for the rules implemented; jurisdictions adopt with amendments. Window net-clear openings are estimated from nominal size + operation type. Only numeric requirements are encoded — no ICC code text is reproduced.
 - Rooms are drawn as rectangles; ceiling slopes and min-dimension checks use the room's bounding box.
+- Setbacks are local zoning, entered by you; the envelope inset is exact for convex lots, approximate for concave ones. Plant sizes are typical figures, not cultivar-specific.
 - Gable-end wall framing above the plate for vaulted/cathedral rooms isn't in the takeoff yet.
 
 ## Deploy

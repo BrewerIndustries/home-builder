@@ -5,13 +5,14 @@ Ordered roughly by value. Competitor research behind these lives in
 
 ## Next up
 
-- [ ] **Landscape module v1** — lot boundary (drawn or from survey bearings), plat/aerial underlay, house footprint pulled from the plan; setback/easement envelope with violation highlights; lot coverage + impervious %; hardscape polygons with material + base-depth presets; one area × depth takeoff engine (pavers, base gravel/sand in yd³/tons, concrete, wall block, mulch, sod, topsoil, fabric); curated plant library (~300 species: mature size, USDA zone, sun, water, native) drawn at mature spread with spacing / too-close-to-foundation warnings; R401.3 6"-in-10-ft grade check; plant schedule.
-- [ ] **Wall framing elevations** — dimensioned SVG per wall from the takeoff we already compute (what framers actually build from).
-- [ ] **Dimension strings + to-scale PDF export with a title block.**
-- [ ] **Price catalog → priced estimate** — editable unit prices, waste/markup, CSV/XLSX.
+- [x] **Landscape module v1** — lot (rectangle or drawn), per-edge setbacks + envelope check, coverage / impervious %, hardscape areas with depth takeoff (pavers + base/sand/edging, concrete, gravel + fabric, mulch, sod, deck area), ~40-species plant library at mature spread with zone / foundation / crowding checks, landscape lines in the estimate.
+- [ ] **Landscape v2** — lot from survey bearings + plat/aerial underlay; easements; retaining wall block, topsoil, edging as lines; grade/drainage (R401.3 6"-in-10-ft); grow the plant library (~300 species, regional native flag); planting beds with auto-spaced fill; site in the 3D view and on the print sheet.
+- [x] **Wall framing elevations** — dimensioned SVG per wall on the Framing tab.
+- [x] **Dimension strings + to-scale PDF export with a title block.**
+- [x] **Price catalog → priced estimate** — editable unit prices, markup, tax, CSV. (XLSX still open.)
 - [ ] **IRC span tables** — headers R602.7(1) (needs snow load + building width inputs), joists R502, rafters R802; replace the header rule of thumb.
 - [ ] **PDF underlay + perspective correction** for phone photos of plans.
-- [ ] **3D view** (three.js) incl. vaulted / cathedral / tray / coffered ceilings.
+- [x] **3D view** (three.js) incl. vaulted / cathedral / tray / coffered ceilings. (Rooms with nested rooms still get a flat ceiling.)
 
 ## Structure & takeoff
 

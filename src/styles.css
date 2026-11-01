@@ -16,6 +16,8 @@
   --outlet: #b45309;
   --outlet-gfci: #fde7c7;
   --room: rgba(37, 99, 235, 0.04);
+  --site-ground: #e9e6dc;
+  --site-lawn: #dcebcf;
   --room-sel: rgba(37, 99, 235, 0.12);
   --m-stud: #e8c99a;
   --m-corner: #d9a86a;
@@ -52,6 +54,8 @@
     --outlet: #f59e0b;
     --outlet-gfci: #4a3410;
     --room: rgba(96, 165, 250, 0.05);
+    --site-ground: #1b1f17;
+    --site-lawn: #243321;
     --room-sel: rgba(96, 165, 250, 0.16);
     --m-stud: #8a6e45;
     --m-corner: #9c7542;
@@ -406,6 +410,103 @@ svg.plan {
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
+}
+
+/* ---------- site plan ---------- */
+
+svg.site {
+  background: var(--site-ground);
+}
+.lot {
+  fill: var(--site-lawn);
+  stroke: var(--text);
+}
+.lot.selected {
+  stroke: var(--accent);
+}
+.envelope {
+  fill: none;
+  stroke: var(--warn);
+}
+.setback-label {
+  fill: var(--warn);
+  font-weight: 600;
+}
+.area {
+  stroke: rgba(0, 0, 0, 0.35);
+}
+.area.selected {
+  stroke: var(--accent);
+}
+.area-pavers {
+  fill: #c9a98a;
+}
+.area-concrete {
+  fill: #c8c8c4;
+}
+.area-gravel {
+  fill: #ddd3c0;
+}
+.area-mulch {
+  fill: #8b5e3c;
+}
+.area-sod {
+  fill: #7fbf6a;
+}
+.area-decking {
+  fill: #b9875a;
+}
+.area-label,
+.plant-label {
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+  pointer-events: none;
+}
+.plant circle {
+  fill-opacity: 0.5;
+  stroke: rgba(0, 0, 0, 0.4);
+}
+.plant.selected circle {
+  stroke: var(--accent);
+  fill-opacity: 0.7;
+}
+.plant .trunk {
+  fill: #5b4030;
+  fill-opacity: 1;
+  stroke: none;
+}
+.plant-tree circle {
+  fill: #3f8f4a;
+}
+.plant-shrub circle {
+  fill: #2f6b3a;
+}
+.plant-perennial circle {
+  fill: #c06aa8;
+}
+.plant-grass circle {
+  fill: #c8b26a;
+}
+.plant-groundcover circle {
+  fill: #5d9a8a;
+}
+.preview polyline {
+  stroke: var(--accent);
+}
+table.mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+table.mini td {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+table.mini .num {
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* ---------- inspector ---------- */

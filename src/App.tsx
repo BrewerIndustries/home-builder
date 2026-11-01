@@ -1,21 +1,23 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { autoOutlets } from './calc/electrical.ts';
 import { ircChecks } from './calc/irc.ts';
+import { siteChecks } from './calc/site.ts';
 import type { Hit } from './editor/hitTest.ts';
 import { Inspector } from './editor/Inspector.tsx';
 import { PlanCanvas, type PlanCanvasHandle, type Tool } from './editor/PlanCanvas.tsx';
 import { downloadJson, loadSaved, readProjectFile, readUnderlay, save } from './model/persist.ts';
 import { historyReducer, initHistory } from './model/store.ts';
 import { emptyProject, type WallKind } from './model/types.ts';
+import { SiteView } from './site/SiteView.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
 
-type Tab = 'plan' | '3d' | 'framing' | 'materials' | 'code';
+type Tab = 'plan' | 'site' | '3d' | 'framing' | 'materials' | 'code';
 
 // three.js is most of the 3D tab's weight — load it only when the tab opens.
 const View3D = lazy(() => import('./views/View3D.tsx'));
 
-const TAB_LABEL: Record<Tab, string> = { plan: 'Plan', '3d': '3D', framing: 'Framing', materials: 'Estimate', code: 'Code check' };
+const TAB_LABEL: Record<Tab, string> = { plan: 'Plan', site: 'Site', '3d': '3D', framing: 'Framing', materials: 'Estimate', code: 'Code check' };
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Select', key: 'v', icon: '↖' },
@@ -68,7 +70,7 @@ export function App() {
         return;
       }
       if (mod) return;
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selection && tab === 'plan') {
         dispatch({ type: 'delete', ids: [selection.id] });
         setSelection(null);
         e.preventDefault();
@@ -83,7 +85,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selection, tab, tool]);
 
-  const fails = useMemo(() => ircChecks(project).filter((c) => c.status === 'fail').length, [project]);
+  const fails = useMemo(() => [...ircChecks(project), ...siteChecks(project)].filter((c) => c.status === 'fail').length, [project]);
 
   function flash(msg: string) {
     setNotice(msg);
@@ -222,6 +224,8 @@ export function App() {
           />
           <Inspector project={project} dispatch={dispatch} selection={selection} setSelection={setSelection} setTool={setTool} />
         </main>
+      ) : tab === 'site' ? (
+        <SiteView project={project} dispatch={dispatch} />
       ) : tab === '3d' ? (
         <main className="report-page full">
           <Suspense fallback={<p className="muted center">Loading 3D…</p>}>

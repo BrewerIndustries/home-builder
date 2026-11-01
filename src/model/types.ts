@@ -122,6 +122,36 @@ export interface Pricing {
   tax: number;
 }
 
+export type SurfaceMaterial = 'pavers' | 'concrete' | 'gravel' | 'mulch' | 'sod' | 'decking';
+
+/** A hardscape or planting area on the site plan. */
+export interface SiteArea {
+  id: string;
+  material: SurfaceMaterial;
+  points: Point[];
+  /** Installed depth of the main material (concrete slab, gravel, mulch). Pavers use their own base build-up. */
+  depth: number;
+  label?: string;
+}
+
+export interface Plant {
+  id: string;
+  /** Key into the plant library (src/data/plants.ts). */
+  species: string;
+  at: Point;
+}
+
+export interface Site {
+  /** Lot boundary, closed polygon. */
+  lot?: Point[];
+  /** Setback per lot edge (edge i runs lot[i] → lot[i+1]), inches. */
+  setbacks: number[];
+  /** USDA hardiness zone, e.g. 8 for 8a/8b. */
+  zone?: number;
+  areas: SiteArea[];
+  plants: Plant[];
+}
+
 /** A traced-over picture of an existing floorplan, placed in plan space. */
 export interface Underlay {
   /** Data URL (downscaled JPEG) so it saves with the project. */
@@ -147,8 +177,11 @@ export interface Project {
   outlets: Outlet[];
   framing: FramingSettings;
   pricing?: Pricing;
+  site?: Site;
   underlay?: Underlay;
 }
+
+export const EMPTY_SITE: Site = { setbacks: [], areas: [], plants: [] };
 
 export const DEFAULT_FRAMING: FramingSettings = {
   studSpacing: 16,
