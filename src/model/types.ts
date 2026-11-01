@@ -179,6 +179,7 @@ export interface Project {
   pricing?: Pricing;
   site?: Site;
   roof?: Roof;
+  foundation?: Foundation;
   underlay?: Underlay;
 }
 
@@ -203,6 +204,41 @@ export interface Roof {
 }
 
 export const DEFAULT_ROOF: Roof = { type: 'gable', pitch: 6, overhang: 12, rake: 12, ridge: 'auto', framing: 'trusses', rafterSize: '2x8', spacing: 24 };
+
+export type FoundationType = 'slab' | 'crawl' | 'none';
+
+/** One foundation under the exterior walls. Depths are measured down from finished grade. */
+export interface Foundation {
+  type: FoundationType;
+  /** Slab: concrete thickness. */
+  slabThickness: number;
+  /** Slab: thickened (turned-down) edge width and overall depth from the top of the slab. */
+  edgeWidth: number;
+  edgeDepth: number;
+  /** Crawlspace: spread footing and stem wall. */
+  footingWidth: number;
+  footingThickness: number;
+  stemHeight: number;
+  stemThickness: number;
+  stemMaterial: 'poured' | 'cmu';
+  /** Bottom of footing (or thickened edge) below grade. */
+  footingDepth: number;
+  /** Local frost depth, if known — checked against footingDepth. */
+  frostDepth?: number;
+}
+
+export const DEFAULT_FOUNDATION: Foundation = {
+  type: 'slab',
+  slabThickness: 4,
+  edgeWidth: 12,
+  edgeDepth: 18,
+  footingWidth: 16,
+  footingThickness: 8,
+  stemHeight: 24,
+  stemThickness: 8,
+  stemMaterial: 'poured',
+  footingDepth: 12,
+};
 
 export const EMPTY_SITE: Site = { setbacks: [], areas: [], plants: [] };
 

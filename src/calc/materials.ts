@@ -5,13 +5,14 @@ import { exclusiveArea, totalFloorArea } from './regions.ts';
 import { roomCeiling } from './model3d.ts';
 import { roofCalc, roofLines, stockFeet } from './roof.ts';
 import { siteLines } from './site.ts';
+import { foundationLines } from './foundation.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Roof' | 'Landscape';
+  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Roof' | 'Landscape';
   item: string;
   qty: number;
   unit: string;
@@ -213,6 +214,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
     });
   }
 
+  lines.unshift(...foundationLines(project, project.framing.waste));
   lines.push(...roofLines(project, project.framing.waste));
   lines.push(...siteLines(project, project.framing.waste));
 

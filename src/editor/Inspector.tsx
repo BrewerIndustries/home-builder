@@ -5,6 +5,7 @@ import { netClearOpening } from '../calc/irc.ts';
 import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
+import { foundationOf } from '../calc/foundation.ts';
 import { wallLength } from '../model/geometry.ts';
 import type { Action } from '../model/store.ts';
 import {
@@ -13,6 +14,7 @@ import {
   type RafterSize,
   type Roof,
   type RoofType,
+  type Foundation,
   studFor,
   type Ceiling,
   type CeilingType,
@@ -22,7 +24,7 @@ import {
   type RoomType,
   type WindowStyle,
 } from '../model/types.ts';
-import { formatFtIn, formatSqFt } from '../model/units.ts';
+import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
 import type { Tool } from './PlanCanvas.tsx';
@@ -319,6 +321,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
       )}
 
       <RoofFields roof={roofOf(project)} set={(patch) => dispatch({ type: 'setRoof', patch })} />
+      <FoundationFields f={foundationOf(project)} set={(patch) => dispatch({ type: 'setFoundation', patch })} />
 
       {u && (
         <>
@@ -351,6 +354,75 @@ const ROOF_TYPES: { value: RoofType; label: string }[] = [
   { value: 'shed', label: 'Shed' },
   { value: 'none', label: 'None' },
 ];
+
+function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Foundation>): void }) {
+  return (
+    <>
+      <h4>Foundation</h4>
+      <Field label="Type">
+        <select value={f.type} onChange={(e) => set({ type: e.target.value as Foundation['type'], footingDepth: e.target.value === 'crawl' ? Math.max(f.footingDepth, 24) : f.footingDepth })}>
+          <option value="slab">Slab on grade (thickened edge)</option>
+          <option value="crawl">Crawlspace (footing + stem wall)</option>
+          <option value="none">None / not in this estimate</option>
+        </select>
+      </Field>
+      {f.type === 'slab' && (
+        <div className="row">
+          <Field label="Slab">
+            <LengthInput value={f.slabThickness} min={1} onChange={(v) => set({ slabThickness: v })} />
+          </Field>
+          <Field label="Edge width">
+            <LengthInput value={f.edgeWidth} min={1} onChange={(v) => set({ edgeWidth: v })} />
+          </Field>
+          <Field label="Edge depth">
+            <LengthInput value={f.edgeDepth} min={1} onChange={(v) => set({ edgeDepth: v })} />
+          </Field>
+        </div>
+      )}
+      {f.type === 'crawl' && (
+        <>
+          <div className="row">
+            <Field label="Footing width">
+              <LengthInput value={f.footingWidth} min={1} onChange={(v) => set({ footingWidth: v })} />
+            </Field>
+            <Field label="Footing thick">
+              <LengthInput value={f.footingThickness} min={1} onChange={(v) => set({ footingThickness: v })} />
+            </Field>
+          </div>
+          <div className="row">
+            <Field label="Stem height">
+              <LengthInput value={f.stemHeight} min={1} onChange={(v) => set({ stemHeight: v })} />
+            </Field>
+            <Field label="Stem">
+              <select value={f.stemMaterial} onChange={(e) => set({ stemMaterial: e.target.value as Foundation['stemMaterial'], stemThickness: e.target.value === 'cmu' ? 7.625 : 8 })}>
+                <option value="poured">Poured 8"</option>
+                <option value="cmu">8" block</option>
+              </select>
+            </Field>
+          </div>
+        </>
+      )}
+      {f.type !== 'none' && (
+        <div className="row">
+          <Field label="Footing bottom below grade">
+            <LengthInput value={f.footingDepth} min={0} onChange={(v) => set({ footingDepth: v })} />
+          </Field>
+          <Field label="Local frost depth">
+            <input
+              defaultValue={f.frostDepth === undefined ? '' : formatFtIn(f.frostDepth)}
+              key={f.frostDepth ?? 'unset'}
+              placeholder={`e.g. 36" — ask your building dept.`}
+              onBlur={(e) => {
+                const v = e.target.value.trim() ? parseFtIn(e.target.value) : null;
+                set({ frostDepth: v ?? undefined });
+              }}
+            />
+          </Field>
+        </div>
+      )}
+    </>
+  );
+}
 
 function RoofFields({ roof, set }: { roof: Roof; set(patch: Partial<Roof>): void }) {
   return (

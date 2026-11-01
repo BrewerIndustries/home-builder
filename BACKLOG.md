@@ -18,7 +18,8 @@ Ordered roughly by value. Competitor research behind these lives in
 
 - [x] Roof model (gable / hip / shed): squares, sheathing, trim, rafter or truss counts; gable-end wall framing above the plate for vaulted rooms
 - [ ] Roof v2: per-wing roofs with valleys for L/T plans, dormers, roof on the print sheet, attic ventilation (R806)
-- [ ] Foundation / concrete takeoff: footings, slab, stem wall, anchor bolts, sill plate
+- [x] Foundation / concrete takeoff: slab or crawlspace footing + stem wall, anchor bolts (R403.1.6), PT sill, vents (R408.1), min-size + frost-depth checks
+- [ ] Foundation v2: interior bearing footings / piers, basement walls, footing sizing from soil + storeys (Table R403.1, needs verified values), foundation in 3D
 - [ ] Floor joist layout + subfloor sheet layout
 - [ ] Cut lists optimised to stock lengths, with waste report
 - [ ] Layered wall assemblies (drywall / stud / sheathing / siding) instead of the +1" finish rule

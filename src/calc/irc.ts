@@ -6,6 +6,7 @@ import { roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
 import { exclusiveArea } from './regions.ts';
 import { framingTakeoff } from './framing.ts';
 import { roofCalc } from './roof.ts';
+import { foundationChecks } from './foundation.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -325,6 +326,8 @@ export function ircChecks(project: Project): CodeCheck[] {
     });
   }
 
+  for (const c of foundationChecks(project)) add(c);
+
   return checks;
 }
 
@@ -338,7 +341,7 @@ export const NOT_CHECKED = [
   'Hallway width (R311.6)',
   'Fire separation, garage–dwelling (R302)',
   'Energy efficiency (Chapter 11)',
-  'Foundations and floor framing (Chapters 4, 5)',
+  'Footing size for soil bearing and storeys (Table R403.1), foundation reinforcement and floor framing (Chapter 5)',
   'Rafter, ceiling joist and truss sizing (R802 span tables) — the Roof takeoff counts members, it does not size them',
   'Attic ventilation (R806) and roof uplift connections (R802.11)',
 ];

@@ -2,6 +2,7 @@ import { useMemo, useState, type Dispatch } from 'react';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
 import { roofCalc, roofFraming } from '../calc/roof.ts';
+import { foundationCalc, foundationVolumes } from '../calc/foundation.ts';
 import { siteChecks } from '../calc/site.ts';
 import { materialsList, studStock, wallAreas } from '../calc/materials.ts';
 import { DEFAULT_PRICING, estimate, money } from '../calc/pricing.ts';
@@ -100,7 +101,30 @@ export function FramingView({ project }: { project: Project }) {
         </table>
       </div>
       <RoofSummary project={project} />
+      <FoundationSummary project={project} />
     </div>
+  );
+}
+
+function FoundationSummary({ project }: { project: Project }) {
+  const c = useMemo(() => foundationCalc(project), [project]);
+  if (!c) return null;
+  const v = foundationVolumes(c);
+  const yd = (n: number) => `${(n / 46656).toFixed(1)} yd³`;
+  return (
+    <>
+      <h3>Foundation</h3>
+      <p className="muted">
+        {c.f.type === 'slab' ? `Monolithic ${c.f.slabThickness}" slab with a ${c.f.edgeWidth}" × ${c.f.edgeDepth}" thickened edge` : `${c.f.footingWidth}" × ${c.f.footingThickness}" footing under a ${c.f.stemHeight}" ${c.f.stemMaterial === 'cmu' ? 'block' : 'poured'} stem wall`}{' '}
+        under the exterior walls. Change it under Foundation in the Plan tab's project panel; quantities are in the Estimate.
+      </p>
+      <div className="stat-grid roof-stats">
+        <Stat label={<>Footprint</>} value={<>{Math.round(c.area / 144).toLocaleString()} sq ft</>} />
+        <Stat label={<>Perimeter</>} value={<>{formatFtIn(c.perimeter, { compact: true })}</>} />
+        <Stat label={<>Concrete (net)</>} value={<>{yd(v.slab + v.edge + v.footing + (c.f.stemMaterial === 'poured' ? v.stem : 0))}</>} />
+        <Stat label={<>Anchor bolts</>} value={<>{c.anchorBolts}</>} />
+      </div>
+    </>
   );
 }
 
