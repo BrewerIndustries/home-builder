@@ -4,6 +4,7 @@ import { useWorkspace } from './account/useWorkspace.ts';
 import { PdfImport } from './editor/PdfImport.tsx';
 import { openPdf } from './model/imaging.ts';
 import { autoOutlets } from './calc/electrical.ts';
+import { autoLighting } from './calc/lighting.ts';
 import { ircChecks } from './calc/irc.ts';
 import { siteChecks } from './calc/site.ts';
 import type { Hit } from './editor/hitTest.ts';
@@ -30,6 +31,9 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'door', label: 'Door', key: 'd', icon: '◜' },
   { id: 'window', label: 'Window', key: 'n', icon: '▤' },
   { id: 'outlet', label: 'Outlet', key: 'o', icon: '⏀' },
+  { id: 'switch', label: 'Switch', key: 's', icon: 'S' },
+  { id: 'light', label: 'Light', key: 'l', icon: '⊗' },
+  { id: 'alarm', label: 'Alarm', key: 'a', icon: '◉' },
 ];
 
 export function App() {
@@ -70,7 +74,7 @@ export function App() {
   // Drop a stale selection after undo / delete.
   useEffect(() => {
     if (!selection) return;
-    const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets };
+    const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures };
     if (!lists[selection.kind].some((x) => x.id === selection.id)) setSelection(null);
   }, [project, selection]);
 
@@ -144,6 +148,17 @@ export function App() {
     const outlets = autoOutlets(project);
     dispatch({ type: 'replaceAutoOutlets', outlets });
     flash(`Placed ${outlets.length} receptacles. Drag to adjust, or use the Outlet tool to add more.`);
+  }
+
+  function runAutoLighting() {
+    if (!project.rooms.length) {
+      flash('Draw rooms first — lights and alarms are laid out per room.');
+      return;
+    }
+    const { fixtures, switches } = autoLighting(project);
+    dispatch({ type: 'replaceAutoLighting', fixtures, switches });
+    const lights = fixtures.filter((f) => f.kind === 'light').length;
+    flash(`Placed ${lights} lights, ${switches.length} switches and ${fixtures.length - lights} alarms. Drag to adjust.`);
   }
 
   return (
@@ -255,6 +270,10 @@ export function App() {
             <button onClick={runAutoOutlets} title="Lay out receptacles in every room per IRC E3901">
               <span className="icon">⚡</span>
               <span>Auto outlets</span>
+            </button>
+            <button onClick={runAutoLighting} title="Lay out switched lights (IRC E3903) and smoke / CO alarms (R314, R315) in every room">
+              <span className="icon">💡</span>
+              <span>Auto lights</span>
             </button>
             <div className="spacer" />
             <button onClick={() => canvas.current?.zoom(1.25)} title="Zoom in">

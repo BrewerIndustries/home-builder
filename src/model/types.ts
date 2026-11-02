@@ -70,6 +70,35 @@ export interface Outlet {
   auto: boolean;
 }
 
+export type FixtureKind = 'light' | 'smoke' | 'smoke-co' | 'co';
+
+/** A ceiling device: a lighting outlet or a smoke / CO alarm, at a plan point. */
+export interface Fixture {
+  id: string;
+  kind: FixtureKind;
+  at: Point;
+  /** Placed by auto-layout (see Outlet.auto). */
+  auto: boolean;
+}
+
+/** A wall switch. Sits on a wall face like a receptacle and controls lighting outlets. */
+export interface WallSwitch {
+  id: string;
+  wallId: string;
+  offset: number;
+  side: 1 | -1;
+  /** Centre height above the floor. */
+  height: number;
+  /** Fixture ids this switch controls. Two switches on one light = 3-way. */
+  controls: string[];
+  auto: boolean;
+}
+
+export interface ElectricalSettings {
+  /** Gas / oil / wood appliances or a fireplace in the house — drives CO alarms (R315). Unset = not answered. */
+  fuelAppliances?: boolean;
+}
+
 export type CeilingType = 'flat' | 'vaulted' | 'cathedral' | 'tray' | 'coffered';
 
 export interface Ceiling {
@@ -175,6 +204,9 @@ export interface Project {
   openings: Opening[];
   rooms: Room[];
   outlets: Outlet[];
+  fixtures: Fixture[];
+  switches: WallSwitch[];
+  electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;
   site?: Site;
@@ -289,7 +321,7 @@ export const WALL_DEFAULTS: Record<WallKind, { thickness: number; height: number
 };
 
 export function emptyProject(name = 'Untitled house'): Project {
-  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], framing: { ...DEFAULT_FRAMING } };
+  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], fixtures: [], switches: [], framing: { ...DEFAULT_FRAMING } };
 }
 
 let counter = 0;

@@ -1,6 +1,7 @@
 import { exclusiveArea } from '../calc/regions.ts';
 import { pointAlong, polygonCentroid, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
-import type { Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
+import { switchWays } from '../calc/lighting.ts';
+import type { Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { outletPosition } from './outletGeometry.ts';
@@ -23,7 +24,10 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
   return (
     <g className="plan-drawing">
       {project.rooms.map((r) => {
-        const c = polygonCentroid(r.points);
+        const centroid = polygonCentroid(r.points);
+        // Lift the label clear of a ceiling fixture sitting on the room's centre.
+        const busy = outlets && project.fixtures.some((f) => Math.abs(f.at.x - centroid.x) < 10 && Math.abs(f.at.y - centroid.y) < 10);
+        const c = busy ? { x: centroid.x, y: centroid.y - 8 - px(18) } : centroid;
         const sel = selection?.kind === 'room' && selection.id === r.id;
         return (
           <g key={r.id}>
@@ -63,6 +67,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
           const w = wallsById.get(o.wallId);
           return w ? <OutletGlyph key={o.id} wall={w} o={o} selected={selection?.kind === 'outlet' && selection.id === o.id} px={px} /> : null;
         })}
+      {outlets && <Lighting project={project} selection={selection} px={px} />}
 
       {wallDims && project.walls.map((w) => <WallDimension key={w.id} w={w} px={px} />)}
       {overallDims && <OverallDimensions project={project} px={px} />}
@@ -202,6 +207,74 @@ function OutletGlyph({ wall, o, selected, px }: { wall: Wall; o: Outlet; selecte
           {prong(-1)}
         </>
       )}
+    </g>
+  );
+}
+
+/** Ceiling lights and alarms, wall switches, and dashed switch legs from each switch to what it controls. */
+function Lighting({ project, selection, px }: { project: Project; selection: Hit | null; px(n: number): number }) {
+  const walls = new Map(project.walls.map((w) => [w.id, w]));
+  const fixtures = new Map(project.fixtures.map((f) => [f.id, f]));
+  const ways = switchWays(project);
+  const switches = project.switches.flatMap((s) => {
+    const w = walls.get(s.wallId);
+    return w ? [{ s, w, at: outletPosition(w, { offset: s.offset, side: s.side }) }] : [];
+  });
+  return (
+    <g className="lighting">
+      {switches.flatMap(({ s, w, at }) =>
+        s.controls.flatMap((id) => {
+          const f = fixtures.get(id);
+          if (!f) return [];
+          // Bow the leg off the wall into the room so it doesn't run along the wall line.
+          const n = { x: -wallDir(w).y * s.side, y: wallDir(w).x * s.side };
+          const mid = { x: (at.x + f.at.x) / 2 + n.x * 18, y: (at.y + f.at.y) / 2 + n.y * 18 };
+          const hot = (selection?.kind === 'switch' && selection.id === s.id) || (selection?.kind === 'fixture' && selection.id === id);
+          return [<path key={s.id + id} d={`M ${at.x} ${at.y} Q ${mid.x} ${mid.y} ${f.at.x} ${f.at.y}`} className={hot ? 'switch-leg hot' : 'switch-leg'} strokeWidth={px(hot ? 1.5 : 1)} strokeDasharray={`${px(5)} ${px(3)}`} />];
+        }),
+      )}
+      {project.fixtures.map((f) => (
+        <FixtureGlyph key={f.id} f={f} selected={selection?.kind === 'fixture' && selection.id === f.id} px={px} />
+      ))}
+      {switches.map(({ s, at }) => {
+        const sel = selection?.kind === 'switch' && selection.id === s.id;
+        const n = ways.get(s.id) ?? 1;
+        return (
+          <g key={s.id} className={s.auto ? 'switch auto' : 'switch'}>
+            <circle cx={at.x} cy={at.y} r={4} fill="var(--canvas)" stroke={sel ? 'var(--accent)' : 'var(--outlet)'} strokeWidth={px(1.2)} />
+            <text x={at.x} y={at.y} fontSize={n === 1 ? 5.5 : 4.5} textAnchor="middle" dominantBaseline="central" fill={sel ? 'var(--accent)' : 'var(--outlet)'}>
+              {n === 1 ? 'S' : `S${n}`}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+const ALARM_LABEL = { smoke: 'SD', co: 'CO', 'smoke-co': 'S/C' } as const;
+
+function FixtureGlyph({ f, selected, px }: { f: Fixture; selected: boolean; px(n: number): number }) {
+  const { x, y } = f.at;
+  if (f.kind === 'light') {
+    const stroke = selected ? 'var(--accent)' : 'var(--outlet)';
+    const k = 6 * Math.SQRT1_2;
+    // Ceiling lighting outlet: a circle crossed through.
+    return (
+      <g className={f.auto ? 'fixture auto' : 'fixture'}>
+        <circle cx={x} cy={y} r={6} fill="var(--canvas)" stroke={stroke} strokeWidth={px(1.5)} />
+        <line x1={x - k} y1={y - k} x2={x + k} y2={y + k} stroke={stroke} strokeWidth={px(1.2)} />
+        <line x1={x - k} y1={y + k} x2={x + k} y2={y - k} stroke={stroke} strokeWidth={px(1.2)} />
+      </g>
+    );
+  }
+  const stroke = selected ? 'var(--accent)' : 'var(--alarm)';
+  return (
+    <g className={f.auto ? 'fixture alarm auto' : 'fixture alarm'}>
+      <circle cx={x} cy={y} r={6.5} fill="var(--alarm-fill)" stroke={stroke} strokeWidth={px(1.5)} />
+      <text x={x} y={y} fontSize={4.2} textAnchor="middle" dominantBaseline="central" fill={stroke} fontWeight={600}>
+        {ALARM_LABEL[f.kind]}
+      </text>
     </g>
   );
 }

@@ -7,6 +7,7 @@ import { roofCalc, roofLines, stockFeet } from './roof.ts';
 import { siteLines } from './site.ts';
 import { foundationLines } from './foundation.ts';
 import { floorLines } from './floor.ts';
+import { lightingLines } from './lighting.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
@@ -188,9 +189,10 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   const devices = new Map<string, number>();
   for (const o of project.outlets) devices.set(o.kind, (devices.get(o.kind) ?? 0) + 1);
   for (const [kind, qty] of devices) lines.push({ category: 'Electrical', item: DEVICE[kind], qty, unit: 'ea', basis: 'from the plan' });
-  if (project.outlets.length) {
-    lines.push({ category: 'Electrical', item: 'Single-gang new-work box', qty: project.outlets.length, unit: 'ea', basis: 'one per receptacle' });
+  if (project.outlets.length + project.switches.length) {
+    lines.push({ category: 'Electrical', item: 'Single-gang new-work box', qty: project.outlets.length + project.switches.length, unit: 'ea', basis: 'one per receptacle and switch' });
   }
+  lines.push(...lightingLines(project));
 
   // Door and window schedule, by kind and nominal size (e.g. 3068 = 3'0" × 6'8").
   const units = new Map<string, number>();

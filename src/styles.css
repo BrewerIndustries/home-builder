@@ -15,6 +15,8 @@
   --opening: #2b3240;
   --outlet: #b45309;
   --outlet-gfci: #fde7c7;
+  --alarm: #dc2626;
+  --alarm-fill: #fee2e2;
   --room: rgba(37, 99, 235, 0.04);
   --site-ground: #e9e6dc;
   --site-lawn: #dcebcf;
@@ -53,6 +55,8 @@
     --opening: #d6dbe4;
     --outlet: #f59e0b;
     --outlet-gfci: #4a3410;
+    --alarm: #f87171;
+    --alarm-fill: #3f1414;
     --room: rgba(96, 165, 250, 0.05);
     --site-ground: #1b1f17;
     --site-lawn: #243321;
@@ -557,8 +561,19 @@ svg.plan {
 .ghost {
   opacity: 0.5;
 }
-.outlet.auto circle {
+.outlet.auto circle,
+.switch.auto circle,
+.fixture.auto circle {
   stroke-dasharray: 1.5 1;
+}
+.switch-leg {
+  fill: none;
+  stroke: var(--outlet);
+  opacity: 0.45;
+}
+.switch-leg.hot {
+  opacity: 1;
+  stroke: var(--accent);
 }
 .cal-point {
   fill: #e11d48;
@@ -1118,6 +1133,8 @@ tr.no-pick {
     --opening: #000;
     --outlet: #000;
     --outlet-gfci: #ddd;
+    --alarm: #000;
+    --alarm-fill: #fff;
     --room: transparent;
     --room-sel: transparent;
     --accent: #000;
@@ -1192,4 +1209,19 @@ tr.no-pick {
 .tb-note {
   font-size: 7.5pt;
   color: #555;
+}
+
+/* Switch → light links in the inspector */
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
 }

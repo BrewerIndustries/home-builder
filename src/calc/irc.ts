@@ -7,6 +7,7 @@ import { exclusiveArea } from './regions.ts';
 import { framingTakeoff } from './framing.ts';
 import { roofCalc } from './roof.ts';
 import { foundationChecks } from './foundation.ts';
+import { lightingChecks } from './lighting.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -327,6 +328,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   }
 
   for (const c of foundationChecks(project)) add(c);
+  for (const c of lightingChecks(project)) add(c);
 
   return checks;
 }
@@ -334,8 +336,8 @@ export function ircChecks(project: Project): CodeCheck[] {
 /** Things this checker does not look at — shown so nobody mistakes silence for compliance. */
 export const NOT_CHECKED = [
   'Wall bracing (R602.10)',
-  'Smoke and CO alarms (R314, R315)',
-  'Lighting outlets, switches, dedicated appliance circuits, AFCI (E3903, E3703, E3902.16)',
+  'Dedicated appliance circuits, AFCI (E3703, E3902.16); exterior door lights, stairway switches, lights for equipment in attics and crawlspaces (E3903.3, E3903.4)',
+  'Smoke alarm distance from cooking appliances and exact ceiling position (R314.3, NFPA 72); CO alarms inside bedrooms with a fuel-burning appliance (R315.3)',
   'Outdoor receptacles front and back (E3901.7)',
   'Stairways, handrails and guards (R311.7, R312)',
   'Hallway width (R311.6)',

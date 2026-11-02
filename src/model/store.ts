@@ -1,5 +1,5 @@
 import { clampOpeningOffset, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation } from './types.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -36,6 +36,13 @@ export type Action =
   | { type: 'addOutlet'; outlet: Outlet }
   | { type: 'updateOutlet'; id: string; patch: Partial<Omit<Outlet, 'id'>>; transient?: boolean }
   | { type: 'replaceAutoOutlets'; outlets: Outlet[] }
+  /** `linkTo`: switches that should also control the new fixture. */
+  | { type: 'addFixture'; fixture: Fixture; linkTo?: string[] }
+  | { type: 'updateFixture'; id: string; patch: Partial<Omit<Fixture, 'id'>>; transient?: boolean }
+  | { type: 'addSwitch'; sw: WallSwitch }
+  | { type: 'updateSwitch'; id: string; patch: Partial<Omit<WallSwitch, 'id'>>; transient?: boolean }
+  | { type: 'replaceAutoLighting'; fixtures: Fixture[]; switches: WallSwitch[] }
+  | { type: 'setElectrical'; patch: Partial<ElectricalSettings> }
   | { type: 'setUnderlay'; underlay: Underlay | undefined }
   | { type: 'updateUnderlay'; patch: Partial<Underlay>; transient?: boolean };
 
@@ -132,6 +139,8 @@ export function projectReducer(p: Project, action: Action): Project {
         walls,
         openings: p.openings.filter((o) => !ids.has(o.id) && wallIds.has(o.wallId)),
         outlets: p.outlets.filter((o) => !ids.has(o.id) && wallIds.has(o.wallId)),
+        fixtures: p.fixtures.filter((f) => !ids.has(f.id)),
+        switches: p.switches.filter((s) => !ids.has(s.id) && wallIds.has(s.wallId)).map((s) => (s.controls.some((c) => ids.has(c)) ? { ...s, controls: s.controls.filter((c) => !ids.has(c)) } : s)),
         rooms: p.rooms.filter((r) => !ids.has(r.id)),
         site: p.site && {
           ...p.site,
@@ -154,6 +163,35 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'replaceAutoOutlets':
       return { ...p, outlets: [...p.outlets.filter((o) => !o.auto), ...action.outlets] };
+
+    case 'addFixture': {
+      const link = new Set(action.linkTo ?? []);
+      return {
+        ...p,
+        fixtures: [...p.fixtures, action.fixture],
+        switches: link.size ? p.switches.map((s) => (link.has(s.id) ? { ...s, controls: [...s.controls, action.fixture.id] } : s)) : p.switches,
+      };
+    }
+
+    case 'updateFixture':
+      return { ...p, fixtures: p.fixtures.map((f) => (f.id === action.id ? { ...f, ...action.patch } : f)) };
+
+    case 'addSwitch':
+      return { ...p, switches: [...p.switches, action.sw] };
+
+    case 'updateSwitch':
+      return { ...p, switches: p.switches.map((s) => (s.id === action.id ? { ...s, ...action.patch } : s)) };
+
+    case 'replaceAutoLighting': {
+      const fixtures = [...p.fixtures.filter((f) => !f.auto), ...action.fixtures];
+      const keep = new Set(fixtures.map((f) => f.id));
+      // Hand-placed switches stay, minus links to auto fixtures that were just replaced.
+      const manual = p.switches.filter((s) => !s.auto).map((s) => ({ ...s, controls: s.controls.filter((c) => keep.has(c)) }));
+      return { ...p, fixtures, switches: [...manual, ...action.switches] };
+    }
+
+    case 'setElectrical':
+      return { ...p, electrical: { ...p.electrical, ...action.patch } };
 
     case 'setSite':
       return { ...p, site: { ...site(p), ...action.patch } };
@@ -199,6 +237,8 @@ export function migrate(p: Project): Project {
   return {
     ...p,
     outlets: p.outlets ?? [],
+    fixtures: p.fixtures ?? [],
+    switches: p.switches ?? [],
     rooms: p.rooms.map((r) => ({ ...r, type: r.type ?? 'other' })),
     framing: { ...DEFAULT_FRAMING, ...p.framing },
     roof: { ...DEFAULT_ROOF, ...p.roof },
@@ -237,7 +277,15 @@ function reclampOpenings(p: Project): Project {
     changed = true;
     return { ...o, offset };
   });
-  return changed ? { ...p, openings, outlets } : p;
+  const switches = p.switches.map((s) => {
+    const w = byId.get(s.wallId);
+    if (!w) return s;
+    const offset = Math.max(2, Math.min(wallLength(w) - 2, s.offset));
+    if (offset === s.offset) return s;
+    changed = true;
+    return { ...s, offset };
+  });
+  return changed ? { ...p, openings, outlets, switches } : p;
 }
 
 /** Four walls (clockwise) and a room for a dragged rectangle. */

@@ -4,16 +4,25 @@ import type { Point, Project } from '../model/types.ts';
 
 export type Hit =
   | { kind: 'outlet'; id: string }
+  | { kind: 'switch'; id: string }
+  | { kind: 'fixture'; id: string }
   | { kind: 'opening'; id: string }
   | { kind: 'wall'; id: string }
   | { kind: 'room'; id: string };
 
-/** What's under `p` (world inches). `slop` is the pointer tolerance in inches. Outlets beat openings beat walls beat rooms. */
+/** What's under `p` (world inches). `slop` is the pointer tolerance in inches. Wall devices beat ceiling devices beat openings beat walls beat rooms. */
 export function hitTest(project: Project, p: Point, slop: number): Hit | null {
   const walls = new Map(project.walls.map((w) => [w.id, w]));
   for (const o of project.outlets) {
     const w = walls.get(o.wallId);
     if (w && dist(outletPosition(w, o), p) <= 5 + slop) return { kind: 'outlet', id: o.id };
+  }
+  for (const s of project.switches) {
+    const w = walls.get(s.wallId);
+    if (w && dist(outletPosition(w, s), p) <= 5 + slop) return { kind: 'switch', id: s.id };
+  }
+  for (const f of project.fixtures) {
+    if (dist(f.at, p) <= 7 + slop) return { kind: 'fixture', id: f.id };
   }
   for (const o of project.openings) {
     const w = walls.get(o.wallId);

@@ -46,7 +46,7 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 
 | Tab | What you get |
 |---|---|
-| **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (drag a rectangle — walls already on the plan are reused, never doubled), Door, Window, Outlet tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; undo/redo; per-wall stud size and height; per-room use and ceiling. |
+| **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (drag a rectangle — walls already on the plan are reused, never doubled), Door, Window, Outlet, Switch, Light and Alarm tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; undo/redo; per-wall stud size and height; per-room use and ceiling. |
 | **Floorplan image / PDF** | *Import floorplan* takes a photo, scan or **PDF**. For a PDF, pick the sheet from page thumbnails and, if the title block gives a drawing scale (1/8" … 1" = 1'-0"), it comes in at true size with no calibrating. *Straighten* fixes a photo taken at an angle: click the four corners of anything that's really a rectangle, optionally type its real width and depth (which also sets the scale), and the picture is warped flat and cropped to it. *Calibrate scale*: click both ends of a known dimension and type its real length. Then trace over it. |
 | **Site** | Lot outline (quick rectangle around the house or draw any polygon) with per-edge setbacks → dashed buildable envelope; hardscape / bed areas (pavers, concrete, gravel, mulch, sod, deck) with depth; ~40-species plant library drawn at mature spread; lot coverage and impervious %. Quantities roll into the Estimate. |
 | **3D** | Orbitable three.js model (lazy-loaded): walls cut around doors and windows, glass, floors, and every ceiling type. Cut-away at 4 ft. |
@@ -73,6 +73,19 @@ Flat, **vaulted** (single slope across the short side), **cathedral** (ridge dow
 
 **Auto outlets** lays out receptacles in every room per IRC E3901 (no point on a wall run more than 6 ft from one; doorways break runs; kitchens at countertop 4 ft spacing with GFCIs; one GFCI in baths; hall ≥ 10 ft gets one). Re-running replaces only auto-placed ones — anything you add, drag or edit becomes manual and is kept. Auto outlets draw with a dashed ring.
 
+### Lights, switches and alarms
+
+**Auto lights** puts a ceiling light in every room (at the centre, or the point furthest from the walls in an L-shape), a wall switch 6" past the latch side of the room's main door at 48", and a 3-way pair in halls and garages with two or more doors. Smoke alarms go in each bedroom and one outside each sleeping area, about 3 ft out from the bedroom doors (doors within 20 ft share one). With no bedrooms there is one on the floor. Those outside alarms become **combination smoke / CO** when the Project panel says there are fuel-burning appliances, or a garage has a door into the house (R315).
+
+Dashed curves show which lights each switch runs. Select a switch to tick or untick lights. A new light joins the switches already running its room, and a new switch runs the lights of the room it faces. Two switches on one light count as 3-ways, and more add 4-ways in between. Re-running keeps anything you dragged, edited or placed by hand, as with outlets.
+
+The checks cover the following:
+- **E3903.2 / E3903.3:** a wall-switched light in each habitable room, bath, hall and garage. Bedrooms and living rooms only warn, since a switched receptacle is allowed there instead.
+- **R314.3:** a smoke alarm in each bedroom, outside each sleeping area and on each storey, and not within 3 ft of a bath door.
+- **R315.3:** a CO alarm outside sleeping areas when one is required.
+
+"Immediate vicinity" has no number in the code, so the app reports the distance and leaves the call to the inspector.
+
 ## Code layout
 
 ```
@@ -80,7 +93,7 @@ src/model/     types (the Project document), geometry, units (ft-in parse/format
                library (IndexedDB projects + which one is open), cloud (API client)
 src/account/   useWorkspace (open/save/sync), Projects + Account dialogs
 api/           Cloudflare Worker: auth, invites, project storage (wrangler.toml has dev + prod envs)
-src/calc/      framing, materials, pricing, ceilings, electrical, regions, irc, roof, site, sheet, model3d — pure functions of Project, unit-tested in test/
+src/calc/      framing, materials, pricing, ceilings, electrical, lighting, regions, irc, roof, site, sheet, model3d — pure functions of Project, unit-tested in test/
 src/data/      plant library
 src/editor/    PlanCanvas (SVG editor), PlanDrawing (shared with print), Inspector, hit testing
 src/site/      Site tab (lot, areas, plants)

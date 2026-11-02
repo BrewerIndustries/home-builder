@@ -13,13 +13,14 @@ import {
   wallNormal,
 } from '../model/geometry.ts';
 import { rectangleWalls, type Action } from '../model/store.ts';
-import { finishedThickness, uid, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
+import { coRequired, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
+import { finishedThickness, uid, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
 import { OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'calibrate' | 'straighten' | 'moveImage';
+export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'calibrate' | 'straighten' | 'moveImage';
 
 interface View {
   /** Screen pixels per inch. */
@@ -33,6 +34,8 @@ type Drag =
   | { kind: 'vertex'; current: Point }
   | { kind: 'opening'; id: string; grab: number }
   | { kind: 'outlet'; id: string }
+  | { kind: 'switch'; id: string }
+  | { kind: 'fixture'; id: string; grab: Point }
   | { kind: 'room'; start: Point; end: Point }
   | { kind: 'underlay'; start: Point; origin: Point };
 
@@ -270,9 +273,13 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         }
         const hit = hitTest(project, raw, slop);
         setSelection(hit);
-        if (hit?.kind === 'outlet') {
+        if (hit?.kind === 'outlet' || hit?.kind === 'switch') {
           dispatch({ type: 'checkpoint' });
-          drag.current = { kind: 'outlet', id: hit.id };
+          drag.current = { kind: hit.kind, id: hit.id };
+        } else if (hit?.kind === 'fixture') {
+          const f = project.fixtures.find((x) => x.id === hit.id)!;
+          dispatch({ type: 'checkpoint' });
+          drag.current = { kind: 'fixture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y } };
         } else if (hit?.kind === 'opening') {
           const o = project.openings.find((x) => x.id === hit.id)!;
           const w = project.walls.find((x) => x.id === o.wallId)!;
@@ -314,6 +321,32 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const outlet: Outlet = { id: uid('e'), wallId: near.wall.id, offset: Math.round(near.along), side, kind: 'duplex', height: 16, auto: false };
         dispatch({ type: 'addOutlet', outlet });
         setSelection({ kind: 'outlet', id: outlet.id });
+        return;
+      }
+      case 'switch': {
+        const near = nearestWall(project.walls, raw, 18 / view.scale + 6);
+        if (!near) return;
+        const n = wallNormal(near.wall);
+        const foot = pointAlong(near.wall, near.along);
+        const side = (raw.x - foot.x) * n.x + (raw.y - foot.y) * n.y >= 0 ? 1 : -1;
+        // Controls the lights of the room it faces.
+        const room = roomAt(project, { x: foot.x + n.x * side * (near.wall.thickness / 2 + 12), y: foot.y + n.y * side * (near.wall.thickness / 2 + 12) });
+        const controls = room ? project.fixtures.filter((f) => f.kind === 'light' && roomAt(project, f.at)?.id === room.id).map((f) => f.id) : [];
+        const sw: WallSwitch = { id: uid('sw'), wallId: near.wall.id, offset: Math.round(near.along), side, height: SWITCH_HEIGHT, controls, auto: false };
+        dispatch({ type: 'addSwitch', sw });
+        setSelection({ kind: 'switch', id: sw.id });
+        return;
+      }
+      case 'light':
+      case 'alarm': {
+        const p = { x: Math.round(raw.x), y: Math.round(raw.y) };
+        const room = roomAt(project, p);
+        const fixture: Fixture = { id: uid(tool === 'light' ? 'lt' : 'sa'), kind: tool === 'light' ? 'light' : coRequired(project) ? 'smoke-co' : 'smoke', at: p, auto: false };
+        // A new light joins whatever switches already run the room's lights.
+        const lights = new Set(room ? project.fixtures.filter((f) => f.kind === 'light' && roomAt(project, f.at)?.id === room.id).map((f) => f.id) : []);
+        const linkTo = tool === 'light' ? project.switches.filter((s) => s.controls.some((c) => lights.has(c))).map((s) => s.id) : [];
+        dispatch({ type: 'addFixture', fixture, linkTo });
+        setSelection({ kind: 'fixture', id: fixture.id });
         return;
       }
       case 'calibrate': {
@@ -358,6 +391,22 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const offset = clampOpeningOffset(w, o.width, Math.round(along));
         if (offset !== o.offset) dispatch({ type: 'updateOpening', id: o.id, patch: { offset }, transient: true });
       }
+      return;
+    }
+    if (d?.kind === 'switch') {
+      const o = project.switches.find((x) => x.id === d.id);
+      const w = o && project.walls.find((x) => x.id === o.wallId);
+      if (o && w) {
+        const dir = wallDir(w);
+        const along = Math.round(Math.max(2, Math.min(wallLength(w) - 2, (raw.x - w.a.x) * dir.x + (raw.y - w.a.y) * dir.y)));
+        if (along !== o.offset) dispatch({ type: 'updateSwitch', id: o.id, patch: { offset: along, auto: false }, transient: true });
+      }
+      return;
+    }
+    if (d?.kind === 'fixture') {
+      const at = { x: Math.round(raw.x - d.grab.x), y: Math.round(raw.y - d.grab.y) };
+      const f = project.fixtures.find((x) => x.id === d.id);
+      if (f && (at.x !== f.at.x || at.y !== f.at.y)) dispatch({ type: 'updateFixture', id: d.id, patch: { at, auto: false }, transient: true });
       return;
     }
     if (d?.kind === 'outlet') {
@@ -607,6 +656,12 @@ function hintFor(tool: Tool, drawing: boolean): string {
       return `Click on a wall to place a ${tool}`;
     case 'outlet':
       return 'Click beside a wall to add a receptacle on that face';
+    case 'switch':
+      return 'Click beside a wall to add a switch — it controls the lights in the room it faces';
+    case 'light':
+      return 'Click in a room to add a ceiling light — it joins that room’s switches';
+    case 'alarm':
+      return 'Click in a room to add a smoke alarm (smoke / CO where CO alarms are required)';
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
     case 'straighten':

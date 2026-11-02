@@ -6,7 +6,9 @@ import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
 import { foundationOf } from '../calc/foundation.ts';
-import { wallLength } from '../model/geometry.ts';
+import { dist, wallLength } from '../model/geometry.ts';
+import { roomAt, switchWays } from '../calc/lighting.ts';
+import { outletPosition } from './outletGeometry.ts';
 import type { Action } from '../model/store.ts';
 import {
   LUMBER_SIZES,
@@ -22,6 +24,7 @@ import {
   type CeilingType,
   type LumberSize,
   type OutletKind,
+  type FixtureKind,
   type Project,
   type RoomType,
   type WindowStyle,
@@ -186,6 +189,85 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     );
   }
 
+  if (selection?.kind === 'switch') {
+    const sw = project.switches.find((x) => x.id === selection.id);
+    const w = sw && project.walls.find((x) => x.id === sw.wallId);
+    if (!sw || !w) return null;
+    const up = (patch: Partial<typeof sw>) => dispatch({ type: 'updateSwitch', id: sw.id, patch: { ...patch, auto: false } });
+    const at = outletPosition(w, sw);
+    const ways = switchWays(project).get(sw.id) ?? 1;
+    // Nearest lights first; the ones it already runs always show.
+    const lights = project.fixtures
+      .filter((f) => f.kind === 'light')
+      .map((f) => ({ f, d: dist(f.at, at), room: roomAt(project, f.at) }))
+      .sort((a, b) => a.d - b.d)
+      .filter((x, i) => i < 8 || sw.controls.includes(x.f.id));
+    return (
+      <aside className="inspector">
+        <h3>
+          Switch {ways > 1 && <span className="badge">{ways}-way</span>} {sw.auto && <span className="badge">auto</span>}
+        </h3>
+        <div className="field">
+          <span>Controls</span>
+          <div className="link-list">
+            {lights.length ? (
+              lights.map(({ f, d, room }) => (
+                <label key={f.id} className="link-row">
+                  <input
+                    type="checkbox"
+                    checked={sw.controls.includes(f.id)}
+                    onChange={(e) => up({ controls: e.target.checked ? [...sw.controls, f.id] : sw.controls.filter((c) => c !== f.id) })}
+                  />
+                  {room?.name ?? 'Light'} <span className="muted">· {formatFtIn(d, { compact: true })} away</span>
+                </label>
+              ))
+            ) : (
+              <span className="muted small">No lights yet — add one with the Light tool.</span>
+            )}
+          </div>
+          <small className="muted">Tick every light this switch runs. Two switches on one light make a 3-way pair.</small>
+        </div>
+        <Field label="Height to centre">
+          <LengthInput value={sw.height} onChange={(v) => up({ height: v })} />
+        </Field>
+        <button onClick={() => up({ side: sw.side === 1 ? -1 : 1 })}>Move to other face of wall</button>
+        <button className="danger" onClick={() => del(sw.id)}>
+          Delete switch
+        </button>
+      </aside>
+    );
+  }
+
+  if (selection?.kind === 'fixture') {
+    const f = project.fixtures.find((x) => x.id === selection.id);
+    if (!f) return null;
+    const room = roomAt(project, f.at);
+    const by = project.switches.filter((s) => s.controls.includes(f.id)).length;
+    return (
+      <aside className="inspector">
+        <h3>
+          {f.kind === 'light' ? 'Ceiling light' : 'Alarm'} {f.auto && <span className="badge">auto</span>}
+        </h3>
+        <Field label="Type">
+          <select value={f.kind} onChange={(e) => dispatch({ type: 'updateFixture', id: f.id, patch: { kind: e.target.value as FixtureKind, auto: false } })}>
+            <option value="light">Lighting outlet</option>
+            <option value="smoke">Smoke alarm</option>
+            <option value="smoke-co">Smoke / CO alarm</option>
+            <option value="co">CO alarm</option>
+          </select>
+        </Field>
+        <p className="muted small">
+          {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
+          {f.kind === 'light' && (by ? `Switched from ${by} place${by > 1 ? 's' : ''}.` : 'No switch yet — select a switch and tick this light.')}
+        </p>
+        <p className="muted small">Drag it to move. Edited auto items are kept when you re-run Auto lights.</p>
+        <button className="danger" onClick={() => del(f.id)}>
+          Delete {f.kind === 'light' ? 'light' : 'alarm'}
+        </button>
+      </aside>
+    );
+  }
+
   if (selection?.kind === 'room') {
     const r = project.rooms.find((x) => x.id === selection.id);
     if (!r) return null;
@@ -270,6 +352,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Stat label="Exterior walls" value={`${Math.round(extLF / 12)} LF`} />
         <Stat label="Rooms" value={project.rooms.length} />
         <Stat label="Receptacles" value={project.outlets.length} />
+        <Stat label="Lights / alarms" value={`${project.fixtures.filter((f) => f.kind === 'light').length} / ${project.fixtures.filter((f) => f.kind !== 'light').length}`} />
       </div>
 
       <h4>Wall defaults</h4>
@@ -321,6 +404,18 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           {project.walls.filter((w) => w.stud).length} wall(s) override the default ({[...new Set(project.walls.map((w) => studFor(w, fr)))].join(', ')} in use).
         </p>
       )}
+
+      <h4>Electrical</h4>
+      <Field label="Fuel-burning appliances" hint="Gas or oil furnace, water heater or range, or a fireplace — CO alarms follow from this (R315)">
+        <select
+          value={project.electrical?.fuelAppliances === undefined ? '' : project.electrical.fuelAppliances ? 'yes' : 'no'}
+          onChange={(e) => dispatch({ type: 'setElectrical', patch: { fuelAppliances: e.target.value === '' ? undefined : e.target.value === 'yes' } })}
+        >
+          <option value="">Not answered</option>
+          <option value="yes">Yes</option>
+          <option value="no">No — all electric</option>
+        </select>
+      </Field>
 
       <RoofFields roof={roofOf(project)} set={(patch) => dispatch({ type: 'setRoof', patch })} />
       <FoundationFields f={foundationOf(project)} set={(patch) => dispatch({ type: 'setFoundation', patch })} />
