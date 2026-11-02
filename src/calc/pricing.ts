@@ -91,6 +91,9 @@ const SAMPLE: [RegExp, number][] = [
   [/^2x6 pressure-treated sill/, 22],
   [/^2x8 pressure-treated sill/, 30],
   [/^Sill seal/, 9],
+  [/^Pier \/ post/, 45],
+  [/subfloor, 4×8/, 38],
+  [/^Subfloor adhesive/, 9],
   [/^Door /, 250],
   [/^Window /, 350],
 ];
@@ -100,7 +103,7 @@ const PER_FOOT: Record<string, number> = { '2x4': 0.6, '2x6': 0.95, '2x8': 1.35,
 
 export function samplePrice(item: string): number {
   for (const [re, price] of SAMPLE) if (re.test(item)) return price;
-  const stock = item.match(/^(2x\d+) (?:stud|rafter|ceiling joist|ridge board|hip rafter), (\d+)'/);
+  const stock = item.match(/^(2x\d+) (?:stud|rafter|ceiling joist|ridge board|hip rafter|floor joist|rim joist|girder ply \(3-ply built-up\)|blocking over girders), (\d+)'/);
   if (stock) return Math.round(PER_FOOT[stock[1]] * Number(stock[2]) * 100) / 100;
   return 0;
 }

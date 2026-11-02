@@ -225,7 +225,20 @@ export interface Foundation {
   footingDepth: number;
   /** Local frost depth, if known — checked against footingDepth. */
   frostDepth?: number;
+  /** Framed floor over a crawlspace. */
+  joistSize: JoistSize;
+  joistSpacing: 12 | 16 | 19.2 | 24;
+  /** Direction the joists run (their length): along plan x, plan y, or across the short side. */
+  joistDir: 'auto' | 'x' | 'y';
+  /** Girder lines under the joists; 'auto' keeps each joist span to 12 ft or less. */
+  girders: 'auto' | number;
+  /** Posts / piers along a girder, on centre. */
+  pierSpacing: number;
+  subfloor: 'osb' | 'plywood';
 }
+
+export type JoistSize = '2x8' | '2x10' | '2x12';
+export const JOIST_SIZES: JoistSize[] = ['2x8', '2x10', '2x12'];
 
 export const DEFAULT_FOUNDATION: Foundation = {
   type: 'slab',
@@ -238,6 +251,12 @@ export const DEFAULT_FOUNDATION: Foundation = {
   stemThickness: 8,
   stemMaterial: 'poured',
   footingDepth: 12,
+  joistSize: '2x10',
+  joistSpacing: 16,
+  joistDir: 'auto',
+  girders: 'auto',
+  pierSpacing: 96,
+  subfloor: 'osb',
 };
 
 export const EMPTY_SITE: Site = { setbacks: [], areas: [], plants: [] };

@@ -15,6 +15,8 @@ import {
   type Roof,
   type RoofType,
   type Foundation,
+  JOIST_SIZES,
+  type JoistSize,
   studFor,
   type Ceiling,
   type CeilingType,
@@ -400,6 +402,55 @@ function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Founda
               </select>
             </Field>
           </div>
+          <div className="row">
+            <Field label="Floor joists">
+              <select value={f.joistSize} onChange={(e) => set({ joistSize: e.target.value as JoistSize })}>
+                {JOIST_SIZES.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Spacing">
+              <select value={f.joistSpacing} onChange={(e) => set({ joistSpacing: Number(e.target.value) as Foundation['joistSpacing'] })}>
+                {[12, 16, 19.2, 24].map((s) => (
+                  <option key={s} value={s}>
+                    {s}" o.c.
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="row">
+            <Field label="Joists run">
+              <select value={f.joistDir} onChange={(e) => set({ joistDir: e.target.value as Foundation['joistDir'] })}>
+                <option value="auto">Across the short side</option>
+                <option value="x">Left–right</option>
+                <option value="y">Top–bottom</option>
+              </select>
+            </Field>
+            <Field label="Girder lines">
+              <select value={String(f.girders)} onChange={(e) => set({ girders: e.target.value === 'auto' ? 'auto' : Number(e.target.value) })}>
+                <option value="auto">Auto (spans ≤ 12')</option>
+                {[0, 1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="row">
+            <Field label="Piers o.c.">
+              <LengthInput value={f.pierSpacing} min={24} onChange={(v) => set({ pierSpacing: v })} />
+            </Field>
+            <Field label="Subfloor">
+              <select value={f.subfloor} onChange={(e) => set({ subfloor: e.target.value as Foundation['subfloor'] })}>
+                <option value="osb">23/32" OSB</option>
+                <option value="plywood">23/32" plywood</option>
+              </select>
+            </Field>
+          </div>
+          <small className="muted">Joists and girders are laid out and counted, not sized — check spans with the IRC R502.3 tables or your lumber yard.</small>
         </>
       )}
       {f.type !== 'none' && (

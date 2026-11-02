@@ -461,6 +461,54 @@ button.link.danger {
   background: #fff;
 }
 
+/* ---------- floor framing plan ---------- */
+
+svg.floor-plan {
+  width: 100%;
+  max-height: 520px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.fp-outline {
+  fill: var(--room);
+  stroke: var(--text);
+}
+.fp-joist {
+  stroke: #b8864e;
+}
+.fp-girder {
+  stroke: #7a4e22;
+  stroke-linecap: square;
+}
+.fp-pier {
+  fill: #9aa3ad;
+  stroke: var(--text);
+}
+.fp-sheet {
+  fill: rgba(201, 176, 138, 0.35);
+  stroke: #8a6a3e;
+}
+.fp-sheet.cut {
+  fill: rgba(234, 179, 8, 0.35);
+}
+.floor-toggle {
+  max-width: 260px;
+  margin-bottom: 8px;
+}
+.legend .fp-sw-joist {
+  background: #b8864e;
+}
+.legend .fp-sw-girder {
+  background: #7a4e22;
+}
+.legend .fp-sw-pier {
+  background: #9aa3ad;
+}
+.legend .fp-sw-cut {
+  background: rgba(234, 179, 8, 0.6);
+}
+
 /* ---------- canvas ---------- */
 
 .canvas-wrap {

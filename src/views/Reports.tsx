@@ -3,6 +3,7 @@ import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
 import { roofCalc, roofFraming } from '../calc/roof.ts';
 import { foundationCalc, foundationVolumes } from '../calc/foundation.ts';
+import { FloorFraming } from './FloorFraming.tsx';
 import { siteChecks } from '../calc/site.ts';
 import { materialsList, studStock, wallAreas } from '../calc/materials.ts';
 import { DEFAULT_PRICING, estimate, money } from '../calc/pricing.ts';
@@ -102,6 +103,7 @@ export function FramingView({ project }: { project: Project }) {
       </div>
       <RoofSummary project={project} />
       <FoundationSummary project={project} />
+      <FloorFraming project={project} />
     </div>
   );
 }
