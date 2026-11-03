@@ -5,6 +5,7 @@ import {
   nearestWall,
   orthoFrom,
   pointAlong,
+  projectOnWall,
   samePoint,
   snapToGrid,
   wallDir,
@@ -15,7 +16,7 @@ import {
 import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
-import { wallDragPoints } from '../model/wallEdit.ts';
+import { snapWallMove, splitAt, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounter } from '../calc/counters.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
 import { CounterGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
@@ -36,7 +37,7 @@ type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
   | { kind: 'vertex'; current: Point }
   /** Whole-wall drag: slides across its own length; `current` = the points travelling with it. */
-  | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean }
+  | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean; snap: { start: number; targets: WallSnapTarget[] }; square: boolean }
   | { kind: 'opening'; id: string; grab: number }
   | { kind: 'outlet'; id: string }
   | { kind: 'switch'; id: string }
@@ -82,6 +83,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
   const [realH, setRealH] = useState('');
   const [straightening, setStraightening] = useState(false);
   const [lengthText, setLengthText] = useState('');
+  const [moveText, setMoveText] = useState<string | null>(null);
   const [shift, setShift] = useState(false);
   const [space, setSpace] = useState(false);
   const drag = useRef<Drag | null>(null);
@@ -301,7 +303,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
           drag.current = { kind: 'counter', id: c.id, start: raw, a: c.a, b: c.b, along: c.island ? null : counterDir(c), started: false };
         } else if (hit?.kind === 'wall') {
           const w = project.walls.find((x) => x.id === hit.id)!;
-          drag.current = { kind: 'wall', start: raw, normal: wallNormal(w), moved: 0, current: wallDragPoints(project, w), started: false };
+          const n = wallNormal(w);
+          const square = Math.abs(n.x) < 1e-6 || Math.abs(n.y) < 1e-6;
+          drag.current = { kind: 'wall', start: raw, normal: n, moved: 0, current: wallDragPoints(project, w), started: false, snap: wallSnapTargets(project, w), square };
         } else if (!hit) {
           drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
         }
@@ -416,9 +420,13 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
       return;
     }
     if (d?.kind === 'wall') {
-      // Whole inches across the wall; attached walls stretch to follow.
-      const perp = Math.round((raw.x - d.start.x) * d.normal.x + (raw.y - d.start.y) * d.normal.y);
-      if (perp !== d.moved) {
+      // Across the wall, snapping to parallel walls' lines and faces, then the grid (Shift: whole inches); attached walls stretch to follow.
+      const rawPerp = (raw.x - d.start.x) * d.normal.x + (raw.y - d.start.y) * d.normal.y;
+      // A click (or the first press of a double-click) mustn't nudge an off-grid wall onto the grid.
+      if (!d.started && Math.abs(rawPerp) < 4 / viewRef.current.scale) return;
+      const { perp, label } = snapWallMove(d.snap, rawPerp, { tol: SNAP_PX / viewRef.current.scale, grid: GRID, square: d.square, free: shift });
+      if (d.started || perp !== 0) setMoveText(`Moved ${formatFtIn(Math.abs(perp))}${label ? ` · ${label}` : ''}`);
+      if (Math.abs(perp - d.moved) > 1e-6) {
         // Checkpoint on the first real move, so a plain click to select adds no undo step.
         if (!d.started) dispatch({ type: 'checkpoint' });
         d.started = true;
@@ -493,6 +501,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
   function onPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
     const d = drag.current;
     drag.current = null;
+    setMoveText(null);
     if (d?.kind === 'room' && e) d.end = snap(toWorld(e.clientX, e.clientY)).p;
     setRoomDrag(null);
     if (d?.kind === 'newCounter') {
@@ -603,7 +612,23 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         onPointerCancel={() => onPointerUp()}
         onLostPointerCapture={() => drag.current && onPointerUp()}
         onPointerLeave={() => !drag.current && setCursor(null)}
-        onDoubleClick={() => tool === 'wall' && setChain(null)}
+        onDoubleClick={(e) => {
+          if (tool === 'wall') setChain(null);
+          if (tool !== 'select') return;
+          // Double-click a wall to split it there.
+          const raw = toWorld(e.clientX, e.clientY);
+          const hit = hitTest(project, raw, 6 / viewRef.current.scale);
+          if (hit?.kind !== 'wall') return;
+          const w = project.walls.find((x) => x.id === hit.id)!;
+          const t = splitAt(project, w, projectOnWall(w, raw).along);
+          if (t === null) {
+            onMessage?.('Can’t split there — too close to an end, or through a door or window.');
+            return;
+          }
+          dispatch({ type: 'splitWall', id: w.id, at: t, newId: uid('w') });
+          setSelection({ kind: 'wall', id: w.id });
+          onMessage?.(`Split ${formatFtIn(t)} from the wall’s start.`);
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           setChain(null);
@@ -661,6 +686,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         </g>
       </svg>
 
+      {moveText && <div className="length-entry">{moveText}</div>}
       {lengthText && (
         <div className="length-entry">
           Length: <strong>{lengthText}</strong> <span className="muted">↵ to place · Esc to clear</span>
@@ -730,7 +756,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow) · drag its ends or openings to move them · ⌫ deletes';
+      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends or openings to move them · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':

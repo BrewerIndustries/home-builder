@@ -47,7 +47,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Room from enclosed walls (click inside) and non-rectangular rooms
 - [ ] Non-rectangular rooms v2: R304 min dimension and ceiling slopes on the real outline (not the bounding box); auto-name / auto-type rooms from size and doors
 - [x] Drag a whole wall (move both ends together); split / join walls
-- [ ] Wall edits v2: split at a clicked point (not just the middle); snap a dragged wall to grid / other walls; show the move distance while dragging
+- [x] Wall edits v2: double-click to split at a point; dragged walls snap in line / flush with parallel walls and the grid; live move readout
+- [ ] Wall edits v3: type an exact move distance while dragging; snap a dragged wall end to other walls' faces; rotate a wall about an end
 - [x] Inside / outside dimension modes (centreline / inside faces / outside face)
 - [x] Dimensions v2: type a length as inside / outside in the wall panel; opening chains on exterior walls; room clear sizes; finished vs framing faces
 - [ ] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it

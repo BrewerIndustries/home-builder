@@ -107,3 +107,66 @@ export function joinWalls(p: Project, id: string, otherId: string): Project {
   next = rehome(next, w, merged);
   return rehome(next, o, merged);
 }
+
+/** Snap targets for sliding `wall` sideways: lines (as distances along its normal) it can land on. */
+export interface WallSnapTarget {
+  level: number;
+  label: string;
+}
+
+/**
+ * Where a sideways-dragged wall can snap: the centreline of each parallel wall,
+ * or flush with either of its faces. Levels are measured along `wall`'s normal
+ * from the origin, as is the wall's own starting level.
+ */
+export function wallSnapTargets(project: Project, wall: Wall): { start: number; targets: WallSnapTarget[] } {
+  const n = { x: wallDir(wall).y, y: -wallDir(wall).x };
+  const level = (p: Point) => p.x * n.x + p.y * n.y;
+  const targets: WallSnapTarget[] = [];
+  project.walls.forEach((o, i) => {
+    if (o.id === wall.id) return;
+    const od = wallDir(o);
+    if (Math.abs(od.x * n.x + od.y * n.y) > 1e-3) return; // not parallel
+    const c = level(o.a);
+    const name = `W${i + 1}`;
+    targets.push({ level: c, label: `in line with ${name}` });
+    const df = (o.thickness - wall.thickness) / 2;
+    if (Math.abs(df) > 1e-6) {
+      targets.push({ level: c + df, label: `flush with ${name}'s face` }, { level: c - df, label: `flush with ${name}'s face` });
+    }
+  });
+  return { start: level(wall.a), targets };
+}
+
+/**
+ * The sideways move to use for a raw drag of `perp` inches: a parallel wall's
+ * line or face within `tol`, else the grid (for walls square to the plan), else
+ * whole inches. `free` (Shift) skips the snapping.
+ */
+export function snapWallMove(
+  snap: { start: number; targets: WallSnapTarget[] },
+  perp: number,
+  opts: { tol: number; grid: number; square: boolean; free?: boolean },
+): { perp: number; label: string | null } {
+  if (!opts.free) {
+    const want = snap.start + perp;
+    let best: WallSnapTarget | null = null;
+    for (const t of snap.targets) if (Math.abs(t.level - want) <= opts.tol && (!best || Math.abs(t.level - want) < Math.abs(best.level - want))) best = t;
+    if (best) return { perp: best.level - snap.start, label: best.label };
+    if (opts.square) return { perp: Math.round(want / opts.grid) * opts.grid - snap.start, label: null };
+  }
+  return { perp: Math.round(perp), label: null };
+}
+
+/** Where to split a wall at a clicked distance along it: whole inches, clear of openings and the ends. */
+export function splitAt(project: Project, wall: Wall, along: number): number | null {
+  const t = Math.round(along);
+  const len = wallLength(wall);
+  if (t <= 6 || t >= len - 6) return null;
+  const inOpening = project.openings.some((o) => {
+    if (o.wallId !== wall.id) return false;
+    const s = openingSpan(o);
+    return t > s.start && t < s.end;
+  });
+  return inOpening ? null : t;
+}
