@@ -20,6 +20,7 @@ export type Action =
   | { type: 'rename'; name: string }
   | { type: 'setDimMode'; mode: DimMode }
   | { type: 'setDimFaces'; faces: 'finished' | 'framing' }
+  | { type: 'setDimOffset'; id: string; offset: number; transient?: boolean }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
@@ -97,6 +98,12 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'setDimMode':
       return { ...p, dimMode: action.mode };
+
+    case 'setDimOffset': {
+      const rest = Object.fromEntries(Object.entries(p.dimOffsets ?? {}).filter(([k]) => k !== action.id));
+      const dimOffsets = action.offset ? { ...rest, [action.id]: action.offset } : rest;
+      return { ...p, dimOffsets: Object.keys(dimOffsets).length ? dimOffsets : undefined };
+    }
 
     case 'setDimFaces':
       return { ...p, dimFaces: action.faces };

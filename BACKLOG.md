@@ -53,7 +53,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Wall edits v4: typed values for opening / counter / fixture drags; rotate a whole wall group (room) about a point; angle snap to other walls' angles (not just 15°)
 - [x] Inside / outside dimension modes (centreline / inside faces / outside face)
 - [x] Dimensions v2: type a length as inside / outside in the wall panel; opening chains on exterior walls; room clear sizes; finished vs framing faces
-- [ ] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it
+- [x] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it
+- [ ] Dimensions v4: partition strings at several heights through the plan (not just one each way); clear sizes for T / U rooms; user-placed dimensions (click two points); hide / show individual strings
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
 - [ ] Plan versions with change-order diffs
 - [x] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)

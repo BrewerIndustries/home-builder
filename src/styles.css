@@ -1296,3 +1296,8 @@ tr.no-pick {
 .check-fail {
   color: var(--fail);
 }
+.dim-hit {
+  stroke: transparent;
+  pointer-events: stroke;
+  cursor: move;
+}

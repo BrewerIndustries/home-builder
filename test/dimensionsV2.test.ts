@@ -44,9 +44,9 @@ test('opening chains run from the outside face to each opening centre', () => {
   assert.equal(c.side, outerSides(p).get(top.id));
   assert.deepEqual(c.stops, [-3.25, 60, 180, 243.25]);
   assert.deepEqual(openingChains(p, 'centre')[0].stops, [0, 60, 180, 240]);
-  // Interior walls get none.
+  // Interior walls get one too (Dimensions v3), on the side of the bigger room.
   p = { ...p, openings: [{ ...door(p.walls[4].id, 72), id: 'd2' }] };
-  assert.deepEqual(openingChains(p, 'outside'), []);
+  assert.deepEqual(openingChains(p, 'outside').map((c) => c.wall.id), [p.walls[4].id]);
 });
 
 test('typing an outside length sets the centreline that gives it', () => {

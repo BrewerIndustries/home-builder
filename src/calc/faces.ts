@@ -2,6 +2,7 @@ import { pointAlong, pointInPolygon, polygonArea, projectOnWall, wallDir, wallLe
 import type { DimMode, Point, Project, Room, Wall } from '../model/types.ts';
 import { wallFaces } from './enclosure.ts';
 import { projectReducer } from '../model/store.ts';
+import { clipHalfPlane } from './outline.ts';
 
 // Wall faces for inside / outside dimensions. Each side of a wall is a strip
 // `thickness / 2` off the centreline; it ends where it meets the next wall's
@@ -204,24 +205,72 @@ export function outerCorners(project: Project): Point[] {
  * Null for other shapes.
  */
 export function roomClearSize(project: Project, room: Room): { width: number; depth: number } | null {
+  const sizes = room.points.length === 4 ? roomClearSizes(project, room) : [];
+  return sizes.length === 1 ? { width: sizes[0].width, depth: sizes[0].depth } : null;
+}
+
+const squarePlan = (pts: Point[]) =>
+  pts.every((p, i) => {
+    const q = pts[(i + 1) % pts.length];
+    return Math.abs(p.x - q.x) < TOL || Math.abs(p.y - q.y) < TOL;
+  });
+
+/**
+ * Clear sizes of a room square to the plan: one for a rectangle, two for an L
+ * (its body and its leg, split at the inside corner the way that gives the
+ * bigger body). Each is the piece's centreline box less half of each wall along
+ * it (any wall along part of an edge counts); the split line itself has no wall.
+ * Empty for other shapes.
+ */
+export function roomClearSizes(project: Project, room: Room): { width: number; depth: number; at: Point }[] {
   const pts = room.points;
-  if (pts.length !== 4) return null;
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  if (!pts.every((p) => (Math.abs(p.x - x0) < TOL || Math.abs(p.x - x1) < TOL) && (Math.abs(p.y - y0) < TOL || Math.abs(p.y - y1) < TOL))) return null;
-  const under = (p: Point) => {
-    const w = project.walls.find((o) => {
+  if (!squarePlan(pts) || (pts.length !== 4 && pts.length !== 6)) return [];
+  // Half the wall along an edge, if a wall runs along any of it (an L's body edge is walled only part way).
+  const wallOn = (p: Point) =>
+    project.walls.find((o) => {
       const { along, perp } = projectOnWall(o, p);
       return perp <= TOL && along >= -TOL && along <= wallLength(o) + TOL;
     });
+  const under = (a: Point, b: Point) => {
+    const w = [0.25, 0.5, 0.75].map((t) => wallOn({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })).find(Boolean);
     return w ? faceHalf(project, w) : 0;
   };
-  const [mx, my] = [(x0 + x1) / 2, (y0 + y1) / 2];
-  return {
-    width: x1 - x0 - under({ x: x0, y: my }) - under({ x: x1, y: my }),
-    depth: y1 - y0 - under({ x: mx, y: y0 }) - under({ x: mx, y: y1 }),
+  const clear = (x0: number, x1: number, y0: number, y1: number) => ({
+    width: x1 - x0 - under({ x: x0, y: y0 }, { x: x0, y: y1 }) - under({ x: x1, y: y0 }, { x: x1, y: y1 }),
+    depth: y1 - y0 - under({ x: x0, y: y0 }, { x: x1, y: y0 }) - under({ x: x0, y: y1 }, { x: x1, y: y1 }),
+    at: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 },
+  });
+  const box = (q: Point[]) => {
+    const xs = q.map((p) => p.x);
+    const ys = q.map((p) => p.y);
+    return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)] as const;
   };
+  if (pts.length === 4) return [clear(...box(pts))];
+  // The L's one inside (reflex) corner: cut through it across x or across y.
+  const sign = Math.sign(pts.reduce((s, p, i) => s + p.x * pts[(i + 1) % 6].y - pts[(i + 1) % 6].x * p.y, 0));
+  const reflex = pts.find((p, i) => {
+    const [a, c] = [pts[(i + 5) % 6], pts[(i + 1) % 6]];
+    return ((p.x - a.x) * (c.y - p.y) - (p.y - a.y) * (c.x - p.x)) * sign < 0;
+  });
+  if (!reflex) return [];
+  // Clip a hair past the cut (a clipped L keeps a zero-width sliver along the cut line otherwise), then square the cut edge back up.
+  type Box = readonly [number, number, number, number];
+  const half = (n: Point, c: number): Box | null => {
+    const q = clipHalfPlane(pts, n, c + 1e-3);
+    if (!q.length) return null;
+    const [x0, x1, y0, y1] = box(q);
+    // n is ±x or ±y, c = dot(cut point, n): the cut line is x (or y) = ±c.
+    if (n.x > 0) return [c, x1, y0, y1];
+    if (n.x < 0) return [x0, -c, y0, y1];
+    if (n.y > 0) return [x0, x1, c, y1];
+    return [x0, x1, y0, -c];
+  };
+  const pieces = (n: Point, c: number) => [half(n, c), half({ x: -n.x, y: -n.y }, -c)].filter((b): b is Box => !!b);
+  const options = [pieces({ x: 1, y: 0 }, reflex.x), pieces({ x: 0, y: 1 }, reflex.y)].filter((o) => o.length === 2);
+  if (!options.length) return [];
+  const area = ([x0, x1, y0, y1]: readonly number[]) => (x1 - x0) * (y1 - y0);
+  options.sort((p, q) => Math.max(...q.map(area)) - Math.max(...p.map(area)));
+  return options[0].sort((p, q) => area(q) - area(p)).map((b) => clear(...b));
 }
 
 /**
@@ -233,15 +282,53 @@ export function openingChains(project: Project, mode: DimMode): { wall: Wall; si
   const outer = outerSides(project);
   const spans = mode === 'centre' ? [] : faceSpans(project);
   const out: { wall: Wall; side: 1 | -1; stops: number[] }[] = [];
-  for (const [id, side] of outer) {
-    const wall = project.walls.find((w) => w.id === id)!;
-    const centres = project.openings.filter((o) => o.wallId === id).map((o) => o.offset);
+  for (const wall of project.walls) {
+    const centres = project.openings.filter((o) => o.wallId === wall.id).map((o) => o.offset);
     if (!centres.length) continue;
-    const mine = spans.filter((f) => f.wall.id === id && f.side === side);
+    const side = outer.get(wall.id) ?? roomierSide(project, wall);
+    const mine = spans.filter((f) => f.wall.id === wall.id && f.side === side);
     const [start, end] = mine.length ? [Math.min(...mine.map((f) => f.start)), Math.max(...mine.map((f) => f.end))] : [0, wallLength(wall)];
     out.push({ wall, side, stops: [start, ...centres.sort((a, b) => a - b), end] });
   }
   return out;
+}
+
+/** An interior wall's chain goes on the side of the bigger room (the +normal side if neither has one). */
+function roomierSide(project: Project, wall: Wall): 1 | -1 {
+  const mid = pointAlong(wall, wallLength(wall) / 2);
+  const n = wallNormal(wall);
+  const off = wall.thickness / 2 + 12;
+  const area = (side: 1 | -1) => {
+    const p = { x: mid.x + n.x * off * side, y: mid.y + n.y * off * side };
+    const rooms = project.rooms.filter((r) => pointInPolygon(p, r.points)).map((r) => polygonArea(r.points));
+    return rooms.length ? Math.min(...rooms) : 0;
+  };
+  return area(-1) > area(1) ? -1 : 1;
+}
+
+/**
+ * Strings across the whole plan through the interior walls: along x, the
+ * exterior ends and every interior wall standing square across that axis
+ * (centreline, or both faces when measuring to faces); along y the same.
+ * `ends` are the exterior extremes the overall dimension uses.
+ */
+export function interiorStrings(project: Project, mode: DimMode, ends: { x: [number, number]; y: [number, number] }): { x: number[]; y: number[] } {
+  const inner = project.walls.filter((w) => w.kind !== 'exterior');
+  const along = (axis: 'x' | 'y') => {
+    const [lo, hi] = ends[axis];
+    const stops: number[] = [];
+    for (const w of inner) {
+      // A wall square across x runs along y (constant x), and vice versa.
+      const c = axis === 'x' ? w.a.x : w.a.y;
+      const square = axis === 'x' ? Math.abs(w.a.x - w.b.x) < TOL : Math.abs(w.a.y - w.b.y) < TOL;
+      if (!square || wallLength(w) < 1 || c <= lo + TOL || c >= hi - TOL) continue;
+      const h = faceHalf(project, w);
+      stops.push(...(mode === 'centre' ? [c] : [c - h, c + h]));
+    }
+    if (!stops.length) return [];
+    return [lo, ...stops, hi].sort((p, q) => p - q).filter((v, i, all) => i === 0 || v - all[i - 1] > TOL);
+  };
+  return { x: along('x'), y: along('y') };
 }
 
 /**

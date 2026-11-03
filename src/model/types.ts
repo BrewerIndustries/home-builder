@@ -271,6 +271,8 @@ export interface Project {
   dimMode?: DimMode;
   /** Which wall faces inside / outside dimensions measure to; finished when unset. */
   dimFaces?: 'finished' | 'framing';
+  /** Dimension strings dragged out from where they're drawn: id → extra inches outward. */
+  dimOffsets?: Record<string, number>;
   electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;

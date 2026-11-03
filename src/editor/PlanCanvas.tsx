@@ -49,7 +49,9 @@ type Drag =
   | { kind: 'room'; start: Point; end: Point; raw: Point }
   | { kind: 'newCounter'; start: Point; end: Point }
   | { kind: 'counter'; id: string; start: Point; a: Point; b: Point; along: Point | null; started: boolean }
-  | { kind: 'underlay'; start: Point; origin: Point };
+  | { kind: 'underlay'; start: Point; origin: Point }
+  /** A dimension string dragged in or out; `out` is its outward unit direction. */
+  | { kind: 'dim'; id: string; out: Point; start: Point; base: number; started: boolean };
 
 export interface PlanCanvasHandle {
   fit(): void;
@@ -350,6 +352,15 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       return;
     }
 
+    // A dimension string: drag it in or out (any tool but the drawing ones).
+    const dimEl = tool === 'select' ? (e.target as Element).closest?.('[data-dim]') : null;
+    if (dimEl) {
+      const id = dimEl.getAttribute('data-dim')!;
+      const [ox, oy] = (dimEl.getAttribute('data-out') ?? '0,0').split(',').map(Number);
+      drag.current = { kind: 'dim', id, out: { x: ox, y: oy }, start: raw, base: project.dimOffsets?.[id] ?? 0, started: false };
+      return;
+    }
+
     switch (tool) {
       case 'select': {
         // Endpoint handles of the selected wall first.
@@ -510,6 +521,16 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         dispatch({ type: 'moveVertex', from: d.current, to: p, transient: true });
         d.current = p;
       }
+      return;
+    }
+    if (d?.kind === 'dim') {
+      const moved = (raw.x - d.start.x) * d.out.x + (raw.y - d.start.y) * d.out.y;
+      const offset = Math.round(d.base + moved);
+      if (offset === (project.dimOffsets?.[d.id] ?? 0)) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'setDimOffset', id: d.id, offset, transient: true });
+      setMoveText(offset ? `Dimension ${offset > 0 ? 'out' : 'in'} ${formatFtIn(Math.abs(offset))} · double-click it to put it back` : 'Dimension back in its usual place');
       return;
     }
     if (d?.kind === 'opening') {
@@ -744,6 +765,13 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         onDoubleClick={(e) => {
           if (tool === 'wall') setChain(null);
           if (tool !== 'select') return;
+          // Double-click a dragged dimension string to put it back.
+          const dimEl = (e.target as Element).closest?.('[data-dim]');
+          if (dimEl) {
+            const id = dimEl.getAttribute('data-dim')!;
+            if (project.dimOffsets?.[id]) dispatch({ type: 'setDimOffset', id, offset: 0 });
+            return;
+          }
           // Double-click a wall to split it there.
           const raw = toWorld(e.clientX, e.clientY);
           const hit = hitTest(project, raw, 6 / viewRef.current.scale);
@@ -896,7 +924,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
+      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':

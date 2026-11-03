@@ -4,7 +4,7 @@ import { isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { counterCorners, counterPoint, islandReceptacles, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
-import { openingChains, outerCorners, roomClearSize, wallDimLabels, type DimLabel } from '../calc/faces.ts';
+import { interiorStrings, openingChains, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -34,7 +34,8 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         const busy = outlets && project.fixtures.some((f) => Math.abs(f.at.x - centroid.x) < 10 && Math.abs(f.at.y - centroid.y) < 10);
         const c = busy ? { x: centroid.x, y: centroid.y - 8 - px(18) } : centroid;
         const sel = selection?.kind === 'room' && selection.id === r.id;
-        const size = wallDims ? roomClearSize(project, r) : null;
+        // Clear sizes: a rectangle's under its label; an L's body there and its leg's in the leg.
+        const [size, leg] = wallDims ? roomClearSizes(project, r) : [];
         return (
           <g key={r.id}>
             <polygon points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill={sel ? 'var(--room-sel)' : 'var(--room)'} stroke="none" />
@@ -47,6 +48,11 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
             {size && (
               <text x={c.x} y={c.y + px(25)} className="room-area" fontSize={px(10)} textAnchor="middle">
                 {formatFtIn(size.width)} × {formatFtIn(size.depth)}
+              </text>
+            )}
+            {leg && (
+              <text x={leg.at.x} y={leg.at.y} className="room-area" fontSize={px(10)} textAnchor="middle" dominantBaseline="middle">
+                {formatFtIn(leg.width)} × {formatFtIn(leg.depth)}
               </text>
             )}
           </g>
@@ -101,7 +107,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {outlets && <Lighting project={project} selection={selection} px={px} />}
 
       {wallDims && wallDimLabels(project, project.dimMode ?? 'centre').map((l, i) => <WallDimension key={`${l.wall.id}-${i}`} l={l} px={px} />)}
-      {wallDims && openingChains(project, project.dimMode ?? 'centre').map((c) => <OpeningChain key={c.wall.id} {...c} px={px} />)}
+      {wallDims && openingChains(project, project.dimMode ?? 'centre').map((c) => <OpeningChain key={c.wall.id} {...c} extra={project.dimOffsets?.[`chain:${c.wall.id}`] ?? 0} px={px} />)}
       {overallDims && <OverallDimensions project={project} px={px} />}
     </g>
   );
@@ -126,28 +132,34 @@ export function OverallDimensions({ project, px }: { project: Project; px(n: num
   const shift = project.openings.length ? px(16) : 0;
   const chainOff = t + px(28) + shift;
   const overallOff = t + px(52) + shift;
+  const off = (id: string) => project.dimOffsets?.[id] ?? 0;
+  // Strings through the interior walls run along the bottom and right, clear of the exterior chains.
+  const inner = interiorStrings(project, project.dimMode ?? 'centre', { x: [minX, maxX], y: [minY, maxY] });
   return (
     <g className="dims">
-      {xs.length > 2 && <DimString axis="x" stops={xs} at={minY - chainOff} px={px} />}
-      <DimString axis="x" stops={[minX, maxX]} at={minY - (xs.length > 2 ? overallOff : chainOff)} px={px} />
-      {ys.length > 2 && <DimString axis="y" stops={ys} at={minX - chainOff} px={px} />}
-      <DimString axis="y" stops={[minY, maxY]} at={minX - (ys.length > 2 ? overallOff : chainOff)} px={px} />
+      {xs.length > 2 && <DimString id="top-chain" axis="x" stops={xs} at={minY - chainOff - off('top-chain')} out={-1} px={px} />}
+      <DimString id="top-overall" axis="x" stops={[minX, maxX]} at={minY - (xs.length > 2 ? overallOff : chainOff) - off('top-overall')} out={-1} px={px} />
+      {ys.length > 2 && <DimString id="left-chain" axis="y" stops={ys} at={minX - chainOff - off('left-chain')} out={-1} px={px} />}
+      <DimString id="left-overall" axis="y" stops={[minY, maxY]} at={minX - (ys.length > 2 ? overallOff : chainOff) - off('left-overall')} out={-1} px={px} />
+      {inner.x.length > 2 && <DimString id="bottom-interior" axis="x" stops={inner.x} at={maxY + chainOff + off('bottom-interior')} out={1} px={px} />}
+      {inner.y.length > 2 && <DimString id="right-interior" axis="y" stops={inner.y} at={maxX + chainOff + off('right-interior')} out={1} px={px} />}
     </g>
   );
 }
 
 /** A dimension chain along one wall, outside it: end → each opening centre → end. */
-function OpeningChain({ wall, side, stops, px }: { wall: Wall; side: 1 | -1; stops: number[]; px(n: number): number }) {
+function OpeningChain({ wall, side, stops, extra, px }: { wall: Wall; side: 1 | -1; stops: number[]; extra: number; px(n: number): number }) {
   const d = wallDir(wall);
   const n = wallNormal(wall);
-  const off = (wall.thickness / 2 + px(24)) * side;
+  const off = (wall.thickness / 2 + px(24) + extra) * side;
   const P = (t: number, extra = 0): Point => ({ x: wall.a.x + d.x * t + n.x * (off + extra * side), y: wall.a.y + d.y * t + n.y * (off + extra * side) });
   const tick = px(4);
   let angle = (Math.atan2(d.y, d.x) * 180) / Math.PI;
   if (angle > 90 || angle <= -90) angle += 180;
   const [a, b] = [P(stops[0]), P(stops.at(-1)!)];
   return (
-    <g className="dims opening-chain">
+    <g className="dims opening-chain" data-dim={`chain:${wall.id}`} data-out={`${n.x * side},${n.y * side}`}>
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-hit" strokeWidth={px(10)} />
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-line" strokeWidth={px(0.8)} />
       {stops.map((s, i) => {
         const p = P(s);
@@ -175,13 +187,16 @@ function uniq(ns: number[]): number[] {
   return out;
 }
 
-function DimString({ axis, stops, at, px }: { axis: 'x' | 'y'; stops: number[]; at: number; px(n: number): number }) {
+function DimString({ id, axis, stops, at, out, px }: { id: string; axis: 'x' | 'y'; stops: number[]; at: number; out: 1 | -1; px(n: number): number }) {
   const P = (along: number, across: number): Point => (axis === 'x' ? { x: along, y: across } : { x: across, y: along });
   const a = P(stops[0], at);
   const b = P(stops.at(-1)!, at);
   const tick = px(5);
+  const outward = axis === 'x' ? { x: 0, y: out } : { x: out, y: 0 };
   return (
-    <g>
+    <g data-dim={id} data-out={`${outward.x},${outward.y}`}>
+      {/* Wide invisible stroke: grab it to drag the string in or out. */}
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-hit" strokeWidth={px(10)} />
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-line" strokeWidth={px(1)} />
       {stops.map((s) => {
         const p = P(s, at);
@@ -189,7 +204,8 @@ function DimString({ axis, stops, at, px }: { axis: 'x' | 'y'; stops: number[]; 
         return <line key={s} x1={p.x - tick} y1={p.y + tick} x2={p.x + tick} y2={p.y - tick} className="dim-line" strokeWidth={px(1.2)} />;
       })}
       {stops.slice(1).map((s, i) => {
-        const mid = P((stops[i] + s) / 2, at - px(5));
+        // Text on the outer side of the line (hanging below it when outward is +).
+        const mid = P((stops[i] + s) / 2, at + out * px(5));
         const len = s - stops[i];
         if (len < px(30)) return null;
         return (
@@ -199,6 +215,7 @@ function DimString({ axis, stops, at, px }: { axis: 'x' | 'y'; stops: number[]; 
             y={mid.y}
             fontSize={px(11)}
             textAnchor="middle"
+            dominantBaseline={out > 0 ? 'hanging' : undefined}
             className="dim"
             transform={axis === 'y' ? `rotate(-90 ${mid.x} ${mid.y})` : undefined}
           >
