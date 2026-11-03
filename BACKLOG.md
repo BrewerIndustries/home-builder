@@ -7,6 +7,7 @@ Ordered roughly by value. Competitor research behind these lives in
 
 - [x] **Landscape module v1** — lot (rectangle or drawn), per-edge setbacks + envelope check, coverage / impervious %, hardscape areas with depth takeoff (pavers + base/sand/edging, concrete, gravel + fabric, mulch, sod, deck area), ~40-species plant library at mature spread with zone / foundation / crowding checks, landscape lines in the estimate.
 - [ ] **Landscape v2** — lot from survey bearings + plat/aerial underlay; easements; retaining wall block, topsoil, edging as lines; grade/drainage (R401.3 6"-in-10-ft); grow the plant library (~300 species, regional native flag); planting beds with auto-spaced fill; site in the 3D view and on the print sheet.
+- [ ] **Sprinkler / irrigation layout tool** — zones over lawn and bed areas, spray / rotor / drip heads with throw radius and head-to-head coverage, pipe runs from the valve manifold and backflow device, zone flow (GPM) against the water supply, parts list in the estimate.
 - [x] **Wall framing elevations** — dimensioned SVG per wall on the Framing tab.
 - [x] **Dimension strings + to-scale PDF export with a title block.**
 - [x] **Price catalog → priced estimate** — editable unit prices, markup, tax, CSV. (XLSX still open.)
