@@ -10,6 +10,7 @@ import { roofCalc } from './roof.ts';
 import { foundationChecks } from './foundation.ts';
 import { lightingChecks } from './lighting.ts';
 import { outdoorChecks } from './outdoor.ts';
+import { kitchenChecks } from './kitchen.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -373,6 +374,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const c of foundationChecks(project)) add(c);
   for (const c of lightingChecks(project)) add(c);
   for (const c of outdoorChecks(project)) add(c);
+  for (const c of kitchenChecks(project)) add(c);
 
   return checks;
 }

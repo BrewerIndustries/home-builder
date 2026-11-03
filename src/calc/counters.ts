@@ -1,5 +1,5 @@
-import { dist, nearestWall, pointAlong, pointInPolygon, polygonArea, projectOnWall, wallLength, wallNormal } from '../model/geometry.ts';
-import type { Counter, Point, Project, Room } from '../model/types.ts';
+import { dist, nearestWall, pointAlong, pointInPolygon, polygonArea, projectOnWall, samePoint, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
+import type { Counter, Point, Project, Room, Wall } from '../model/types.ts';
 import type { Run } from './electrical.ts';
 import type { MaterialLine } from './materials.ts';
 
@@ -16,7 +16,9 @@ export const COUNTER_HEIGHT = 36;
 export const MIN_COUNTER_SPACE = 12;
 export const ISLAND_MIN_LONG = 24;
 export const ISLAND_MIN_SHORT = 12;
-export const CUTOUT_WIDTH = { sink: 33, range: 30 } as const;
+export const CUTOUT_WIDTH = { sink: 33, range: 30, dishwasher: 24, fridge: 36 } as const;
+export const CUTOUT_LABEL = { sink: 'Sink', range: 'Range', dishwasher: 'Dishwasher', fridge: 'Fridge' } as const;
+export const FRIDGE_HEIGHT = 70;
 
 const TOL = 0.5;
 
@@ -45,10 +47,10 @@ export function counterPoint(c: Counter, t: number, inset = 0): Point {
   return { x: c.a.x + d.x * t + n.x * inset, y: c.a.y + d.y * t + n.y * inset };
 }
 
-/** Countertop spaces along the back edge, [start, end], with sinks and ranges cut out. */
+/** Countertop spaces along the back edge, [start, end], with sinks, ranges and fridges cut out. */
 export function counterSpaces(c: Counter): [number, number][] {
   const len = counterLength(c);
-  const cuts = c.cutouts.map((k) => [k.offset - k.width / 2, k.offset + k.width / 2] as [number, number]).sort((p, q) => p[0] - q[0]);
+  const cuts = c.cutouts.filter((k) => k.kind !== 'dishwasher').map((k) => [k.offset - k.width / 2, k.offset + k.width / 2] as [number, number]).sort((p, q) => p[0] - q[0]);
   const out: [number, number][] = [];
   let cursor = 0;
   for (const [lo, hi] of [...cuts, [len, len] as [number, number]]) {
@@ -129,14 +131,17 @@ export function counterLines(project: Project): MaterialLine[] {
   if (!project.counters.length) return [];
   const lines: MaterialLine[] = [];
   const add = (item: string, qty: number, unit: string, basis: string) => qty > 0 && lines.push({ category: 'Kitchen', item, qty, unit, basis });
-  const lf = project.counters.reduce((s, c) => s + counterLength(c), 0) / 12;
+  const width = (c: Counter, kinds: string[]) => c.cutouts.filter((k) => kinds.includes(k.kind)).reduce((s, k) => s + k.width, 0);
+  const lf = project.counters.reduce((s, c) => s + counterLength(c) - width(c, ['dishwasher', 'fridge']), 0) / 12;
   const islands = project.counters.filter((c) => c.island).length;
-  add('Base cabinets (allowance)', Math.ceil(lf * 2) / 2, 'LF', `${project.counters.length} run${project.counters.length > 1 ? 's' : ''}${islands ? `, ${islands} island${islands > 1 ? 's' : ''}` : ''}`);
-  const sqft = project.counters.reduce((s, c) => s + counterLength(c) * c.depth, 0) / 144;
-  add('Countertop (allowance)', Math.ceil(sqft), 'sq ft', 'counter outlines, sink and range openings not deducted');
+  add('Base cabinets (allowance)', Math.ceil(lf * 2) / 2, 'LF', `${project.counters.length} run${project.counters.length > 1 ? 's' : ''}${islands ? `, ${islands} island${islands > 1 ? 's' : ''}` : ''}, less dishwasher and fridge spaces`);
+  const sqft = project.counters.reduce((s, c) => s + (counterLength(c) - width(c, ['fridge'])) * c.depth, 0) / 144;
+  add('Countertop (allowance)', Math.ceil(sqft), 'sq ft', 'counter outlines less fridge spaces; sink and range openings not deducted');
   const count = (k: string) => project.counters.reduce((s, c) => s + c.cutouts.filter((x) => x.kind === k).length, 0);
   add('Kitchen sink + faucet (allowance)', count('sink'), 'ea', 'from the counters');
   add('Range (allowance)', count('range'), 'ea', 'from the counters');
+  add('Dishwasher (allowance)', count('dishwasher'), 'ea', 'from the counters');
+  add('Refrigerator (allowance)', count('fridge'), 'ea', 'from the counters');
   return lines;
 }
 
@@ -172,4 +177,56 @@ export function newCounter(project: Project, start: Point, end: Point, id: strin
   return x1 - x0 >= y1 - y0
     ? { id, a: { x: x0, y: y0 }, b: { x: x1, y: y0 }, depth: y1 - y0, side: -1, island: true, cutouts: [] }
     : { id, a: { x: x0, y: y0 }, b: { x: x0, y: y1 }, depth: x1 - x0, side: 1, island: true, cutouts: [] };
+}
+
+/** The wall a counter's back edge sits on: within a slack of its face, parallel, facing away. */
+export function counterHost(project: Project, c: Counter): { wall: Wall; side: 1 | -1; ta: number; tb: number } | null {
+  if (c.island) return null;
+  const d = counterDir(c);
+  const f = counterFront(c);
+  for (const w of project.walls) {
+    const wd = wallDir(w);
+    if (Math.abs(d.x * wd.y - d.y * wd.x) > 0.01) continue;
+    const pa = projectOnWall(w, c.a);
+    const pb = projectOnWall(w, c.b);
+    if (Math.abs(pa.perp - w.thickness / 2) > 1 || Math.abs(pb.perp - w.thickness / 2) > 1) continue;
+    const n = wallNormal(w);
+    const side: 1 | -1 = (c.a.x - pointAlong(w, pa.along).x) * n.x + (c.a.y - pointAlong(w, pa.along).y) * n.y >= 0 ? 1 : -1;
+    if (f.x * n.x * side + f.y * n.y * side < 0.9) continue;
+    const len = wallLength(w);
+    if (Math.max(pa.along, pb.along) < -1 || Math.min(pa.along, pb.along) > len + 1) continue;
+    return { wall: w, side, ta: pa.along, tb: pb.along };
+  }
+  return null;
+}
+
+/**
+ * After walls move (drag, end drag, length, thickness), carry the wall counters
+ * along: same distances along the wall, on its new face, cut short if the wall
+ * got shorter. Islands stay put.
+ */
+export function followWalls(prev: Project, next: Project): Project {
+  if (prev.walls === next.walls || !next.counters.length) return next;
+  const after = new Map(next.walls.map((w) => [w.id, w]));
+  let changed = false;
+  const counters = next.counters.map((c) => {
+    const host = counterHost(prev, c);
+    const w = host && after.get(host.wall.id);
+    if (!host || !w) return c;
+    const old = host.wall;
+    if (samePoint(old.a, w.a) && samePoint(old.b, w.b) && old.thickness === w.thickness) return c;
+    const len = wallLength(w);
+    const n = wallNormal(w);
+    const face = (t: number) => {
+      const p = pointAlong(w, Math.max(0, Math.min(len, t)));
+      return { x: p.x + n.x * host.side * (w.thickness / 2), y: p.y + n.y * host.side * (w.thickness / 2) };
+    };
+    const a = face(host.ta);
+    const b = face(host.tb);
+    if (dist(a, b) < MIN_COUNTER_SPACE) return c;
+    changed = true;
+    const shrunk = dist(a, b);
+    return { ...c, a, b, cutouts: c.cutouts.map((k) => ({ ...k, width: Math.min(k.width, shrunk), offset: Math.max(Math.min(k.width, shrunk) / 2, Math.min(shrunk - Math.min(k.width, shrunk) / 2, k.offset)) })) };
+  });
+  return changed ? { ...next, counters } : next;
 }

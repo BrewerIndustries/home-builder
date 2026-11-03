@@ -39,7 +39,7 @@ import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
 import { faceSpans, outerSides } from '../calc/faces.ts';
 import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
-import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_WIDTH, MIN_COUNTER_SPACE } from '../calc/counters.ts';
+import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, MIN_COUNTER_SPACE } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
 interface Props {
@@ -327,7 +327,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </Field>
         {c.cutouts.map((k) => (
           <div key={k.id} className="field">
-            <span>{k.kind === 'sink' ? 'Sink' : 'Range'} — centre from the start, width</span>
+            <span>{CUTOUT_LABEL[k.kind]} — centre from the start, width</span>
             <div className="row">
               <LengthInput value={k.offset} min={0} onChange={(v) => setCutout(k.id, { offset: v })} />
               <LengthInput value={k.width} min={12} onChange={(v) => setCutout(k.id, { width: v })} />
@@ -337,9 +337,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </div>
           </div>
         ))}
-        <div className="row">
+        <div className="row wrap">
           <button onClick={() => addCutout('sink')}>Add sink</button>
           <button onClick={() => addCutout('range')}>Add range</button>
+          <button onClick={() => addCutout('dishwasher')}>Add dishwasher</button>
+          <button onClick={() => addCutout('fridge')}>Add fridge</button>
         </div>
         <div className="stat-grid">
           <Stat label="Countertop" value={`${Math.round((len * c.depth) / 144)} sq ft`} />

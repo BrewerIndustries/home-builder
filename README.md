@@ -80,7 +80,11 @@ The **Counter** tool (K): drag along a wall for a counter on that wall face (25"
 
 Sinks and ranges split a counter into separate countertop spaces. In a kitchen with counters, **Auto outlets** puts GFCIs at 44" along every space 12" or wider, no point more than 24" from one (E3901.4), and general 12 ft spacing on the walls off the counters (still GFCI). Each island space at least 24" × 12" gets one receptacle, drawn on the island and counted in the estimate. Code editions differ on island receptacles, so the check is a note. **R306.2** checks the kitchen has a sink.
 
-Counters don't follow walls you drag yet. Peninsulas count as islands.
+A counter can also hold a **dishwasher** (24", sits under the countertop, so it doesn't split a space; dashed **DW**) or a **fridge** (36", breaks the run like a sink or range; **REF**, 70" tall in 3D). The estimate takes both out of the base-cabinet run, takes the fridge out of the countertop, and adds dishwasher and refrigerator allowances.
+
+Wall counters ride along with their wall: drag it, drag an end, change its length or its studs and the counter keeps its place along the wall, on the new face, cut back if the wall got shorter. Islands stay put.
+
+The Code check adds two **NKBA guidelines** (they warn, never fail): the **work triangle** between sink, range and fridge (each leg 4–9 ft, 26 ft or less in all, measured centre to centre) and the **clearance around each island** (42" work aisle to the nearest counter, 36" walkway to a wall). Peninsulas still count as islands.
 
 ### Lights, switches and alarms
 

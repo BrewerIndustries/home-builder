@@ -323,6 +323,17 @@ export function CounterGlyph({ c, selected, px }: { c: Counter; selected: boolea
             </g>
           );
         }
+        if (k.kind === 'dishwasher' || k.kind === 'fridge') {
+          const at = counterPoint(c, k.offset, c.depth / 2);
+          return (
+            <g key={k.id} className={`cutout ${k.kind}`}>
+              <polygon points={poly(box(s + 0.5, e - 0.5, 0.5, c.depth - 0.5))} strokeWidth={px(1)} strokeDasharray={k.kind === 'dishwasher' ? `${px(3)} ${px(2)}` : undefined} />
+              <text x={at.x} y={at.y} fontSize={Math.min(7, (e - s) / 4)} textAnchor="middle" dominantBaseline="central">
+                {k.kind === 'fridge' ? 'REF' : 'DW'}
+              </text>
+            </g>
+          );
+        }
         const w = e - s;
         return (
           <g key={k.id} className="cutout range">

@@ -579,6 +579,10 @@ svg.plan {
 .counter .cutout circle {
   fill: var(--canvas);
 }
+.counter .cutout text {
+  fill: var(--counter-edge);
+  font-weight: 600;
+}
 .counter.sel > polygon {
   stroke: var(--accent);
 }
@@ -775,6 +779,12 @@ table.mini .num {
 }
 .row button {
   flex: 1;
+}
+.row.wrap {
+  flex-wrap: wrap;
+}
+.row.wrap button {
+  flex: 1 1 45%;
 }
 .badge {
   font-size: 11px;

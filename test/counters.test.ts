@@ -95,3 +95,37 @@ test('cutouts stay inside the counter, and deleting a counter removes it', () =>
   p = projectReducer(p, { type: 'delete', ids: [counter.id] });
   assert.deepEqual(p.counters.map((c) => c.id), ['i1']);
 });
+
+test('a wall counter rides along when its wall is dragged, stretched or thickened', () => {
+  let { p, counter } = kitchen();
+  const top = p.walls[0]; // (0,0) → (240,0); the counter hangs below it
+  // Drag the top wall down 12": the counter follows, the island stays.
+  p = projectReducer(p, { type: 'translatePoints', from: [top.a, top.b], delta: { x: 0, y: 12 } });
+  const c = p.counters.find((x) => x.id === counter.id)!;
+  assert.deepEqual([c.a, c.b], [{ x: 24, y: 12 + top.thickness / 2 }, { x: 192, y: 12 + top.thickness / 2 }]);
+  assert.deepEqual(p.counters.find((x) => x.island)!.a, { x: 84, y: 84 });
+  // Shorten the wall to 10 ft: the counter is cut back to the new end.
+  p = projectReducer(p, { type: 'setWallLength', id: top.id, length: 120 });
+  assert.equal(p.counters.find((x) => x.id === counter.id)!.b.x, 120);
+  // Thicker wall: the back edge moves to the new face.
+  p = projectReducer(p, { type: 'updateWall', id: top.id, patch: { thickness: 10 } });
+  assert.equal(p.counters.find((x) => x.id === counter.id)!.a.y, 17);
+});
+
+test('dishwashers stay under the countertop; fridges cut it and price separately', () => {
+  let { p, counter } = kitchen();
+  p = projectReducer(p, {
+    type: 'updateCounter',
+    id: counter.id,
+    patch: { cutouts: [...counter.cutouts, { id: 'dw', kind: 'dishwasher', offset: 112.5, width: 24 }, { id: 'f', kind: 'fridge', offset: 150, width: 36 }] },
+  });
+  const c = p.counters.find((x) => x.id === counter.id)!;
+  // Sink 67.5–100.5 and fridge 132–168 cut; the dishwasher (100.5–124.5) doesn't.
+  assert.deepEqual(counterSpaces(c), [[0, 67.5], [100.5, 132]]);
+  const lines = materialsList(p);
+  const qty = (item: string) => lines.find((l) => l.item === item)?.qty ?? 0;
+  assert.equal(qty('Base cabinets (allowance)'), Math.ceil(((168 - 60 + 72) / 12) * 2) / 2);
+  assert.equal(qty('Dishwasher (allowance)'), 1);
+  assert.equal(qty('Refrigerator (allowance)'), 1);
+  assert.equal(buildScene(p).boxes.filter((b) => b.kind === 'counter').length, 3);
+});

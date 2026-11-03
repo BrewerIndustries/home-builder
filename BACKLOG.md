@@ -34,7 +34,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] **Auto smoke / CO alarm placement (R314 / R315)** — every bedroom, one shared alarm outside each sleeping area, one per storey; combination smoke / CO where there are fuel-burning appliances or an attached garage; 3 ft bathroom-door check.
 - [ ] Lighting v2: exterior lights at outdoor doors (E3903.4), stairway switches at each level, switched receptacles as the E3903.2 alternative, ceiling fans
 - [x] Countertop and island modelling so kitchen receptacles follow real counters, not every wall
-- [ ] Counters v2: follow wall drags; L-shaped counter runs and peninsulas (connecting-edge rule); corner sink / range rules; wall cabinets and appliance symbols (fridge, dishwasher); work-triangle and clearance checks
+- [x] Counters v2: follow wall drags; fridge and dishwasher; work-triangle and island-clearance guideline checks
+- [ ] Counters v3: L-shaped counter runs and peninsulas (connecting-edge rule); corner sink / range rules; wall cabinets; range-hood / landing-area checks
 - [x] Outdoor receptacles front + back (E3901.7): auto GFCI beside an exterior door, front-of-house setting, in-use covers in the estimate
 - [ ] Dedicated appliance circuits, AFCI; outdoor receptacles v2: decks / balconies / porches, height above real grade
 - [ ] Circuits, NEC 220 load calc, panel schedule

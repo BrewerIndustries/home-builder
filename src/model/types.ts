@@ -104,9 +104,12 @@ export interface ElectricalSettings {
   fuelAppliances?: boolean;
 }
 
-export type CutoutKind = 'sink' | 'range';
+export type CutoutKind = 'sink' | 'range' | 'dishwasher' | 'fridge';
 
-/** A sink or range set into a counter. Splits the counter into separate countertop spaces (E3901.4). */
+/**
+ * Something set into a counter run. Sinks, ranges and fridges split it into
+ * separate countertop spaces (E3901.4); a dishwasher sits under the countertop.
+ */
 export interface Cutout {
   id: string;
   kind: CutoutKind;

@@ -1,6 +1,7 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
 import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
 import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
+import { followWalls } from '../calc/counters.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -75,7 +76,8 @@ export function historyReducer(h: History, action: Action): History {
     case 'load':
       return initHistory(syncThickness(migrate(action.project)));
   }
-  const next = syncThickness(projectReducer(h.present, action));
+  const reduced = projectReducer(h.present, action);
+  const next = followWalls(reduced, syncThickness(reduced));
   if (next === h.present) return h;
   if ('transient' in action && action.transient) return { ...h, present: next };
   return push(h, next);
@@ -108,7 +110,7 @@ export function projectReducer(p: Project, action: Action): Project {
     }
 
     case 'updateWall':
-      return reclampOpenings({ ...p, walls: p.walls.map((w) => (w.id === action.id ? { ...w, ...action.patch } : w)) });
+      return followWalls(p, reclampOpenings({ ...p, walls: p.walls.map((w) => (w.id === action.id ? { ...w, ...action.patch } : w)) }));
 
     case 'setWallLength': {
       const w = p.walls.find((x) => x.id === action.id);
@@ -121,15 +123,15 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'moveVertex': {
       const { from, to } = action;
       const move = (q: Point) => (samePoint(q, from) ? { ...to } : q);
-      return reclampOpenings({
+      return followWalls(p, reclampOpenings({
         ...p,
         walls: p.walls.map((w) => ({ ...w, a: move(w.a), b: move(w.b) })),
         rooms: p.rooms.map((r) => ({ ...r, points: r.points.map(move) })),
-      });
+      }));
     }
 
     case 'translatePoints':
-      return reclampOpenings(translatePoints(p, action.from, action.delta));
+      return followWalls(p, reclampOpenings(translatePoints(p, action.from, action.delta)));
 
     case 'splitWall':
       return splitWall(p, action.id, action.at, action.newId);

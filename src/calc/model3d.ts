@@ -3,7 +3,7 @@ import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
-import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint } from './counters.ts';
+import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
 // Axes: plan x → X, plan y → Z, height → Y (up). Inches throughout.
@@ -184,6 +184,10 @@ export function buildScene(project: Project): Scene3D {
     const d = counterDir(c);
     const mid = counterPoint(c, len / 2, c.depth / 2);
     boxes.push({ kind: 'counter', c: [mid.x, COUNTER_HEIGHT / 2, mid.y], size: [len, COUNTER_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });
+    for (const k of c.cutouts.filter((x) => x.kind === 'fridge')) {
+      const at = counterPoint(c, k.offset, c.depth / 2);
+      boxes.push({ kind: 'counter', c: [at.x, FRIDGE_HEIGHT / 2, at.y], size: [k.width, FRIDGE_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });
+    }
   }
   faces.push(...roofFaces(project).map((f) => ({ ...f, roofPart: true })));
   const pts = project.walls.flatMap((w) => [w.a, w.b]);
