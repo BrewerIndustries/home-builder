@@ -1,7 +1,8 @@
 import { exclusiveArea } from '../calc/regions.ts';
-import { pointAlong, polygonCentroid, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
+import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { counterCorners, counterPoint, islandReceptacles } from '../calc/counters.ts';
+import { outerCorners, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -76,7 +77,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         })}
       {outlets && <Lighting project={project} selection={selection} px={px} />}
 
-      {wallDims && project.walls.map((w) => <WallDimension key={w.id} w={w} px={px} />)}
+      {wallDims && wallDimLabels(project, project.dimMode ?? 'centre').map((l, i) => <WallDimension key={`${l.wall.id}-${i}`} l={l} px={px} />)}
       {overallDims && <OverallDimensions project={project} px={px} />}
     </g>
   );
@@ -89,7 +90,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
 export function OverallDimensions({ project, px }: { project: Project; px(n: number): number }) {
   const ext = project.walls.filter((w) => w.kind === 'exterior');
   if (!ext.length) return null;
-  const pts = ext.flatMap((w) => [w.a, w.b]);
+  const pts = (project.dimMode ?? 'centre') === 'centre' ? ext.flatMap((w) => [w.a, w.b]) : outerCorners(project);
   const t = Math.max(...ext.map((w) => w.thickness)) / 2;
   const xs = uniq(pts.map((p) => p.x));
   const ys = uniq(pts.map((p) => p.y));
@@ -286,12 +287,13 @@ function FixtureGlyph({ f, selected, px }: { f: Fixture; selected: boolean; px(n
   );
 }
 
-function WallDimension({ w, px }: { w: Wall; px(n: number): number }) {
-  const len = wallLength(w);
+function WallDimension({ l, px }: { l: DimLabel; px(n: number): number }) {
+  const w = l.wall;
+  const len = l.length;
   if (len < 12) return null;
   const n = wallNormal(w);
-  const mid = pointAlong(w, len / 2);
-  const off = w.thickness / 2 + px(10);
+  const mid = pointAlong(w, l.at);
+  const off = (w.thickness / 2 + px(10)) * l.side;
   const pos = { x: mid.x + n.x * off, y: mid.y + n.y * off };
   let angle = (Math.atan2(w.b.y - w.a.y, w.b.x - w.a.x) * 180) / Math.PI;
   if (angle > 90 || angle <= -90) angle += 180;

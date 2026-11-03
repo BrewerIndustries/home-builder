@@ -36,6 +36,7 @@ import {
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
+import { faceSpans, outerSides } from '../calc/faces.ts';
 import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
 import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_WIDTH, MIN_COUNTER_SPACE } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
@@ -79,6 +80,13 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     const f = frameWall(w, project);
     const def = w.kind === 'exterior' ? project.framing.exteriorStud : project.framing.interiorStud;
     const splitAt = splitPoint(project, w);
+    const faces = faceSpans(project).filter((x) => x.wall.id === w.id);
+    const outer = outerSides(project).get(w.id);
+    const faceText = (side: 1 | -1) =>
+      faces
+        .filter((x) => x.side === side)
+        .map((x) => formatFtIn(x.length))
+        .join(' + ') || '—';
     return (
       <aside className="inspector">
         <h3>Wall W{project.walls.indexOf(w) + 1}</h3>
@@ -101,7 +109,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             ))}
           </select>
         </Field>
-        <Field label="Length">
+        <Field label="Length" hint={`Centreline. Faces: ${outer ? `outside ${faceText(outer)}, inside ${faceText(-outer as 1 | -1)}` : `${faceText(1)} / ${faceText(-1)}`}`}>
           <LengthInput value={wallLength(w)} min={1} onChange={(v) => dispatch({ type: 'setWallLength', id: w.id, length: v })} />
         </Field>
         <Field label="Wall height" hint="Plate to plate. 97-1/8&quot; = standard 8' wall">

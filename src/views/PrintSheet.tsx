@@ -1,11 +1,17 @@
 import { wallAreas } from '../calc/materials.ts';
 import { PlanDrawing } from '../editor/PlanDrawing.tsx';
-import type { Project } from '../model/types.ts';
+import type { DimMode, Project } from '../model/types.ts';
 import { DIM_ROOM, pickScale } from '../calc/sheet.ts';
 
 // A to-scale floor plan sheet for printing / Save as PDF: US Letter landscape,
 // largest standard architectural scale that fits, title block and scale bar.
 // Only visible in print (see @media print in styles.css).
+
+const DIM_NOTE: Record<DimMode, string> = {
+  centre: 'dimensions to wall centrelines',
+  inside: 'dimensions to inside faces; overall to outside face',
+  outside: 'dimensions to outside face of exterior walls; interior walls to centrelines',
+};
 
 export function PrintSheet({ project }: { project: Project }) {
   const pts = project.walls.flatMap((w) => [w.a, w.b]);
@@ -49,7 +55,7 @@ export function PrintSheet({ project }: { project: Project }) {
       <div className="title-block">
         <div>
           <div className="tb-name">{project.name}</div>
-          <div>Floor plan · {Math.round(floor).toLocaleString()} sq ft · dimensions to wall centrelines</div>
+          <div>Floor plan · {Math.round(floor).toLocaleString()} sq ft · {DIM_NOTE[project.dimMode ?? 'centre']}</div>
         </div>
         <div>
           <div className="tb-label">Scale</div>

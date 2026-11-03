@@ -44,7 +44,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Non-rectangular rooms v2: R304 min dimension and ceiling slopes on the real outline (not the bounding box); auto-name / auto-type rooms from size and doors
 - [x] Drag a whole wall (move both ends together); split / join walls
 - [ ] Wall edits v2: split at a clicked point (not just the middle); snap a dragged wall to grid / other walls; show the move distance while dragging
-- [ ] Inside / outside dimension modes (currently centreline)
+- [x] Inside / outside dimension modes (centreline / inside faces / outside face)
+- [ ] Dimensions v2: type a length as inside / outside in the wall panel; dimension strings across rooms and to openings; finished (drywall) vs framing faces
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
 - [ ] Plan versions with change-order diffs
 - [ ] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)

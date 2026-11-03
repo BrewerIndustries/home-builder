@@ -12,7 +12,7 @@ import { Inspector } from './editor/Inspector.tsx';
 import { PlanCanvas, type PlanCanvasHandle, type Tool } from './editor/PlanCanvas.tsx';
 import { downloadJson, loadSaved, readProjectFile, readUnderlay, save } from './model/persist.ts';
 import { historyReducer, initHistory } from './model/store.ts';
-import type { WallKind } from './model/types.ts';
+import type { DimMode, WallKind } from './model/types.ts';
 import { SiteView } from './site/SiteView.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
@@ -23,6 +23,12 @@ type Tab = 'plan' | 'site' | '3d' | 'framing' | 'materials' | 'code';
 const View3D = lazy(() => import('./views/View3D.tsx'));
 
 const TAB_LABEL: Record<Tab, string> = { plan: 'Plan', site: 'Site', '3d': '3D', framing: 'Framing', materials: 'Estimate', code: 'Code check' };
+
+const DIM_MODES: { id: DimMode; label: string; title: string }[] = [
+  { id: 'centre', label: '℄', title: 'Dimensions to wall centrelines' },
+  { id: 'inside', label: 'In', title: 'Dimensions to the inside faces (room clear sizes); overall to the outside face' },
+  { id: 'outside', label: 'Out', title: 'Exterior walls to their outside face; interior walls to centrelines' },
+];
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Select', key: 'v', icon: '↖' },
@@ -276,6 +282,14 @@ export function App() {
               <span className="icon">💡</span>
               <span>Auto lights</span>
             </button>
+            <div className="sep" />
+            <div className="seg" role="group" aria-label="Dimensions">
+              {DIM_MODES.map((m) => (
+                <button key={m.id} className={(project.dimMode ?? 'centre') === m.id ? 'active' : ''} onClick={() => dispatch({ type: 'setDimMode', mode: m.id })} title={m.title}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
             <div className="spacer" />
             <button onClick={() => canvas.current?.zoom(1.25)} title="Zoom in">
               +

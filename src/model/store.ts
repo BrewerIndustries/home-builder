@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
 import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
@@ -17,6 +17,7 @@ export type Action =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'rename'; name: string }
+  | { type: 'setDimMode'; mode: DimMode }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
@@ -88,6 +89,9 @@ export function projectReducer(p: Project, action: Action): Project {
   switch (action.type) {
     case 'rename':
       return { ...p, name: action.name };
+
+    case 'setDimMode':
+      return { ...p, dimMode: action.mode };
 
     case 'addWalls': {
       // Drop any stretch already covered by an existing wall, so a room drawn

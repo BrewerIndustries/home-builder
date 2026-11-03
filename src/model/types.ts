@@ -223,6 +223,9 @@ export interface Underlay {
   visible: boolean;
 }
 
+/** Dimensions to wall centrelines, room-side faces, or the outside face of the exterior walls. */
+export type DimMode = 'centre' | 'inside' | 'outside';
+
 export interface Project {
   version: 1;
   name: string;
@@ -233,6 +236,8 @@ export interface Project {
   fixtures: Fixture[];
   switches: WallSwitch[];
   counters: Counter[];
+  /** What the plan's dimensions measure; centrelines when unset. */
+  dimMode?: DimMode;
   electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;
