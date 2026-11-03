@@ -19,6 +19,7 @@ export type Action =
   | { type: 'redo' }
   | { type: 'rename'; name: string }
   | { type: 'setDimMode'; mode: DimMode }
+  | { type: 'setDimFaces'; faces: 'finished' | 'framing' }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
@@ -94,6 +95,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'setDimMode':
       return { ...p, dimMode: action.mode };
+
+    case 'setDimFaces':
+      return { ...p, dimFaces: action.faces };
 
     case 'addWalls': {
       // Drop any stretch already covered by an existing wall, so a room drawn

@@ -38,7 +38,7 @@ import {
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
-import { faceSpans, outerSides } from '../calc/faces.ts';
+import { centrelineForFace, faceSpans, outerSides } from '../calc/faces.ts';
 import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
 import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, freeSpaces, MIN_COUNTER_SPACE, peninsulaJoin, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
@@ -89,6 +89,22 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         .filter((x) => x.side === side)
         .map((x) => formatFtIn(x.length))
         .join(' + ') || '—';
+    // Faces you can type a length for: one unbroken piece on that side.
+    const single = (side: 1 | -1) => {
+      const mine = faces.filter((x) => x.side === side);
+      return mine.length === 1 ? mine[0] : null;
+    };
+    const faceFields: { label: string; length: number; side: 1 | -1 }[] = [];
+    if (outer) {
+      const o = single(outer);
+      const i = single(-outer as 1 | -1);
+      if (o) faceFields.push({ label: 'Outside face', length: o.length, side: o.side });
+      if (i) faceFields.push({ label: 'Inside face', length: i.length, side: i.side });
+    } else {
+      const [l, r] = [single(1), single(-1)];
+      if (l && r && Math.abs(l.length - r.length) < 0.5) faceFields.push({ label: 'Face length', length: l.length, side: 1 });
+    }
+    const faceWord = project.dimFaces === 'framing' ? 'framing' : 'finished';
     return (
       <aside className="inspector">
         <h3>Wall W{project.walls.indexOf(w) + 1}</h3>
@@ -114,6 +130,18 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Length" hint={`Centreline. Faces: ${outer ? `outside ${faceText(outer)}, inside ${faceText(-outer as 1 | -1)}` : `${faceText(1)} / ${faceText(-1)}`}`}>
           <LengthInput value={wallLength(w)} min={1} onChange={(v) => dispatch({ type: 'setWallLength', id: w.id, length: v })} />
         </Field>
+        {faceFields.map((f) => (
+          <Field key={f.label} label={f.label} hint={`To the ${faceWord} face. Typing here moves the wall's end like the centreline length does.`}>
+            <LengthInput
+              value={f.length}
+              min={1}
+              onChange={(v) => {
+                const length = centrelineForFace(project, w.id, f.side, v);
+                if (length) dispatch({ type: 'setWallLength', id: w.id, length });
+              }}
+            />
+          </Field>
+        ))}
         <Field label="Wall height" hint="Plate to plate. 97-1/8&quot; = standard 8' wall">
           <LengthInput value={w.height} min={24} onChange={(v) => dispatch({ type: 'updateWall', id: w.id, patch: { height: v } })} />
         </Field>
@@ -536,6 +564,13 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           {project.walls.filter((w) => w.stud).length} wall(s) override the default ({[...new Set(project.walls.map((w) => studFor(w, fr)))].join(', ')} in use).
         </p>
       )}
+
+      <Field label="Dimension faces" hint="What inside / outside dimensions measure to: the drywall and sheathing, or the studs 1/2&quot; inside them">
+        <select value={project.dimFaces ?? 'finished'} onChange={(e) => dispatch({ type: 'setDimFaces', faces: e.target.value as 'finished' | 'framing' })}>
+          <option value="finished">Finished faces</option>
+          <option value="framing">Framing (stud) faces</option>
+        </select>
+      </Field>
 
       <h4>Electrical</h4>
       <Field label="Fuel-burning appliances" hint="Gas or oil furnace, water heater or range, or a fireplace — CO alarms follow from this (R315)">

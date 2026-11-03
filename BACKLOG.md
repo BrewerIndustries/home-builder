@@ -49,7 +49,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Drag a whole wall (move both ends together); split / join walls
 - [ ] Wall edits v2: split at a clicked point (not just the middle); snap a dragged wall to grid / other walls; show the move distance while dragging
 - [x] Inside / outside dimension modes (centreline / inside faces / outside face)
-- [ ] Dimensions v2: type a length as inside / outside in the wall panel; dimension strings across rooms and to openings; finished (drywall) vs framing faces
+- [x] Dimensions v2: type a length as inside / outside in the wall panel; opening chains on exterior walls; room clear sizes; finished vs framing faces
+- [ ] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
 - [ ] Plan versions with change-order diffs
 - [ ] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)

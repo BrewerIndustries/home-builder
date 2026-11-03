@@ -249,6 +249,8 @@ export interface Project {
   counters: Counter[];
   /** What the plan's dimensions measure; centrelines when unset. */
   dimMode?: DimMode;
+  /** Which wall faces inside / outside dimensions measure to; finished when unset. */
+  dimFaces?: 'finished' | 'framing';
   electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;

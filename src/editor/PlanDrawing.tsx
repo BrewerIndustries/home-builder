@@ -2,7 +2,7 @@ import { exclusiveArea } from '../calc/regions.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { counterCorners, counterPoint, islandReceptacles, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
-import { outerCorners, wallDimLabels, type DimLabel } from '../calc/faces.ts';
+import { openingChains, outerCorners, roomClearSize, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -32,6 +32,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         const busy = outlets && project.fixtures.some((f) => Math.abs(f.at.x - centroid.x) < 10 && Math.abs(f.at.y - centroid.y) < 10);
         const c = busy ? { x: centroid.x, y: centroid.y - 8 - px(18) } : centroid;
         const sel = selection?.kind === 'room' && selection.id === r.id;
+        const size = wallDims ? roomClearSize(project, r) : null;
         return (
           <g key={r.id}>
             <polygon points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill={sel ? 'var(--room-sel)' : 'var(--room)'} stroke="none" />
@@ -41,6 +42,11 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
             <text x={c.x} y={c.y + px(12)} className="room-area" fontSize={px(11)} textAnchor="middle">
               {formatSqFt(exclusiveArea(project, r))}
             </text>
+            {size && (
+              <text x={c.x} y={c.y + px(25)} className="room-area" fontSize={px(10)} textAnchor="middle">
+                {formatFtIn(size.width)} × {formatFtIn(size.depth)}
+              </text>
+            )}
           </g>
         );
       })}
@@ -90,6 +96,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {outlets && <Lighting project={project} selection={selection} px={px} />}
 
       {wallDims && wallDimLabels(project, project.dimMode ?? 'centre').map((l, i) => <WallDimension key={`${l.wall.id}-${i}`} l={l} px={px} />)}
+      {wallDims && openingChains(project, project.dimMode ?? 'centre').map((c) => <OpeningChain key={c.wall.id} {...c} px={px} />)}
       {overallDims && <OverallDimensions project={project} px={px} />}
     </g>
   );
@@ -110,14 +117,49 @@ export function OverallDimensions({ project, px }: { project: Project; px(n: num
   const maxX = xs.at(-1)!;
   const minY = ys[0];
   const maxY = ys.at(-1)!;
-  const chainOff = t + px(28);
-  const overallOff = t + px(52);
+  // Leave room for the opening chains that run just outside the walls.
+  const shift = project.openings.length ? px(16) : 0;
+  const chainOff = t + px(28) + shift;
+  const overallOff = t + px(52) + shift;
   return (
     <g className="dims">
       {xs.length > 2 && <DimString axis="x" stops={xs} at={minY - chainOff} px={px} />}
       <DimString axis="x" stops={[minX, maxX]} at={minY - (xs.length > 2 ? overallOff : chainOff)} px={px} />
       {ys.length > 2 && <DimString axis="y" stops={ys} at={minX - chainOff} px={px} />}
       <DimString axis="y" stops={[minY, maxY]} at={minX - (ys.length > 2 ? overallOff : chainOff)} px={px} />
+    </g>
+  );
+}
+
+/** A dimension chain along one wall, outside it: end → each opening centre → end. */
+function OpeningChain({ wall, side, stops, px }: { wall: Wall; side: 1 | -1; stops: number[]; px(n: number): number }) {
+  const d = wallDir(wall);
+  const n = wallNormal(wall);
+  const off = (wall.thickness / 2 + px(24)) * side;
+  const P = (t: number, extra = 0): Point => ({ x: wall.a.x + d.x * t + n.x * (off + extra * side), y: wall.a.y + d.y * t + n.y * (off + extra * side) });
+  const tick = px(4);
+  let angle = (Math.atan2(d.y, d.x) * 180) / Math.PI;
+  if (angle > 90 || angle <= -90) angle += 180;
+  const [a, b] = [P(stops[0]), P(stops.at(-1)!)];
+  return (
+    <g className="dims opening-chain">
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-line" strokeWidth={px(0.8)} />
+      {stops.map((s, i) => {
+        const p = P(s);
+        // 45° tick, turned with the wall.
+        const u = { x: (d.x + n.x) * tick, y: (d.y + n.y) * tick };
+        return <line key={i} x1={p.x - u.x} y1={p.y - u.y} x2={p.x + u.x} y2={p.y + u.y} className="dim-line" strokeWidth={px(1)} />;
+      })}
+      {stops.slice(1).map((s, i) => {
+        const len = s - stops[i];
+        if (len < px(28)) return null;
+        const m = P((stops[i] + s) / 2, px(6));
+        return (
+          <text key={i} x={m.x} y={m.y} transform={`rotate(${angle} ${m.x} ${m.y})`} className="dim" fontSize={px(9)} textAnchor="middle" dominantBaseline="middle">
+            {formatFtIn(len)}
+          </text>
+        );
+      })}
     </g>
   );
 }
