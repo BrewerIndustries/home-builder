@@ -17,7 +17,7 @@ import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
-import { snapWallMove, splitAt, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
+import { snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounter } from '../calc/counters.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
@@ -37,7 +37,8 @@ interface View {
 
 type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
-  | { kind: 'vertex'; current: Point }
+  /** A wall end; `anchor` is the selected wall's other end (Alt swings round it, keeping `radius`). */
+  | { kind: 'vertex'; start: Point; current: Point; anchor: Point; radius: number; swung: boolean }
   /** Whole-wall drag: slides across its own length; `current` = the points travelling with it. */
   | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean; snap: { start: number; targets: WallSnapTarget[] }; square: boolean }
   | { kind: 'opening'; id: string; grab: number }
@@ -72,6 +73,12 @@ interface Props {
   ref?: Ref<PlanCanvasHandle>;
 }
 
+/** The last drag, so a typed value can set it exactly: a wall's move, an end's length, or a swing's angle. */
+type LastEdit =
+  | { kind: 'move'; points: Point[]; normal: Point; moved: number }
+  | { kind: 'end'; at: Point; anchor: Point }
+  | { kind: 'swing'; at: Point; anchor: Point; radius: number };
+
 const SNAP_PX = 10;
 const GRID = 6;
 
@@ -89,6 +96,14 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const [straightening, setStraightening] = useState(false);
   const [lengthText, setLengthText] = useState('');
   const [moveText, setMoveText] = useState<string | null>(null);
+  const lastEdit = useRef<LastEdit | null>(null);
+  const [entry, setEntry] = useState('');
+  // A typed value only applies straight after the drag it sets.
+  useEffect(() => {
+    lastEdit.current = null;
+    setEntry('');
+    setMoveText(null);
+  }, [tool, project.name]);
   const [shift, setShift] = useState(false);
   const [space, setSpace] = useState(false);
   const drag = useRef<Drag | null>(null);
@@ -225,6 +240,32 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         setSpace(true);
         e.preventDefault();
       }
+      const last = lastEdit.current;
+      if (last && !(tool === 'wall' && chain)) {
+        if (/^[0-9'". /°-]$/.test(e.key) && !(e.key === ' ' && !entry)) {
+          setEntry((t) => t + e.key);
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Backspace' && entry) {
+          setEntry((t) => t.slice(0, -1));
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        if (e.key === 'Enter' && entry) {
+          applyEntry(last, entry);
+          setEntry('');
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Escape') {
+          lastEdit.current = null;
+          setEntry('');
+          setMoveText(null);
+          return;
+        }
+      }
       if (e.key === 'Escape') {
         if (lengthText) setLengthText('');
         else if (chain) setChain(null);
@@ -260,13 +301,47 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       window.removeEventListener('keydown', down, true);
       window.removeEventListener('keyup', up);
     };
-  }, [tool, chain, lengthText, cursor, shift, placeWall, setTool]);
+  }, [tool, chain, lengthText, cursor, shift, placeWall, setTool, entry]);
+
+  /** Set the last drag exactly from typed text: a distance moved, an end's length, or a swing's angle. */
+  function applyEntry(last: LastEdit, text: string) {
+    const neg = text.trim().startsWith('-');
+    const body = text.replace(/^\s*-/, '');
+    if (last.kind === 'swing') {
+      const deg = Number(body.replace('°', '').trim()) * (neg ? -1 : 1);
+      if (!Number.isFinite(deg)) return;
+      const to = swingEnd(last.anchor, last.radius, { x: last.anchor.x + Math.cos((deg * Math.PI) / 180), y: last.anchor.y - Math.sin((deg * Math.PI) / 180) }, 0).p;
+      dispatch({ type: 'moveVertex', from: last.at, to, transient: true });
+      lastEdit.current = { ...last, at: to };
+      setMoveText(`Turned to ${(((deg % 360) + 360) % 360)}° · length kept`);
+      return;
+    }
+    const len = parseFtIn(body);
+    if (len === null || len < 0) return;
+    if (last.kind === 'move') {
+      const want = (neg ? -1 : 1) * (Math.sign(last.moved) || 1) * len;
+      const delta = { x: last.normal.x * (want - last.moved), y: last.normal.y * (want - last.moved) };
+      dispatch({ type: 'translatePoints', from: last.points, delta, transient: true });
+      lastEdit.current = { ...last, points: last.points.map((q) => ({ x: q.x + delta.x, y: q.y + delta.y })), moved: want };
+      setMoveText(`Moved ${formatFtIn(len)}${neg ? ' back' : ''}`);
+      return;
+    }
+    if (len < 1) return;
+    const d = dist(last.anchor, last.at) || 1;
+    const to = { x: Math.round((last.anchor.x + ((last.at.x - last.anchor.x) / d) * len) * 1000) / 1000, y: Math.round((last.anchor.y + ((last.at.y - last.anchor.y) / d) * len) * 1000) / 1000 };
+    dispatch({ type: 'moveVertex', from: last.at, to, transient: true });
+    lastEdit.current = { ...last, at: to };
+    setMoveText(`Length ${formatFtIn(len)}`);
+  }
 
   const selectedWall = selection?.kind === 'wall' ? project.walls.find((w) => w.id === selection.id) : undefined;
 
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
     if (e.button === 2) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    lastEdit.current = null;
+    setEntry('');
+    setMoveText(null);
     const raw = toWorld(e.clientX, e.clientY);
     const slop = 6 / view.scale;
 
@@ -282,7 +357,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           for (const end of [selectedWall.a, selectedWall.b]) {
             if (dist(end, raw) <= 10 / view.scale) {
               dispatch({ type: 'checkpoint' });
-              drag.current = { kind: 'vertex', current: end };
+              const anchor = end === selectedWall.a ? selectedWall.b : selectedWall.a;
+              drag.current = { kind: 'vertex', start: end, current: end, anchor, radius: wallLength(selectedWall), swung: false };
               return;
             }
           }
@@ -414,8 +490,22 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       return;
     }
     if (d?.kind === 'vertex') {
-      const { p, snapped } = snap(raw, { exclude: d.current });
+      let p: Point;
+      let snapped: 'endpoint' | 'grid' | null = null;
+      let note: string | null = null;
+      d.swung = e.altKey && d.radius > 0;
+      if (d.swung) {
+        // Alt: swing round the other end, length kept; 15° steps, Shift for any angle.
+        const sw = swingEnd(d.anchor, d.radius, raw, shift ? 0 : 15);
+        p = sw.p;
+        note = `Turned to ${sw.angle}° · length kept`;
+      } else {
+        const sn = snap(raw, { exclude: d.current });
+        const onWall = sn.snapped === 'endpoint' || shift ? null : snapEndToWalls(project, raw, { exclude: d.current, anchor: d.anchor, tol: SNAP_PX / viewRef.current.scale });
+        [p, snapped, note] = onWall ? [onWall.p, null, onWall.label] : [sn.p, sn.snapped, null];
+      }
       setCursor({ p, snapped });
+      setMoveText(`${note ? `${note} · ` : ''}Length ${formatFtIn(dist(d.anchor, p))}`);
       if (!samePoint(p, d.current)) {
         dispatch({ type: 'moveVertex', from: d.current, to: p, transient: true });
         d.current = p;
@@ -529,6 +619,14 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     const d = drag.current;
     drag.current = null;
     setMoveText(null);
+    // Remember a real wall move or end drag, so a typed value can set it exactly.
+    if (d?.kind === 'wall' && d.started && d.moved) {
+      lastEdit.current = { kind: 'move', points: d.current, normal: d.normal, moved: d.moved };
+      setMoveText(`Moved ${formatFtIn(Math.abs(d.moved))} · type a distance + ↵ to set it exactly`);
+    } else if (d?.kind === 'vertex' && !samePoint(d.start, d.current)) {
+      lastEdit.current = d.swung ? { kind: 'swing', at: d.current, anchor: d.anchor, radius: d.radius } : { kind: 'end', at: d.current, anchor: d.anchor };
+      setMoveText(d.swung ? 'Type an angle + ↵ to set it exactly (0° = right, 90° = up)' : `Length ${formatFtIn(dist(d.anchor, d.current))} · type a length + ↵ to set it exactly`);
+    }
     if (d?.kind === 'room' && e) d.end = snap(toWorld(e.clientX, e.clientY)).p;
     setRoomDrag(null);
     if (d?.kind === 'newCounter') {
@@ -718,7 +816,17 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         </g>
       </svg>
 
-      {moveText && <div className="length-entry">{moveText}</div>}
+      {(moveText || entry) && (
+        <div className="length-entry">
+          {entry ? (
+            <>
+              {lastEdit.current?.kind === 'move' ? 'Move' : lastEdit.current?.kind === 'swing' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
+            </>
+          ) : (
+            moveText
+          )}
+        </div>
+      )}
       {lengthText && (
         <div className="length-entry">
           Length: <strong>{lengthText}</strong> <span className="muted">↵ to place · Esc to clear</span>
@@ -788,7 +896,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends or openings to move them · ⌫ deletes';
+      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':

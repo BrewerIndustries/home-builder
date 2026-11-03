@@ -42,9 +42,9 @@ import {
 } from '../model/types.ts';
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
-import { LengthInput } from './LengthInput.tsx';
+import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { centrelineForFace, faceSpans, outerSides } from '../calc/faces.ts';
-import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
+import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, freeSpaces, MIN_COUNTER_SPACE, peninsulaJoin, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
@@ -147,6 +147,17 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             />
           </Field>
         ))}
+        <Field label="Angle" hint="0° points right, 90° up the plan. Turns about the start, keeping the length — or Alt-drag an end to swing it round the other (15° steps, Shift = any angle).">
+          <div className="row">
+            <AngleInput value={wallAngle(w)} onChange={(v) => dispatch({ type: 'moveVertex', ...rotateWall(w, v, 'a') })} />
+            <button title="Turn 90° anticlockwise about the start" onClick={() => dispatch({ type: 'moveVertex', ...rotateWall(w, wallAngle(w) + 90, 'a') })}>
+              ⟲ 90°
+            </button>
+            <button title="Turn 90° clockwise about the start" onClick={() => dispatch({ type: 'moveVertex', ...rotateWall(w, wallAngle(w) - 90, 'a') })}>
+              ⟳ 90°
+            </button>
+          </div>
+        </Field>
         <Field label="Wall height" hint="Plate to plate. 97-1/8&quot; = standard 8' wall">
           <LengthInput value={w.height} min={24} onChange={(v) => dispatch({ type: 'updateWall', id: w.id, patch: { height: v } })} />
         </Field>

@@ -170,3 +170,82 @@ export function splitAt(project: Project, wall: Wall, along: number): number | n
   });
   return inOpening ? null : t;
 }
+
+/** A wall's plan angle, a → b: degrees anticlockwise from pointing right (plan y runs down), 0 ≤ angle < 360. */
+export function wallAngle(w: Wall): number {
+  const deg = (Math.atan2(-(w.b.y - w.a.y), w.b.x - w.a.x) * 180) / Math.PI;
+  const a = Math.round(((deg % 360) + 360) % 360 * 1000) / 1000;
+  return a === 360 ? 0 : a;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** The end that moves (and where to) to turn `wall` to `angle` about its start (`a`) or its end (`b`), keeping its length. */
+export function rotateWall(wall: Wall, angle: number, pivot: 'a' | 'b'): { from: Point; to: Point } {
+  const len = wallLength(wall);
+  const r = (angle * Math.PI) / 180;
+  const v = { x: Math.cos(r) * len, y: -Math.sin(r) * len };
+  return pivot === 'a'
+    ? { from: wall.b, to: { x: round3(wall.a.x + v.x), y: round3(wall.a.y + v.y) } }
+    : { from: wall.a, to: { x: round3(wall.b.x - v.x), y: round3(wall.b.y - v.y) } };
+}
+
+/**
+ * Swing a dragged end round `anchor`, keeping the wall's length: the end goes on
+ * the circle at the pointer's bearing, in `step`-degree steps (0 = any angle).
+ */
+export function swingEnd(anchor: Point, radius: number, p: Point, step: number): { p: Point; angle: number } {
+  let deg = (Math.atan2(-(p.y - anchor.y), p.x - anchor.x) * 180) / Math.PI;
+  if (step) deg = Math.round(deg / step) * step;
+  deg = ((deg % 360) + 360) % 360;
+  const r = (deg * Math.PI) / 180;
+  return { p: { x: round3(anchor.x + Math.cos(r) * radius), y: round3(anchor.y - Math.sin(r) * radius) }, angle: Math.round(deg * 10) / 10 % 360 };
+}
+
+/**
+ * Snap a dragged wall end onto another wall: inside its thickness → onto its
+ * centreline (a T); just outside a face (within `tol`) → onto that face line.
+ * Walls already meeting at the dragged end are skipped. With an `anchor` (the
+ * dragged wall's fixed end) the end keeps the wall square to the plan when it
+ * nearly was; otherwise it drops straight onto the line.
+ */
+export function snapEndToWalls(
+  project: Project,
+  raw: Point,
+  opts: { exclude: Point; anchor?: Point; tol: number },
+): { p: Point; label: string } | null {
+  let best: { p: Point; label: string; d: number } | null = null;
+  for (const [i, w] of project.walls.entries()) {
+    if (samePoint(w.a, opts.exclude) || samePoint(w.b, opts.exclude)) continue;
+    const len = wallLength(w);
+    const dir = wallDir(w);
+    const n = { x: dir.y, y: -dir.x };
+    const along = (raw.x - w.a.x) * dir.x + (raw.y - w.a.y) * dir.y;
+    if (along < -opts.tol || along > len + opts.tol) continue;
+    const perp = (raw.x - w.a.x) * n.x + (raw.y - w.a.y) * n.y;
+    const half = w.thickness / 2;
+    let offset: number;
+    let label: string;
+    if (Math.abs(perp) <= half) [offset, label] = [0, `onto W${i + 1}`];
+    else if (Math.abs(perp) <= half + opts.tol) [offset, label] = [Math.sign(perp) * half, `to W${i + 1}'s face`];
+    else continue;
+    // The line to land on: w's centreline shifted by `offset`.
+    const o = { x: w.a.x + n.x * offset, y: w.a.y + n.y * offset };
+    let p = { x: o.x + dir.x * along, y: o.y + dir.y * along };
+    if (opts.anchor) {
+      // Keep it square: meet the line on the horizontal or vertical through the anchor, if that's near.
+      for (const axis of [{ x: 1, y: 0 }, { x: 0, y: 1 }]) {
+        const den = axis.x * dir.y - axis.y * dir.x;
+        if (Math.abs(den) < 1e-6) continue;
+        // anchor + s·axis on the line o + t·dir.
+        const t = ((opts.anchor.x - o.x) * axis.y - (opts.anchor.y - o.y) * axis.x) / -den;
+        const q = { x: o.x + dir.x * t, y: o.y + dir.y * t };
+        if (dist(q, raw) <= Math.max(opts.tol, half + opts.tol) && t >= -1e-6 && t <= len + 1e-6) p = q;
+      }
+    }
+    p = { x: round3(p.x), y: round3(p.y) };
+    const d = Math.abs(Math.abs(perp) - Math.abs(offset));
+    if (!best || d < best.d) best = { p, label, d };
+  }
+  return best && { p: best.p, label: best.label };
+}
