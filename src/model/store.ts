@@ -190,8 +190,13 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'updateOutlet':
       return { ...p, outlets: p.outlets.map((o) => (o.id === action.id ? { ...o, ...action.patch } : o)) };
 
-    case 'replaceAutoOutlets':
-      return { ...p, outlets: [...p.outlets.filter((o) => !o.auto), ...action.outlets] };
+    case 'replaceAutoOutlets': {
+      const outlets = [...p.outlets.filter((o) => !o.auto), ...action.outlets];
+      // A switch that ran a replaced receptacle lets go of it.
+      const gone = new Set(p.outlets.filter((o) => o.auto).map((o) => o.id));
+      const switches = p.switches.map((s) => (s.controls.some((c) => gone.has(c)) ? { ...s, controls: s.controls.filter((c) => !gone.has(c)) } : s));
+      return { ...p, outlets, switches };
+    }
 
     case 'addFixture': {
       const link = new Set(action.linkTo ?? []);

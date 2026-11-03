@@ -13,7 +13,7 @@ import {
   wallNormal,
 } from '../model/geometry.ts';
 import { rectangleWalls, type Action } from '../model/store.ts';
-import { coRequired, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
+import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { wallDragPoints } from '../model/wallEdit.ts';
 import { counterDir, newCounter } from '../calc/counters.ts';
@@ -353,7 +353,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const side = (raw.x - foot.x) * n.x + (raw.y - foot.y) * n.y >= 0 ? 1 : -1;
         // Controls the lights of the room it faces.
         const room = roomAt(project, { x: foot.x + n.x * side * (near.wall.thickness / 2 + 12), y: foot.y + n.y * side * (near.wall.thickness / 2 + 12) });
-        const controls = room ? project.fixtures.filter((f) => f.kind === 'light' && roomAt(project, f.at)?.id === room.id).map((f) => f.id) : [];
+        const controls = room ? project.fixtures.filter((f) => isLight(f.kind) && roomAt(project, f.at)?.id === room.id).map((f) => f.id) : [];
         const sw: WallSwitch = { id: uid('sw'), wallId: near.wall.id, offset: Math.round(near.along), side, height: SWITCH_HEIGHT, controls, auto: false };
         dispatch({ type: 'addSwitch', sw });
         setSelection({ kind: 'switch', id: sw.id });
@@ -365,7 +365,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const room = roomAt(project, p);
         const fixture: Fixture = { id: uid(tool === 'light' ? 'lt' : 'sa'), kind: tool === 'light' ? 'light' : coRequired(project) ? 'smoke-co' : 'smoke', at: p, auto: false };
         // A new light joins whatever switches already run the room's lights.
-        const lights = new Set(room ? project.fixtures.filter((f) => f.kind === 'light' && roomAt(project, f.at)?.id === room.id).map((f) => f.id) : []);
+        const lights = new Set(room ? project.fixtures.filter((f) => isLight(f.kind) && roomAt(project, f.at)?.id === room.id).map((f) => f.id) : []);
         const linkTo = tool === 'light' ? project.switches.filter((s) => s.controls.some((c) => lights.has(c))).map((s) => s.id) : [];
         dispatch({ type: 'addFixture', fixture, linkTo });
         setSelection({ kind: 'fixture', id: fixture.id });

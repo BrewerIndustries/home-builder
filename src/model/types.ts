@@ -70,7 +70,8 @@ export interface Outlet {
   auto: boolean;
 }
 
-export type FixtureKind = 'light' | 'smoke' | 'smoke-co' | 'co';
+/** Lighting outlets (ceiling light, ceiling fan with light kit, exterior wall light) and alarms. */
+export type FixtureKind = 'light' | 'fan' | 'outdoor' | 'smoke' | 'smoke-co' | 'co';
 
 /** A ceiling device: a lighting outlet or a smoke / CO alarm, at a plan point. */
 export interface Fixture {
@@ -89,7 +90,7 @@ export interface WallSwitch {
   side: 1 | -1;
   /** Centre height above the floor. */
   height: number;
-  /** Fixture ids this switch controls. Two switches on one light = 3-way. */
+  /** Lights (fixture ids) and switched receptacles (outlet ids) this switch controls. Two switches on one light = 3-way. */
   controls: string[];
   auto: boolean;
 }

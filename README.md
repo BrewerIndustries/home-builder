@@ -92,8 +92,11 @@ The Code check adds two **NKBA guidelines** (they warn, never fail): the **work 
 
 Dashed curves show which lights each switch runs. Select a switch to tick or untick lights. A new light joins the switches already running its room, and a new switch runs the lights of the room it faces. Two switches on one light count as 3-ways, and more add 4-ways in between. Re-running keeps anything you dragged, edited or placed by hand, as with outlets.
 
+Every outdoor door (a door in an exterior wall; anything wider than 6 ft counts as a vehicle door and is skipped) gets an **exterior wall light** beside it on the outside face, switched from inside at that door — on the room's own switch when it's already there. Select a light to make it a **ceiling fan** (with a light kit; counts as the room's light, priced with a fan-rated box) or an exterior light. Select a switch to tick **switched receptacles** in its room too; they get a small S, and in bedrooms, living rooms and other rooms they satisfy E3903.2 instead of a ceiling light. Ticking an auto receptacle makes it yours, so Auto outlets keeps it.
+
 The checks cover the following:
-- **E3903.2 / E3903.3:** a wall-switched light in each habitable room, bath, hall and garage. Bedrooms and living rooms only warn, since a switched receptacle is allowed there instead.
+- **E3903.2 / E3903.3:** a wall-switched light in each habitable room, bath, hall and garage. Bedrooms and living rooms pass with a switched receptacle instead, and only warn without either.
+- **E3903.4:** a wall-switched exterior light beside each outdoor door (within 8 ft), vehicle doors excepted.
 - **R314.3:** a smoke alarm in each bedroom, outside each sleeping area and on each storey, and not within 3 ft of a bath door.
 - **R315.3:** a CO alarm outside sleeping areas when one is required.
 

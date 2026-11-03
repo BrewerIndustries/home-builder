@@ -32,7 +32,8 @@ Ordered roughly by value. Competitor research behind these lives in
 
 - [x] **Switches, lighting outlets, switch-to-light links (E3903)** — Light / Switch tools, dashed switch legs, auto 3-way pairs in halls and garages, single-pole / 3-way / 4-way counts in the estimate.
 - [x] **Auto smoke / CO alarm placement (R314 / R315)** — every bedroom, one shared alarm outside each sleeping area, one per storey; combination smoke / CO where there are fuel-burning appliances or an attached garage; 3 ft bathroom-door check.
-- [ ] Lighting v2: exterior lights at outdoor doors (E3903.4), stairway switches at each level, switched receptacles as the E3903.2 alternative, ceiling fans
+- [x] Lighting v2: exterior lights at outdoor doors (E3903.4), switched receptacles as the E3903.2 alternative, ceiling fans
+- [ ] Lighting v3: stairway switches at each level (needs stairs / storeys); attic and crawlspace equipment lights; fan-only (no light kit) option
 - [x] Countertop and island modelling so kitchen receptacles follow real counters, not every wall
 - [x] Counters v2: follow wall drags; fridge and dishwasher; work-triangle and island-clearance guideline checks
 - [ ] Counters v3: L-shaped counter runs and peninsulas (connecting-edge rule); corner sink / range rules; wall cabinets; range-hood / landing-area checks

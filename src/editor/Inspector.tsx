@@ -7,7 +7,8 @@ import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
 import { foundationOf } from '../calc/foundation.ts';
 import { dist, wallLength } from '../model/geometry.ts';
-import { roomAt, switchWays } from '../calc/lighting.ts';
+import { isLight, roomAt, switchRoom, switchWays } from '../calc/lighting.ts';
+import { roomOutletCount } from '../calc/electrical.ts';
 import { outletPosition } from './outletGeometry.ts';
 import type { Action } from '../model/store.ts';
 import {
@@ -233,10 +234,18 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     const ways = switchWays(project).get(sw.id) ?? 1;
     // Nearest lights first; the ones it already runs always show.
     const lights = project.fixtures
-      .filter((f) => f.kind === 'light')
+      .filter((f) => isLight(f.kind))
       .map((f) => ({ f, d: dist(f.at, at), room: roomAt(project, f.at) }))
       .sort((a, b) => a.d - b.d)
       .filter((x, i) => i < 8 || sw.controls.includes(x.f.id));
+    // Receptacles in the switch's room (any it already runs always show).
+    const home = switchRoom(project, sw);
+    const walls = new Map(project.walls.map((x) => [x.id, x]));
+    const receptacles = project.outlets
+      .map((o) => ({ o, d: dist(outletPosition(walls.get(o.wallId)!, o), at) }))
+      .filter(({ o }) => walls.has(o.wallId) && (sw.controls.includes(o.id) || (home && roomOutletCount({ ...project, outlets: [o] }, home) > 0)))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8);
     return (
       <aside className="inspector">
         <h3>
@@ -253,7 +262,8 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                     checked={sw.controls.includes(f.id)}
                     onChange={(e) => up({ controls: e.target.checked ? [...sw.controls, f.id] : sw.controls.filter((c) => c !== f.id) })}
                   />
-                  {room?.name ?? 'Light'} <span className="muted">· {formatFtIn(d, { compact: true })} away</span>
+                  {f.kind === 'fan' ? 'Fan' : f.kind === 'outdoor' ? 'Outside light' : 'Light'}
+                  {room?.name ? ` · ${room.name}` : ''} <span className="muted">· {formatFtIn(d, { compact: true })} away</span>
                 </label>
               ))
             ) : (
@@ -262,6 +272,28 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </div>
           <small className="muted">Tick every light this switch runs. Two switches on one light make a 3-way pair.</small>
         </div>
+        {receptacles.length > 0 && (
+          <div className="field">
+            <span>Switched receptacles</span>
+            <div className="link-list">
+              {receptacles.map(({ o, d }) => (
+                <label key={o.id} className="link-row">
+                  <input
+                    type="checkbox"
+                    checked={sw.controls.includes(o.id)}
+                    onChange={(e) => {
+                      // A receptacle a switch runs is the user's now: re-running Auto outlets keeps it.
+                      if (o.auto) dispatch({ type: 'updateOutlet', id: o.id, patch: { auto: false } });
+                      up({ controls: e.target.checked ? [...sw.controls, o.id] : sw.controls.filter((c) => c !== o.id) });
+                    }}
+                  />
+                  Receptacle <span className="muted">· {formatFtIn(d, { compact: true })} away</span>
+                </label>
+              ))}
+            </div>
+            <small className="muted">In bedrooms, living rooms and other rooms (not kitchens, baths, halls or garages) a switched receptacle can stand in for the ceiling light (E3903.2).</small>
+          </div>
+        )}
         <Field label="Height to centre">
           <LengthInput value={sw.height} onChange={(v) => up({ height: v })} />
         </Field>
@@ -281,11 +313,13 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     return (
       <aside className="inspector">
         <h3>
-          {f.kind === 'light' ? 'Ceiling light' : 'Alarm'} {f.auto && <span className="badge">auto</span>}
+          {f.kind === 'light' ? 'Ceiling light' : f.kind === 'fan' ? 'Ceiling fan' : f.kind === 'outdoor' ? 'Exterior light' : 'Alarm'} {f.auto && <span className="badge">auto</span>}
         </h3>
         <Field label="Type">
           <select value={f.kind} onChange={(e) => dispatch({ type: 'updateFixture', id: f.id, patch: { kind: e.target.value as FixtureKind, auto: false } })}>
             <option value="light">Lighting outlet</option>
+            <option value="fan">Ceiling fan with light</option>
+            <option value="outdoor">Exterior wall light</option>
             <option value="smoke">Smoke alarm</option>
             <option value="smoke-co">Smoke / CO alarm</option>
             <option value="co">CO alarm</option>
@@ -293,11 +327,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </Field>
         <p className="muted small">
           {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
-          {f.kind === 'light' && (by ? `Switched from ${by} place${by > 1 ? 's' : ''}.` : 'No switch yet — select a switch and tick this light.')}
+          {isLight(f.kind) && (by ? `Switched from ${by} place${by > 1 ? 's' : ''}.` : 'No switch yet — select a switch and tick this light.')}
         </p>
         <p className="muted small">Drag it to move. Edited auto items are kept when you re-run Auto lights.</p>
         <button className="danger" onClick={() => del(f.id)}>
-          Delete {f.kind === 'light' ? 'light' : 'alarm'}
+          Delete {f.kind === 'fan' ? 'fan' : isLight(f.kind) ? 'light' : 'alarm'}
         </button>
       </aside>
     );
@@ -442,7 +476,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Stat label="Exterior walls" value={`${Math.round(extLF / 12)} LF`} />
         <Stat label="Rooms" value={project.rooms.length} />
         <Stat label="Receptacles" value={project.outlets.length} />
-        <Stat label="Lights / alarms" value={`${project.fixtures.filter((f) => f.kind === 'light').length} / ${project.fixtures.filter((f) => f.kind !== 'light').length}`} />
+        <Stat label="Lights / alarms" value={`${project.fixtures.filter((f) => isLight(f.kind)).length} / ${project.fixtures.filter((f) => !isLight(f.kind)).length}`} />
       </div>
 
       <h4>Wall defaults</h4>

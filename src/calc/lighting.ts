@@ -1,15 +1,18 @@
 import { dist, pointAlong, pointInPolygon, polygonArea, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
-import { attach, roomRuns } from './electrical.ts';
+import { attach, roomOutletCount, roomRuns } from './electrical.ts';
 import { childRooms, exclusiveArea, regionEdges, type RegionEdge } from './regions.ts';
 import { HABITABLE, uid, type Fixture, type FixtureKind, type Opening, type Point, type Project, type Room, type Wall, type WallSwitch } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { formatFtIn } from '../model/units.ts';
+import { outerSides } from './faces.ts';
 
 // Lighting outlets, wall switches and smoke / CO alarms.
 //   E3903.2  a wall-switched lighting outlet in every habitable room and bathroom
 //            (rooms other than kitchens and baths may use a switched receptacle instead).
 //   E3903.3  the same in hallways, stairways and garages.
+//   E3903.4  a wall-switched lighting outlet on the exterior side of each outdoor
+//            egress door with grade-level access (vehicle doors excepted).
 //   R314.3   smoke alarms in each sleeping room, outside each separate sleeping area
 //            in the immediate vicinity of the bedrooms, and on each storey; not within
 //            3 ft of a bathroom door (where that doesn't block a required one).
@@ -27,6 +30,14 @@ const CLOSET_SQIN = 40 * 144;
 /** One hallway alarm serves bedroom doors within this distance of each other (a layout choice, not code). */
 const SHARE_ALARM = 240;
 export const BATH_DOOR_CLEAR = 36;
+
+/** Lighting outlets: ceiling lights, ceiling fans (with a light kit) and exterior wall lights. */
+export const isLight = (k: FixtureKind) => k === 'light' || k === 'fan' || k === 'outdoor';
+const isRoomLight = (k: FixtureKind) => k === 'light' || k === 'fan';
+/** Doors wider than this are vehicle (garage) doors, which E3903.4 leaves out. */
+const VEHICLE_DOOR = 72;
+/** An exterior light this close to an outdoor door lights it. */
+const DOOR_LIGHT_REACH = 96;
 
 export const detectsSmoke = (k: FixtureKind) => k === 'smoke' || k === 'smoke-co';
 export const detectsCO = (k: FixtureKind) => k === 'co' || k === 'smoke-co';
@@ -210,7 +221,7 @@ export function autoLighting(project: Project): { fixtures: Fixture[]; switches:
   for (const room of project.rooms) {
     if (!LIGHTED.has(room.type) || exclusiveArea(project, room) < CLOSET_SQIN) continue;
     const center = roomCenter(project, room);
-    const lights = manualIn(room, (k) => k === 'light').map((f) => f.id);
+    const lights = manualIn(room, isRoomLight).map((f) => f.id);
     if (!lights.length) {
       const f: Fixture = { id: uid('lt'), kind: 'light', at: center, auto: true };
       fixtures.push(f);
@@ -252,9 +263,24 @@ export function autoLighting(project: Project): { fixtures: Fixture[]; switches:
     for (const s of spots) switches.push({ id: uid('sw'), ...s, height: SWITCH_HEIGHT, controls: [...lights], auto: true });
   }
 
+  // E3903.4 — a switched light outside each outdoor door, switched at the door inside.
+  for (const x of outdoorDoors(project)) {
+    if (manual.some((f) => f.kind === 'outdoor' && dist(f.at, x.outside) <= DOOR_LIGHT_REACH)) continue;
+    const spot = doorLightSpot(project, x);
+    if (!spot) continue;
+    const light: Fixture = { id: uid('lt'), kind: 'outdoor', at: spot, auto: true };
+    fixtures.push(light);
+    const rd = x.room && roomDoors(project, x.room).find((d) => d.door.id === x.door.id);
+    const s = rd && switchAtDoor(project, x.room!, rd);
+    if (!s) continue;
+    const same = switches.find((o) => o.wallId === s.wallId && Math.abs(o.offset - s.offset) < 1 && o.side === s.side);
+    if (same) same.controls.push(light.id);
+    else switches.push({ id: uid('sw'), ...s, height: SWITCH_HEIGHT, controls: [light.id], auto: true });
+  }
+
   // Smoke alarms: every bedroom, then outside each sleeping area.
   const co = coRequired(project);
-  const alarms: { room: Room; at: Point }[] = manual.filter((f) => f.kind !== 'light').map((f) => ({ room: roomAt(project, f.at)!, at: f.at })).filter((a) => a.room);
+  const alarms: { room: Room; at: Point }[] = manual.filter((f) => !isLight(f.kind)).map((f) => ({ room: roomAt(project, f.at)!, at: f.at })).filter((a) => a.room);
   const place = (room: Room, p: Point, kind: FixtureKind) => {
     fixtures.push({ id: uid('sa'), kind, at: { x: Math.round(p.x), y: Math.round(p.y) }, auto: true });
     alarms.push({ room, at: p });
@@ -291,6 +317,48 @@ export function autoLighting(project: Project): { fixtures: Fixture[]; switches:
   return { fixtures, switches };
 }
 
+export interface OutdoorDoor {
+  door: Opening;
+  wall: Wall;
+  /** Door centre on the outside face, and the room it opens from. */
+  outside: Point;
+  /** Unit vector out of the house. */
+  out: Point;
+  room?: Room;
+}
+
+/** Doors in exterior walls that people walk through (vehicle doors left out). */
+export function outdoorDoors(project: Project): OutdoorDoor[] {
+  const sides = outerSides(project);
+  const out: OutdoorDoor[] = [];
+  for (const door of project.openings) {
+    if (door.kind !== 'door' || door.width > VEHICLE_DOOR) continue;
+    const wall = project.walls.find((w) => w.id === door.wallId);
+    const side = wall && sides.get(wall.id);
+    if (!wall || !side) continue;
+    const n = wallNormal(wall);
+    const o = { x: n.x * side, y: n.y * side };
+    const c = pointAlong(wall, door.offset);
+    const h = wall.thickness / 2;
+    out.push({ door, wall, out: o, outside: { x: c.x + o.x * h, y: c.y + o.y * h }, room: roomAt(project, { x: c.x - o.x * (h + 12), y: c.y - o.y * (h + 12) }) });
+  }
+  return out;
+}
+
+/** Beside the door on the outside face, clear of other openings. */
+function doorLightSpot(project: Project, x: OutdoorDoor): Point | null {
+  const len = dist(x.wall.a, x.wall.b);
+  const spans = project.openings.filter((o) => o.wallId === x.wall.id && o.id !== x.door.id).map((o) => [o.offset - o.width / 2, o.offset + o.width / 2]);
+  for (const sign of [1, -1]) {
+    const t = x.door.offset + sign * (x.door.width / 2 + 10);
+    if (t < 6 || t > len - 6 || spans.some(([s, e]) => t > s - 4 && t < e + 4)) continue;
+    const p = pointAlong(x.wall, t);
+    const k = x.wall.thickness / 2 + 3;
+    return { x: Math.round((p.x + x.out.x * k) * 8) / 8, y: Math.round((p.y + x.out.y * k) * 8) / 8 };
+  }
+  return null;
+}
+
 /** Device type per switch: single-pole, or 3-way / 4-way when several switches share a light. */
 export function switchWays(project: Project): Map<string, 1 | 3 | 4> {
   const byLight = new Map<string, string[]>();
@@ -315,10 +383,13 @@ export function lightingLines(project: Project): MaterialLine[] {
   const add = (item: string, qty: number, basis: string) => qty > 0 && lines.push({ category: 'Electrical', item, qty, unit: 'ea', basis });
   const count = (k: FixtureKind) => project.fixtures.filter((f) => f.kind === k).length;
   add('Ceiling light fixture (allowance)', count('light'), 'one per lighting outlet on the plan');
+  add('Ceiling fan with light kit (allowance)', count('fan'), 'from the plan');
+  add('Exterior wall light (allowance)', count('outdoor'), 'wet-location rated, one per outdoor door light (E3903.4)');
   add('Smoke alarm, hardwired, battery backup', count('smoke'), 'interconnected (R314.4, R314.6)');
   add('Combination smoke / CO alarm, hardwired', count('smoke-co'), 'interconnected, battery backup (R314, R315)');
   add('CO alarm, hardwired', count('co'), 'battery backup (R315)');
-  add('Round ceiling box, new-work', project.fixtures.length, 'one per light and alarm');
+  add('Round ceiling box, new-work', project.fixtures.length - count('fan'), 'one per light and alarm');
+  add('Fan-rated ceiling box, new-work', count('fan'), 'listed for fan support');
   const ways = [...switchWays(project).values()];
   add('Single-pole switch, 15A', ways.filter((w) => w === 1).length, 'from the plan');
   add('3-way switch, 15A', ways.filter((w) => w === 3).length, 'two per light switched from two places');
@@ -335,6 +406,7 @@ export function lightingChecks(project: Project): CodeCheck[] {
   }
   const where = new Map(project.fixtures.map((f) => [f.id, roomAt(project, f.at)?.id]));
   const switched = new Set(project.switches.flatMap((s) => s.controls));
+  const switchedOutlets = project.outlets.filter((o) => switched.has(o.id));
   const inRoom = (room: Room, test: (f: Fixture) => boolean) => project.fixtures.filter((f) => where.get(f.id) === room.id && test(f));
 
   // E3903.2 / E3903.3 — wall-switched lighting outlets.
@@ -343,15 +415,29 @@ export function lightingChecks(project: Project): CodeCheck[] {
     const strict = room.type === 'kitchen' || room.type === 'bath' || room.type === 'hall' || room.type === 'garage';
     if (!strict && !HABITABLE.has(room.type)) continue;
     const section = room.type === 'hall' || room.type === 'garage' ? 'E3903.3' : 'E3903.2';
-    const lights = inRoom(room, (f) => f.kind === 'light');
-    const ok = lights.some((f) => switched.has(f.id));
+    const lights = inRoom(room, (f) => isRoomLight(f.kind));
+    const byReceptacle = !strict && switchedOutlets.length > 0 && roomOutletCount({ ...project, outlets: switchedOutlets }, room) > 0;
+    const ok = lights.some((f) => switched.has(f.id)) || byReceptacle;
     const why = !lights.length ? 'no lighting outlet' : 'its light has no wall switch';
     out.push({
       rule: 'Wall-switched lighting outlet',
       section,
       status: ok ? 'pass' : strict ? 'fail' : 'warn',
-      message: ok ? label : strict ? `${label}: ${why}` : `${label}: ${why} — a wall-switched receptacle is allowed instead here`,
+      message: ok ? (byReceptacle && !lights.some((f) => switched.has(f.id)) ? `${label}: switched receptacle` : label) : strict ? `${label}: ${why}` : `${label}: ${why} — a wall-switched receptacle is allowed instead here`,
       targetId: room.id,
+    });
+  }
+
+  // E3903.4 — outdoor doors.
+  for (const x of outdoorDoors(project)) {
+    const lit = project.fixtures.filter((f) => f.kind === 'outdoor' && dist(f.at, x.outside) <= DOOR_LIGHT_REACH);
+    const ok = lit.some((f) => switched.has(f.id));
+    out.push({
+      rule: 'Light outside each outdoor door',
+      section: 'E3903.4',
+      status: ok ? 'pass' : 'fail',
+      message: `${x.room ? `${x.room.name || x.room.type} door` : 'Exterior door'}: ${ok ? 'wall-switched exterior light' : lit.length ? 'its exterior light has no wall switch' : 'no exterior light beside it'}`,
+      targetId: x.door.id,
     });
   }
 

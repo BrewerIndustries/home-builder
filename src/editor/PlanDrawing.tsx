@@ -222,7 +222,13 @@ function OutletGlyph({ wall, o, selected, px }: { wall: Wall; o: Outlet; selecte
 /** Ceiling lights and alarms, wall switches, and dashed switch legs from each switch to what it controls. */
 function Lighting({ project, selection, px }: { project: Project; selection: Hit | null; px(n: number): number }) {
   const walls = new Map(project.walls.map((w) => [w.id, w]));
-  const fixtures = new Map(project.fixtures.map((f) => [f.id, f]));
+  // What a switch can run: lights, and receptacles (a switched receptacle).
+  const targets = new Map<string, Point>(project.fixtures.map((f) => [f.id, f.at]));
+  for (const o of project.outlets) {
+    const w = walls.get(o.wallId);
+    if (w) targets.set(o.id, outletPosition(w, o));
+  }
+  const switchedOutlets = new Set(project.switches.flatMap((s) => s.controls));
   const ways = switchWays(project);
   const switches = project.switches.flatMap((s) => {
     const w = walls.get(s.wallId);
@@ -232,15 +238,26 @@ function Lighting({ project, selection, px }: { project: Project; selection: Hit
     <g className="lighting">
       {switches.flatMap(({ s, w, at }) =>
         s.controls.flatMap((id) => {
-          const f = fixtures.get(id);
-          if (!f) return [];
+          const target = targets.get(id);
+          if (!target) return [];
           // Bow the leg off the wall into the room so it doesn't run along the wall line.
           const n = { x: -wallDir(w).y * s.side, y: wallDir(w).x * s.side };
-          const mid = { x: (at.x + f.at.x) / 2 + n.x * 18, y: (at.y + f.at.y) / 2 + n.y * 18 };
-          const hot = (selection?.kind === 'switch' && selection.id === s.id) || (selection?.kind === 'fixture' && selection.id === id);
-          return [<path key={s.id + id} d={`M ${at.x} ${at.y} Q ${mid.x} ${mid.y} ${f.at.x} ${f.at.y}`} className={hot ? 'switch-leg hot' : 'switch-leg'} strokeWidth={px(hot ? 1.5 : 1)} strokeDasharray={`${px(5)} ${px(3)}`} />];
+          const mid = { x: (at.x + target.x) / 2 + n.x * 18, y: (at.y + target.y) / 2 + n.y * 18 };
+          const hot = (selection?.kind === 'switch' && selection.id === s.id) || ((selection?.kind === 'fixture' || selection?.kind === 'outlet') && selection.id === id);
+          return [<path key={s.id + id} d={`M ${at.x} ${at.y} Q ${mid.x} ${mid.y} ${target.x} ${target.y}`} className={hot ? 'switch-leg hot' : 'switch-leg'} strokeWidth={px(hot ? 1.5 : 1)} strokeDasharray={`${px(5)} ${px(3)}`} />];
         }),
       )}
+      {project.outlets
+        .filter((o) => switchedOutlets.has(o.id) && targets.has(o.id))
+        .map((o) => {
+          const c = targets.get(o.id)!;
+          // Switched receptacle: a small S beside the symbol.
+          return (
+            <text key={`s${o.id}`} x={c.x + 5} y={c.y - 5} fontSize={4.5} className="switched-recep" textAnchor="middle" dominantBaseline="central">
+              S
+            </text>
+          );
+        })}
       {project.fixtures.map((f) => (
         <FixtureGlyph key={f.id} f={f} selected={selection?.kind === 'fixture' && selection.id === f.id} px={px} />
       ))}
@@ -264,13 +281,26 @@ const ALARM_LABEL = { smoke: 'SD', co: 'CO', 'smoke-co': 'S/C' } as const;
 
 function FixtureGlyph({ f, selected, px }: { f: Fixture; selected: boolean; px(n: number): number }) {
   const { x, y } = f.at;
-  if (f.kind === 'light') {
+  if (f.kind === 'fan') {
     const stroke = selected ? 'var(--accent)' : 'var(--outlet)';
-    const k = 6 * Math.SQRT1_2;
+    // Ceiling fan: a hub with four blades.
+    return (
+      <g className={f.auto ? 'fixture fan auto' : 'fixture fan'}>
+        {[0, 90, 180, 270].map((deg) => (
+          <ellipse key={deg} cx={x + 8} cy={y} rx={5} ry={2} transform={`rotate(${deg + 45} ${x} ${y})`} fill="var(--canvas)" stroke={stroke} strokeWidth={px(1.1)} />
+        ))}
+        <circle cx={x} cy={y} r={3.5} fill="var(--canvas)" stroke={stroke} strokeWidth={px(1.5)} />
+      </g>
+    );
+  }
+  if (f.kind === 'light' || f.kind === 'outdoor') {
+    const stroke = selected ? 'var(--accent)' : 'var(--outlet)';
+    const r = f.kind === 'outdoor' ? 4.5 : 6;
+    const k = r * Math.SQRT1_2;
     // Ceiling lighting outlet: a circle crossed through.
     return (
       <g className={f.auto ? 'fixture auto' : 'fixture'}>
-        <circle cx={x} cy={y} r={6} fill="var(--canvas)" stroke={stroke} strokeWidth={px(1.5)} />
+        <circle cx={x} cy={y} r={r} fill={f.kind === 'outdoor' ? 'var(--outlet-gfci)' : 'var(--canvas)'} stroke={stroke} strokeWidth={px(1.5)} />
         <line x1={x - k} y1={y - k} x2={x + k} y2={y + k} stroke={stroke} strokeWidth={px(1.2)} />
         <line x1={x - k} y1={y + k} x2={x + k} y2={y - k} stroke={stroke} strokeWidth={px(1.2)} />
       </g>

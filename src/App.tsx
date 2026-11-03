@@ -4,7 +4,7 @@ import { useWorkspace } from './account/useWorkspace.ts';
 import { PdfImport } from './editor/PdfImport.tsx';
 import { openPdf } from './model/imaging.ts';
 import { autoOutlets } from './calc/electrical.ts';
-import { autoLighting } from './calc/lighting.ts';
+import { autoLighting, isLight } from './calc/lighting.ts';
 import { ircChecks } from './calc/irc.ts';
 import { siteChecks } from './calc/site.ts';
 import type { Hit } from './editor/hitTest.ts';
@@ -164,7 +164,7 @@ export function App() {
     }
     const { fixtures, switches } = autoLighting(project);
     dispatch({ type: 'replaceAutoLighting', fixtures, switches });
-    const lights = fixtures.filter((f) => f.kind === 'light').length;
+    const lights = fixtures.filter((f) => isLight(f.kind)).length;
     flash(`Placed ${lights} lights, ${switches.length} switches and ${fixtures.length - lights} alarms. Drag to adjust.`);
   }
 

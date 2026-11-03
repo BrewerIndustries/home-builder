@@ -586,6 +586,10 @@ svg.plan {
 .counter.sel > polygon {
   stroke: var(--accent);
 }
+.switched-recep {
+  fill: var(--outlet);
+  font-weight: 600;
+}
 .island-recep {
   fill: var(--outlet-gfci);
   stroke: var(--outlet);
