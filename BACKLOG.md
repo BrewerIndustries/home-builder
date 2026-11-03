@@ -38,7 +38,8 @@ Ordered roughly by value. Competitor research behind these lives in
 
 ## Editor
 
-- [ ] Room from enclosed walls (click inside) and non-rectangular rooms
+- [x] Room from enclosed walls (click inside) and non-rectangular rooms
+- [ ] Non-rectangular rooms v2: R304 min dimension and ceiling slopes on the real outline (not the bounding box); auto-name / auto-type rooms from size and doors
 - [ ] Drag a whole wall (move both ends together); split / join walls
 - [ ] Inside / outside dimension modes (currently centreline)
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare

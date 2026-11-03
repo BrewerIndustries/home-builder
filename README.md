@@ -46,7 +46,7 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 
 | Tab | What you get |
 |---|---|
-| **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (drag a rectangle — walls already on the plan are reused, never doubled), Door, Window, Outlet, Switch, Light and Alarm tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; undo/redo; per-wall stud size and height; per-room use and ceiling. |
+| **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (click inside closed walls to make a room of exactly that shape — L-shapes and angled walls included — or drag a rectangle; walls already on the plan are reused, never doubled), Door, Window, Outlet, Switch, Light and Alarm tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; undo/redo; per-wall stud size and height; per-room use and ceiling. |
 | **Floorplan image / PDF** | *Import floorplan* takes a photo, scan or **PDF**. For a PDF, pick the sheet from page thumbnails and, if the title block gives a drawing scale (1/8" … 1" = 1'-0"), it comes in at true size with no calibrating. *Straighten* fixes a photo taken at an angle: click the four corners of anything that's really a rectangle, optionally type its real width and depth (which also sets the scale), and the picture is warped flat and cropped to it. *Calibrate scale*: click both ends of a known dimension and type its real length. Then trace over it. |
 | **Site** | Lot outline (quick rectangle around the house or draw any polygon) with per-edge setbacks → dashed buildable envelope; hardscape / bed areas (pavers, concrete, gravel, mulch, sod, deck) with depth; ~40-species plant library drawn at mature spread; lot coverage and impervious %. Quantities roll into the Estimate. |
 | **3D** | Orbitable three.js model (lazy-loaded): walls cut around doors and windows, glass, floors, and every ceiling type. Cut-away at 4 ft. |
@@ -109,7 +109,7 @@ store a derived value. All lengths are inches.
 
 - **Estimating, not engineering.** Header sizes are a single-storey rule of thumb, *not* IRC Table R602.7(1) (which needs ground snow load and building width). The Code check tab says so on every plan.
 - **IRC checks are a design aid, not a plan review.** Values match the 2018/2021/2024 IRC for the rules implemented; jurisdictions adopt with amendments. Window net-clear openings are estimated from nominal size + operation type. Only numeric requirements are encoded — no ICC code text is reproduced.
-- Rooms are drawn as rectangles; ceiling slopes and min-dimension checks use the room's bounding box.
+- Rooms can be any shape the walls close (Room tool → click inside), but ceiling slopes and the R304 min-dimension check still use the room's bounding box, so an L-shaped room's narrow leg isn't checked on its own.
 - Setbacks are local zoning, entered by you; the envelope inset is exact for convex lots, approximate for concave ones. Plant sizes are typical figures, not cultivar-specific.
 - Floor joists and girders are laid out and counted, not sized. "Auto" girders keep spans to 12 ft as a layout default, not a span check (IRC R502.3).
 - Foundation sizes are your inputs; the checker tests only the code minimums, not soil bearing or storeys (Table R403.1), and runs one foundation under the exterior walls (no interior bearing footings yet).

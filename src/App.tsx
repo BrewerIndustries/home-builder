@@ -296,6 +296,7 @@ export function App() {
             selection={selection}
             setSelection={setSelection}
             onRoomCreated={() => wallKind === 'exterior' && setWallKind('interior')}
+            onMessage={flash}
           />
           <Inspector project={project} dispatch={dispatch} selection={selection} setSelection={setSelection} setTool={setTool} />
         </main>

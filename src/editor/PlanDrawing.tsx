@@ -1,6 +1,6 @@
 import { exclusiveArea } from '../calc/regions.ts';
 import { pointAlong, polygonCentroid, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
-import { switchWays } from '../calc/lighting.ts';
+import { roomCenter, switchWays } from '../calc/lighting.ts';
 import type { Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -24,7 +24,8 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
   return (
     <g className="plan-drawing">
       {project.rooms.map((r) => {
-        const centroid = polygonCentroid(r.points);
+        // An L-shaped room's corner average can sit in the notch; find its open middle instead.
+        const centroid = r.points.length === 4 ? polygonCentroid(r.points) : roomCenter(project, r);
         // Lift the label clear of a ceiling fixture sitting on the room's centre.
         const busy = outlets && project.fixtures.some((f) => Math.abs(f.at.x - centroid.x) < 10 && Math.abs(f.at.y - centroid.y) < 10);
         const c = busy ? { x: centroid.x, y: centroid.y - 8 - px(18) } : centroid;

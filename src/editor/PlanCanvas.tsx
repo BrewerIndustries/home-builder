@@ -14,6 +14,7 @@ import {
 } from '../model/geometry.ts';
 import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
+import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { finishedThickness, uid, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
 import { OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
@@ -36,7 +37,7 @@ type Drag =
   | { kind: 'outlet'; id: string }
   | { kind: 'switch'; id: string }
   | { kind: 'fixture'; id: string; grab: Point }
-  | { kind: 'room'; start: Point; end: Point }
+  | { kind: 'room'; start: Point; end: Point; raw: Point }
   | { kind: 'underlay'; start: Point; origin: Point };
 
 export interface PlanCanvasHandle {
@@ -55,13 +56,14 @@ interface Props {
   selection: Hit | null;
   setSelection(h: Hit | null): void;
   onRoomCreated?(): void;
+  onMessage?(msg: string): void;
   ref?: Ref<PlanCanvasHandle>;
 }
 
 const SNAP_PX = 10;
 const GRID = 6;
 
-export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selection, setSelection, onRoomCreated, ref }: Props) {
+export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selection, setSelection, onRoomCreated, onMessage, ref }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState<View>({ scale: 1.2, ox: 80, oy: 80 });
   const [cursor, setCursor] = useState<{ p: Point; snapped: 'endpoint' | 'grid' | null } | null>(null);
@@ -299,7 +301,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
       }
       case 'room': {
         const { p } = snap(raw);
-        drag.current = { kind: 'room', start: p, end: p };
+        drag.current = { kind: 'room', start: p, end: p, raw };
         setRoomDrag({ a: p, b: p });
         return;
       }
@@ -452,8 +454,30 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         dispatch({ type: 'addWalls', walls, room: { id, name: `Room ${count}`, type: 'other', points: corners } });
         setSelection({ kind: 'room', id });
         onRoomCreated?.();
+      } else {
+        // Too small to be a rectangle: a click.
+        roomFromClick(d.raw);
       }
     }
+  }
+
+  /** A click (not a drag) with the Room tool: make a room of whatever the walls enclose there. */
+  function roomFromClick(p: Point) {
+    const points = enclosedArea(project.walls, p);
+    if (!points) {
+      onMessage?.('No closed walls around that spot — close the gap, or drag a rectangle.');
+      return;
+    }
+    const existing = project.rooms.find((r) => samePolygon(r.points, points));
+    if (existing) {
+      setSelection({ kind: 'room', id: existing.id });
+      onMessage?.(`That's already ${existing.name}.`);
+      return;
+    }
+    const id = uid('r');
+    dispatch({ type: 'addWalls', walls: [], room: { id, name: `Room ${project.rooms.length + 1}`, type: 'other', points } });
+    setSelection({ kind: 'room', id });
+    onRoomCreated?.();
   }
 
   function finishCalibration() {
@@ -650,7 +674,7 @@ function hintFor(tool: Tool, drawing: boolean): string {
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':
-      return 'Drag a rectangle — walls already on the plan are reused, not doubled';
+      return 'Click inside closed walls to make a room of that shape · or drag a rectangle (walls already on the plan are reused)';
     case 'door':
     case 'window':
       return `Click on a wall to place a ${tool}`;
