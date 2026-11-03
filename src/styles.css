@@ -17,6 +17,8 @@
   --outlet-gfci: #fde7c7;
   --alarm: #dc2626;
   --alarm-fill: #fee2e2;
+  --counter: #ece4d6;
+  --counter-edge: #8a7a62;
   --room: rgba(37, 99, 235, 0.04);
   --site-ground: #e9e6dc;
   --site-lawn: #dcebcf;
@@ -57,6 +59,8 @@
     --outlet-gfci: #4a3410;
     --alarm: #f87171;
     --alarm-fill: #3f1414;
+    --counter: #2e2a22;
+    --counter-edge: #a8987e;
     --room: rgba(96, 165, 250, 0.05);
     --site-ground: #1b1f17;
     --site-lawn: #243321;
@@ -565,6 +569,22 @@ svg.plan {
 .switch.auto circle,
 .fixture.auto circle {
   stroke-dasharray: 1.5 1;
+}
+.counter polygon,
+.counter circle {
+  fill: var(--counter);
+  stroke: var(--counter-edge);
+}
+.counter .cutout polygon,
+.counter .cutout circle {
+  fill: var(--canvas);
+}
+.counter.sel > polygon {
+  stroke: var(--accent);
+}
+.island-recep {
+  fill: var(--outlet-gfci);
+  stroke: var(--outlet);
 }
 .switch-leg {
   fill: none;
@@ -1135,6 +1155,8 @@ tr.no-pick {
     --outlet-gfci: #ddd;
     --alarm: #000;
     --alarm-fill: #fff;
+    --counter: #f2f2f2;
+    --counter-edge: #000;
     --room: transparent;
     --room-sel: transparent;
     --accent: #000;

@@ -1,5 +1,5 @@
-import { clampOpeningOffset, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation } from './types.ts';
+import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation } from './types.ts';
 import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
@@ -47,6 +47,8 @@ export type Action =
   | { type: 'addSwitch'; sw: WallSwitch }
   | { type: 'updateSwitch'; id: string; patch: Partial<Omit<WallSwitch, 'id'>>; transient?: boolean }
   | { type: 'replaceAutoLighting'; fixtures: Fixture[]; switches: WallSwitch[] }
+  | { type: 'addCounter'; counter: Counter }
+  | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
   | { type: 'setElectrical'; patch: Partial<ElectricalSettings> }
   | { type: 'setUnderlay'; underlay: Underlay | undefined }
   | { type: 'updateUnderlay'; patch: Partial<Underlay>; transient?: boolean };
@@ -131,6 +133,12 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'joinWalls':
       return reclampOpenings(joinWalls(p, action.id, action.otherId));
 
+    case 'addCounter':
+      return { ...p, counters: [...p.counters, action.counter] };
+
+    case 'updateCounter':
+      return { ...p, counters: p.counters.map((c) => (c.id === action.id ? clampCutouts({ ...c, ...action.patch }) : c)) };
+
     case 'addOpening':
       return reclampOpenings({ ...p, openings: [...p.openings, action.opening] });
 
@@ -156,6 +164,7 @@ export function projectReducer(p: Project, action: Action): Project {
         fixtures: p.fixtures.filter((f) => !ids.has(f.id)),
         switches: p.switches.filter((s) => !ids.has(s.id) && wallIds.has(s.wallId)).map((s) => (s.controls.some((c) => ids.has(c)) ? { ...s, controls: s.controls.filter((c) => !ids.has(c)) } : s)),
         rooms: p.rooms.filter((r) => !ids.has(r.id)),
+        counters: p.counters.filter((c) => !ids.has(c.id)),
         site: p.site && {
           ...p.site,
           lot: ids.has('lot') ? undefined : p.site.lot,
@@ -253,6 +262,7 @@ export function migrate(p: Project): Project {
     outlets: p.outlets ?? [],
     fixtures: p.fixtures ?? [],
     switches: p.switches ?? [],
+    counters: p.counters ?? [],
     rooms: p.rooms.map((r) => ({ ...r, type: r.type ?? 'other' })),
     framing: { ...DEFAULT_FRAMING, ...p.framing },
     roof: { ...DEFAULT_ROOF, ...p.roof },
@@ -269,6 +279,12 @@ export function syncThickness(p: Project): Project {
     return { ...w, thickness: t };
   });
   return changed ? { ...p, walls } : p;
+}
+
+/** Keep sinks and ranges inside their counter. */
+function clampCutouts(c: Counter): Counter {
+  const len = dist(c.a, c.b);
+  return { ...c, cutouts: c.cutouts.map((k) => ({ ...k, width: Math.min(k.width, len), offset: Math.max(Math.min(k.width, len) / 2, Math.min(len - Math.min(k.width, len) / 2, k.offset)) })) };
 }
 
 /** After any geometry change, keep every opening fully on its wall. */

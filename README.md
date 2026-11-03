@@ -53,7 +53,7 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 | **Framing** | Per-wall takeoff and a dimensioned framing elevation (commons on layout, 3-stud corners, ladder backing at tees, king/jack studs, headers, cripples, sills, plates, rough openings), plus a roof summary (area, squares, rise, truss/rafter count and length, ridge, hips) and a foundation summary (footprint, perimeter, concrete, anchor bolts). Over a crawlspace: a **floor framing plan** (joists at spacing, broken over auto or chosen girder lines, piers, longest span) and the staggered 4×8 **subfloor sheet layout**. |
 | **Estimate** | Materials list priced from editable unit prices (sample US big-box defaults until you type your own), markup and tax, by category; CSV with prices. Lumber, sheathing, wrap, batts, drywall incl. vaulted/tray/coffered ceilings, receptacles + boxes, door/window schedule, gable-end infill studs above the plate (vaulted/cathedral rooms, rafter gable ends), roof (trusses or rafters + ridge + ceiling joists, hurricane ties, sheathing, underlayment, shingles, starter, ridge cap, drip edge, fascia, soffit), foundation (slab concrete + 4" base + 6-mil poly + mesh + edge rebar, or footing + poured/block stem wall + vents; anchor bolts, PT sill, sill seal), floor framing (joists by stock length, rim, 3-ply girders, blocking, piers + pads, T&G subfloor sheets from the layout, adhesive), and landscape (pavers + base + sand + edging + polymeric sand, concrete yd³, gravel tons + fabric, mulch yd³, sod pallets, plant schedule). |
 | **Print / PDF** | From the Plan tab: a Letter-landscape sheet at the largest architectural scale that fits, with dimension strings, scale bar and title block. |
-| **Code check** | IRC rules with section refs and click-to-locate: R303.1 light/vent, R304 room size, R305 ceiling height (incl. R305.1.1 sloped), R308.4 safety glazing, R310 bedroom escape openings, R311.2 egress door, R602.3 wall height/spacing, R602.7 header reminder, E3901 receptacle spacing, E3902 GFCI, and foundation minimums: R506.1 slab ≥ 3-1/2", R403.1.1 footing ≥ 12" × 6", R403.1.4 ≥ 12" below grade, R403.1.4.1 frost depth (you enter it). Plus site checks: house inside the setback envelope, coverage, plant hardiness zone, trees too close to the foundation, plants overlapping at maturity. Lists what is *not* checked. |
+| **Code check** | IRC rules with section refs and click-to-locate: R303.1 light/vent, R304 room size, R305 ceiling height (incl. R305.1.1 sloped), R308.4 safety glazing, R310 bedroom escape openings, R311.2 egress door, R602.3 wall height/spacing, R602.7 header reminder, E3901 receptacle spacing incl. E3901.4 countertop spaces and islands, E3902 GFCI, R306.2 kitchen sink, and foundation minimums: R506.1 slab ≥ 3-1/2", R403.1.1 footing ≥ 12" × 6", R403.1.4 ≥ 12" below grade, R403.1.4.1 frost depth (you enter it). Plus site checks: house inside the setback envelope, coverage, plant hardiness zone, trees too close to the foundation, plants overlapping at maturity. Lists what is *not* checked. |
 
 ### Walls
 
@@ -71,7 +71,15 @@ Flat, **vaulted** (single slope across the short side), **cathedral** (ridge dow
 
 ### Outlets
 
-**Auto outlets** lays out receptacles in every room per IRC E3901 (no point on a wall run more than 6 ft from one; doorways break runs; kitchens at countertop 4 ft spacing with GFCIs; one GFCI in baths; hall ≥ 10 ft gets one). Re-running replaces only auto-placed ones — anything you add, drag or edit becomes manual and is kept. Auto outlets draw with a dashed ring.
+**Auto outlets** lays out receptacles in every room per IRC E3901 (no point on a wall run more than 6 ft from one; doorways break runs; kitchens: GFCIs along each counter space, else countertop spacing on every wall if no counters are drawn; one GFCI in baths; hall ≥ 10 ft gets one). Re-running replaces only auto-placed ones — anything you add, drag or edit becomes manual and is kept. Auto outlets draw with a dashed ring.
+
+### Kitchen counters
+
+The **Counter** tool (K): drag along a wall for a counter on that wall face (25" deep; a plain click gives 6 ft), or drag in open floor for an island. Select a counter to set its length and depth and **add a sink or range**; drag a wall counter to slide it along the wall, or an island to move it. Counters show in the 3D view (36" high) and the estimate (base cabinets LF, countertop sq ft, sink, range: sample allowance prices).
+
+Sinks and ranges split a counter into separate countertop spaces. In a kitchen with counters, **Auto outlets** puts GFCIs at 44" along every space 12" or wider, no point more than 24" from one (E3901.4), and general 12 ft spacing on the walls off the counters (still GFCI). Each island space at least 24" × 12" gets one receptacle, drawn on the island and counted in the estimate. Code editions differ on island receptacles, so the check is a note. **R306.2** checks the kitchen has a sink.
+
+Counters don't follow walls you drag yet. Peninsulas count as islands.
 
 ### Lights, switches and alarms
 

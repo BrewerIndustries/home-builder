@@ -99,6 +99,32 @@ export interface ElectricalSettings {
   fuelAppliances?: boolean;
 }
 
+export type CutoutKind = 'sink' | 'range';
+
+/** A sink or range set into a counter. Splits the counter into separate countertop spaces (E3901.4). */
+export interface Cutout {
+  id: string;
+  kind: CutoutKind;
+  /** Centre, measured from counter.a along the back edge. */
+  offset: number;
+  width: number;
+}
+
+/**
+ * Base cabinets + countertop: a rectangle from its back edge a → b, `depth` deep.
+ * A wall counter's back edge sits on a wall face; an island stands free.
+ */
+export interface Counter {
+  id: string;
+  a: Point;
+  b: Point;
+  depth: number;
+  /** Which side of a → b the counter extends: +1 = the left-hand normal (as wallNormal), -1 = the other. */
+  side: 1 | -1;
+  island: boolean;
+  cutouts: Cutout[];
+}
+
 export type CeilingType = 'flat' | 'vaulted' | 'cathedral' | 'tray' | 'coffered';
 
 export interface Ceiling {
@@ -206,6 +232,7 @@ export interface Project {
   outlets: Outlet[];
   fixtures: Fixture[];
   switches: WallSwitch[];
+  counters: Counter[];
   electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;
@@ -321,7 +348,7 @@ export const WALL_DEFAULTS: Record<WallKind, { thickness: number; height: number
 };
 
 export function emptyProject(name = 'Untitled house'): Project {
-  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], fixtures: [], switches: [], framing: { ...DEFAULT_FRAMING } };
+  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], fixtures: [], switches: [], counters: [], framing: { ...DEFAULT_FRAMING } };
 }
 
 let counter = 0;

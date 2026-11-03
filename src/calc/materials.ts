@@ -8,13 +8,14 @@ import { siteLines } from './site.ts';
 import { foundationLines } from './foundation.ts';
 import { floorLines } from './floor.ts';
 import { lightingLines } from './lighting.ts';
+import { counterLines, islandReceptacles } from './counters.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape';
+  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen';
   item: string;
   qty: number;
   unit: string;
@@ -188,11 +189,16 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   const DEVICE: Record<string, string> = { duplex: '15A duplex receptacle (TR)', gfci: '20A GFCI receptacle (TR)', dedicated: '20A dedicated receptacle', '240v': '240V receptacle' };
   const devices = new Map<string, number>();
   for (const o of project.outlets) devices.set(o.kind, (devices.get(o.kind) ?? 0) + 1);
-  for (const [kind, qty] of devices) lines.push({ category: 'Electrical', item: DEVICE[kind], qty, unit: 'ea', basis: 'from the plan' });
-  if (project.outlets.length + project.switches.length) {
-    lines.push({ category: 'Electrical', item: 'Single-gang new-work box', qty: project.outlets.length + project.switches.length, unit: 'ea', basis: 'one per receptacle and switch' });
+  // Island receptacles aren't on a wall; they're derived from the islands (E3901.4).
+  const island = islandReceptacles(project).length;
+  if (island) devices.set('gfci', (devices.get('gfci') ?? 0) + island);
+  for (const [kind, qty] of devices) lines.push({ category: 'Electrical', item: DEVICE[kind], qty, unit: 'ea', basis: kind === 'gfci' && island ? `from the plan, incl. ${island} on islands` : 'from the plan' });
+  const boxes = project.outlets.length + project.switches.length + island;
+  if (boxes) {
+    lines.push({ category: 'Electrical', item: 'Single-gang new-work box', qty: boxes, unit: 'ea', basis: 'one per receptacle and switch' });
   }
   lines.push(...lightingLines(project));
+  lines.push(...counterLines(project));
 
   // Door and window schedule, by kind and nominal size (e.g. 3068 = 3'0" × 6'8").
   const units = new Map<string, number>();

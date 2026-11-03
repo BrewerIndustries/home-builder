@@ -20,6 +20,7 @@ function palette(dark: boolean) {
     beam: dark ? 0xc9b08a : 0xe9dcc6,
     glass: 0x7fb3e6,
     roof: dark ? 0x5a4f4a : 0x6e5f58,
+    counter: dark ? 0x8a7a62 : 0xd8ccb6,
   };
 }
 
@@ -126,7 +127,7 @@ export default function View3D({ project }: { project: Project }) {
         cy = (y0 + y1) / 2;
         sy = y1 - y0;
       }
-      const color = b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : c.beam;
+      const color = b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : c.beam;
       const m = new THREE.Mesh(
         new THREE.BoxGeometry(sx, sy, sz),
         b.kind === 'glass' ? mat(color, { transparent: true, opacity: 0.35, roughness: 0.1 }) : mat(color),

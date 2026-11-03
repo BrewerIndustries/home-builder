@@ -1,5 +1,6 @@
 import { dist, pointAlong, projectOnWall, wallNormal } from '../model/geometry.ts';
 import { regionEdges } from './regions.ts';
+import { counterPositions, counterSpans, roomCounters, type CounterSpan } from './counters.ts';
 import { uid, type Outlet, type OutletKind, type Point, type Project, type Room, type RoomType } from '../model/types.ts';
 
 // Receptacle layout per IRC Chapter 39 (which mirrors NEC 210.52):
@@ -12,9 +13,11 @@ import { uid, type Outlet, type OutletKind, type Point, type Project, type Room,
 //   E3901.10 hallways 10 ft or longer — at least one.
 //   E3902    GFCI in bathrooms, kitchens (counter), garages, laundry, outdoors.
 //
-// We don't model counters or fixtures yet, so kitchens get countertop spacing on
-// every wall and bathrooms get one GFCI on the longest run. Treat the result as a
-// starting layout to adjust.
+// Kitchens with counters drawn get countertop spacing along each counter space
+// (see counters.ts) and general spacing on the rest of their walls; without
+// counters, every kitchen wall gets countertop spacing. Basins aren't modelled,
+// so bathrooms get one GFCI on the longest run. Treat the result as a starting
+// layout to adjust.
 //
 // Layout runs along the room's REGION edges (see regions.ts), one wall line at a
 // time with doorways cut out. Treating each wall line separately is slightly
@@ -90,18 +93,27 @@ export function autoOutlets(project: Project): Outlet[] {
   for (const room of project.rooms) {
     const r = rule(room.type);
     const runs = roomRuns(project, room);
-    let targets: { run: Run; t: number }[];
-    if (room.type === 'bath' || room.type === 'hall') {
+    let targets: { run: Run; t: number; kind?: OutletKind; height?: number }[];
+    if (room.type === 'kitchen' && roomCounters(project, room).length) {
+      targets = runs.flatMap((run) => {
+        const spans = counterSpans(project, run);
+        return [
+          ...spans.flatMap((s) => s.spaces.flatMap(([lo, hi]) => counterPositions(hi - lo).map((t) => ({ run, t: lo + t, kind: 'gfci' as const, height: 44 })))),
+          // Off the counters: general spacing, still GFCI (the E3902 check flags any kitchen receptacle that isn't).
+          ...openPieces(run, spans).flatMap(([lo, hi]) => layoutRun(hi - lo, GENERAL_MAX_GAP).map((t) => ({ run, t: lo + t, kind: 'gfci' as const, height: 16 }))),
+        ];
+      });
+    } else if (room.type === 'bath' || room.type === 'hall') {
       const run = longest(runs);
       const wanted = run && (room.type === 'bath' || runs.some((x) => x.length >= 120));
       targets = wanted ? layoutRun(run.length, Infinity).map((t) => ({ run, t })) : [];
     } else {
       targets = runs.flatMap((run) => layoutRun(run.length, r.gap).map((t) => ({ run, t })));
     }
-    for (const { run, t } of targets) {
+    for (const { run, t, kind, height } of targets) {
       const p = { x: run.a.x + run.dir.x * t, y: run.a.y + run.dir.y * t };
       const placed = attach(project, p, { x: p.x + run.inward.x * 12, y: p.y + run.inward.y * 12 });
-      if (placed) out.push({ id: uid('e'), ...placed, kind: r.kind, height: r.height, auto: true });
+      if (placed) out.push({ id: uid('e'), ...placed, kind: kind ?? r.kind, height: height ?? r.height, auto: true });
     }
   }
   return out;
@@ -148,22 +160,64 @@ export function roomOutletCount(project: Project, room: Room, kind?: OutletKind)
   }).length;
 }
 
-/** E3901.2 / E3901.4 check against whatever outlets are on the plan now (auto or hand-placed). */
-export function spacingGaps(project: Project, room: Room): { worst: number; limit: number; uncovered: boolean } {
-  const limit = room.type === 'kitchen' ? COUNTER_MAX_GAP : GENERAL_MAX_GAP;
-  let worst = 0;
-  let uncovered = false;
-  for (const run of roomRuns(project, room)) {
-    if (run.length < MIN_WALL_SPACE) continue;
-    const ts = outletsOnRun(project, run);
-    if (!ts.length) {
-      uncovered = true;
-      worst = Math.max(worst, run.length);
-      continue;
-    }
-    // A point at the end of a run may be up to half the gap from a receptacle.
-    worst = Math.max(worst, ts[0] * 2, (run.length - ts[ts.length - 1]) * 2);
-    for (let i = 1; i < ts.length; i++) worst = Math.max(worst, ts[i] - ts[i - 1]);
+/** Wall space on a run not taken by counters. */
+function openPieces(run: Run, spans: CounterSpan[]): [number, number][] {
+  const out: [number, number][] = [];
+  let cursor = 0;
+  for (const s of [...spans, { lo: run.length, hi: run.length }]) {
+    if (s.lo - cursor >= MIN_WALL_SPACE) out.push([cursor, s.lo]);
+    cursor = Math.max(cursor, s.hi);
   }
-  return { worst, limit, uncovered };
+  return out;
+}
+
+export interface Gaps {
+  worst: number;
+  limit: number;
+  uncovered: boolean;
+}
+
+/** Widest gap over a stretch [lo, hi] of a run, given receptacles at `ts` along it. */
+function gapsOver(ts: number[], lo: number, hi: number, g: Gaps) {
+  const inside = ts.filter((t) => t >= lo - 0.5 && t <= hi + 0.5);
+  if (!inside.length) {
+    g.uncovered = true;
+    g.worst = Math.max(g.worst, hi - lo);
+    return;
+  }
+  // A point at the end of a stretch may be up to half the gap from a receptacle.
+  g.worst = Math.max(g.worst, (inside[0] - lo) * 2, (hi - inside[inside.length - 1]) * 2);
+  for (let i = 1; i < inside.length; i++) g.worst = Math.max(g.worst, inside[i] - inside[i - 1]);
+}
+
+/**
+ * E3901.2 / E3901.4 check against whatever outlets are on the plan now (auto or
+ * hand-placed). In a kitchen with counters this is the wall space off the counters;
+ * see counterGaps for the counters themselves.
+ */
+export function spacingGaps(project: Project, room: Room): Gaps {
+  const counters = room.type === 'kitchen' && roomCounters(project, room).length > 0;
+  const g: Gaps = { worst: 0, limit: room.type === 'kitchen' && !counters ? COUNTER_MAX_GAP : GENERAL_MAX_GAP, uncovered: false };
+  for (const run of roomRuns(project, room)) {
+    const pieces = counters ? openPieces(run, counterSpans(project, run)) : run.length >= MIN_WALL_SPACE ? [[0, run.length] as [number, number]] : [];
+    const ts = outletsOnRun(project, run);
+    for (const [lo, hi] of pieces) gapsOver(ts, lo, hi, g);
+  }
+  return g;
+}
+
+/** E3901.4 over a kitchen's wall countertop spaces (12" or wider). `spaces` = how many were checked. */
+export function counterGaps(project: Project, room: Room): Gaps & { spaces: number } {
+  const g = { worst: 0, limit: COUNTER_MAX_GAP, uncovered: false, spaces: 0 };
+  for (const run of roomRuns(project, room)) {
+    const ts = outletsOnRun(project, run);
+    for (const s of counterSpans(project, run)) {
+      for (const [lo, hi] of s.spaces) {
+        if (hi - lo < 12) continue;
+        g.spaces += 1;
+        gapsOver(ts, lo, hi, g);
+      }
+    }
+  }
+  return g;
 }

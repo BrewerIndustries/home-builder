@@ -27,6 +27,9 @@ import {
   type OutletKind,
   type FixtureKind,
   type Project,
+  type Counter,
+  type Cutout,
+  type CutoutKind,
   type RoomType,
   type WindowStyle,
 } from '../model/types.ts';
@@ -34,6 +37,7 @@ import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
 import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
+import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_WIDTH, MIN_COUNTER_SPACE } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
 interface Props {
@@ -285,6 +289,59 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <p className="muted small">Drag it to move. Edited auto items are kept when you re-run Auto lights.</p>
         <button className="danger" onClick={() => del(f.id)}>
           Delete {f.kind === 'light' ? 'light' : 'alarm'}
+        </button>
+      </aside>
+    );
+  }
+
+  if (selection?.kind === 'counter') {
+    const c = project.counters.find((x) => x.id === selection.id);
+    if (!c) return null;
+    const len = counterLength(c);
+    const up = (patch: Partial<Counter>) => dispatch({ type: 'updateCounter', id: c.id, patch });
+    const setLength = (v: number) => {
+      const d = counterDir(c);
+      up({ b: { x: c.a.x + d.x * v, y: c.a.y + d.y * v } });
+    };
+    const setCutout = (id: string, patch: Partial<Cutout>) => up({ cutouts: c.cutouts.map((k) => (k.id === id ? { ...k, ...patch } : k)) });
+    const addCutout = (kind: CutoutKind) => up({ cutouts: [...c.cutouts, { id: uid('cx'), kind, offset: len / 2, width: CUTOUT_WIDTH[kind] }] });
+    const room = counterRoom(project, c);
+    const spaces = counterSpaces(c).filter(([s, e]) => e - s >= MIN_COUNTER_SPACE).length;
+    return (
+      <aside className="inspector">
+        <h3>{c.island ? 'Island' : 'Counter'}</h3>
+        <Field label="Length">
+          <LengthInput value={len} min={MIN_COUNTER_SPACE} onChange={setLength} />
+        </Field>
+        <Field label="Depth" hint={c.island ? undefined : '25" = 24" base cabinet + 1" overhang'}>
+          <LengthInput value={c.depth} min={MIN_COUNTER_SPACE} onChange={(v) => up({ depth: v })} />
+        </Field>
+        {c.cutouts.map((k) => (
+          <div key={k.id} className="field">
+            <span>{k.kind === 'sink' ? 'Sink' : 'Range'} — centre from the start, width</span>
+            <div className="row">
+              <LengthInput value={k.offset} min={0} onChange={(v) => setCutout(k.id, { offset: v })} />
+              <LengthInput value={k.width} min={12} onChange={(v) => setCutout(k.id, { width: v })} />
+              <button className="link danger" onClick={() => up({ cutouts: c.cutouts.filter((x) => x.id !== k.id) })} title="Remove">
+                ×
+              </button>
+            </div>
+          </div>
+        ))}
+        <div className="row">
+          <button onClick={() => addCutout('sink')}>Add sink</button>
+          <button onClick={() => addCutout('range')}>Add range</button>
+        </div>
+        <div className="stat-grid">
+          <Stat label="Countertop" value={`${Math.round((len * c.depth) / 144)} sq ft`} />
+          <Stat label="Counter spaces" value={spaces} />
+        </div>
+        <p className="muted small">
+          {room ? `In ${room.name || room.type}${room.type === 'kitchen' ? '' : ' — set the room to Kitchen for the countertop receptacle rules'}. ` : 'Not inside a room. '}
+          {c.island ? 'Drag to move. Island receptacles are counted from its spaces.' : 'Drag to slide it along the wall. Run Auto outlets to place countertop receptacles.'}
+        </p>
+        <button className="danger" onClick={() => del(c.id)}>
+          Delete {c.island ? 'island' : 'counter'}
         </button>
       </aside>
     );

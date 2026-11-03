@@ -2,7 +2,8 @@ import { dist, pointAlong, wallLength } from '../model/geometry.ts';
 import { HABITABLE, studFor, type Opening, type Point, type Project, type Room, type Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { ceilingInfo } from './ceilings.ts';
-import { roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
+import { counterGaps, roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
+import { counterLength, counterSpaces, ISLAND_MIN_LONG, ISLAND_MIN_SHORT, roomCounters } from './counters.ts';
 import { exclusiveArea } from './regions.ts';
 import { framingTakeoff } from './framing.ts';
 import { roofCalc } from './roof.ts';
@@ -212,9 +213,36 @@ export function ircChecks(project: Project): CodeCheck[] {
         continue;
       }
       const g = spacingGaps(project, room);
-      const kitchen = room.type === 'kitchen';
+      const counters = room.type === 'kitchen' ? roomCounters(project, room) : [];
+      const kitchen = room.type === 'kitchen' && !counters.length;
+      if (counters.length) {
+        const c = counterGaps(project, room);
+        if (c.spaces) {
+          add({
+            rule: 'Countertop receptacles (no point > 24" from one)',
+            section: 'E3901.4',
+            status: !c.uncovered && c.worst <= c.limit + 0.5 ? 'pass' : 'fail',
+            message: c.uncovered
+              ? `${label}: a countertop space 12" or wider has no receptacle`
+              : `${label}: ${c.spaces} countertop space${c.spaces > 1 ? 's' : ''}, widest gap ${formatFtIn(c.worst)} (max ${formatFtIn(c.limit, { compact: true })})`,
+            targetId: room.id,
+          });
+        }
+        for (const isl of counters.filter((x) => x.island)) {
+          const spaces = counterSpaces(isl).filter(([s, e]) => Math.max(e - s, isl.depth) >= ISLAND_MIN_LONG && Math.min(e - s, isl.depth) >= ISLAND_MIN_SHORT).length;
+          add({
+            rule: 'Island receptacle',
+            section: 'E3901.4',
+            status: 'info',
+            message: spaces
+              ? `${label}: ${formatFtIn(counterLength(isl), { compact: true })} island — ${spaces} receptacle${spaces > 1 ? 's' : ''} included in the estimate (one per space ${ISLAND_MIN_LONG}" × ${ISLAND_MIN_SHORT}" or larger; code editions differ on islands, so check the one you build under)`
+              : `${label}: island too small to need a receptacle`,
+            targetId: isl.id,
+          });
+        }
+      }
       add({
-        rule: kitchen ? 'Countertop receptacle spacing (≤ 4 ft apart)' : 'Receptacle spacing (no point > 6 ft away)',
+        rule: kitchen ? 'Countertop receptacle spacing (≤ 4 ft apart)' : counters.length ? 'Receptacle spacing off the counters (no point > 6 ft away)' : 'Receptacle spacing (no point > 6 ft away)',
         section: kitchen ? 'E3901.4' : 'E3901.2',
         status: !g.uncovered && g.worst <= g.limit + 0.5 ? 'pass' : 'fail',
         message: g.uncovered
@@ -227,6 +255,20 @@ export function ircChecks(project: Project): CodeCheck[] {
         if (bad) add({ rule: 'GFCI protection', section: 'E3902', status: 'warn', message: `${label}: ${bad} receptacle(s) not marked GFCI`, targetId: room.id });
       }
     }
+  }
+
+  // R306.2 — every kitchen has a sink.
+  for (const room of project.rooms.filter((r) => r.type === 'kitchen')) {
+    const label = room.name || room.type;
+    const counters = roomCounters(project, room);
+    const sink = counters.some((x) => x.cutouts.some((k) => k.kind === 'sink'));
+    add({
+      rule: 'Kitchen sink',
+      section: 'R306.2',
+      status: sink ? 'pass' : counters.length ? 'fail' : 'info',
+      message: sink ? `${label}` : counters.length ? `${label}: add a sink to a counter` : `${label}: draw counters (Counter tool) to check the sink and lay out countertop receptacles`,
+      targetId: room.id,
+    });
   }
 
   // R311.2 — at least one egress door: side-hinged, 32" clear width, 78" clear height.

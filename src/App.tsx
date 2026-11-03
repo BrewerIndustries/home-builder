@@ -34,6 +34,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'switch', label: 'Switch', key: 's', icon: 'S' },
   { id: 'light', label: 'Light', key: 'l', icon: '⊗' },
   { id: 'alarm', label: 'Alarm', key: 'a', icon: '◉' },
+  { id: 'counter', label: 'Counter', key: 'k', icon: '▬' },
 ];
 
 export function App() {
@@ -74,7 +75,7 @@ export function App() {
   // Drop a stale selection after undo / delete.
   useEffect(() => {
     if (!selection) return;
-    const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures };
+    const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures, counter: project.counters };
     if (!lists[selection.kind].some((x) => x.id === selection.id)) setSelection(null);
   }, [project, selection]);
 

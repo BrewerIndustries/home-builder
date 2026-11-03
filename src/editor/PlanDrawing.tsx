@@ -1,7 +1,8 @@
 import { exclusiveArea } from '../calc/regions.ts';
 import { pointAlong, polygonCentroid, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
-import type { Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
+import { counterCorners, counterPoint, islandReceptacles } from '../calc/counters.ts';
+import type { Counter, Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { outletPosition } from './outletGeometry.ts';
@@ -42,6 +43,11 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
           </g>
         );
       })}
+
+      {project.counters.map((c) => (
+        <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
+      ))}
+      {outlets && islandReceptacles(project).map((r, i) => <circle key={i} cx={r.at.x} cy={r.at.y} r={4} className="island-recep" strokeWidth={px(1.5)} />)}
 
       {project.walls.map((w) => {
         const sel = selection?.kind === 'wall' && selection.id === w.id;
@@ -296,3 +302,36 @@ function WallDimension({ w, px }: { w: Wall; px(n: number): number }) {
   );
 }
 
+
+/** Counter outline with its sinks (double bowl) and ranges (four burners). */
+export function CounterGlyph({ c, selected, px }: { c: Counter; selected: boolean; px(n: number): number }) {
+  const poly = (pts: { x: number; y: number }[]) => pts.map((p) => `${p.x},${p.y}`).join(' ');
+  return (
+    <g className={selected ? 'counter sel' : 'counter'}>
+      <polygon points={poly(counterCorners(c))} strokeWidth={px(1.2)} />
+      {c.cutouts.map((k) => {
+        const [s, e] = [k.offset - k.width / 2, k.offset + k.width / 2];
+        const box = (t0: number, t1: number, i0: number, i1: number) => [counterPoint(c, t0, i0), counterPoint(c, t1, i0), counterPoint(c, t1, i1), counterPoint(c, t0, i1)];
+        if (k.kind === 'sink') {
+          const mid = k.offset;
+          return (
+            <g key={k.id} className="cutout sink">
+              <polygon points={poly(box(s + 1.5, mid - 0.75, 3, c.depth - 4))} strokeWidth={px(1)} />
+              <polygon points={poly(box(mid + 0.75, e - 1.5, 3, c.depth - 4))} strokeWidth={px(1)} />
+            </g>
+          );
+        }
+        const w = e - s;
+        return (
+          <g key={k.id} className="cutout range">
+            <polygon points={poly(box(s, e, 0.5, c.depth - 0.5))} strokeWidth={px(1)} />
+            {[0.28, 0.72].flatMap((u) => [0.3, 0.7].map((v) => {
+              const p = counterPoint(c, s + w * u, c.depth * v);
+              return <circle key={`${u}${v}`} cx={p.x} cy={p.y} r={Math.min(w, c.depth) * 0.16} strokeWidth={px(1)} />;
+            }))}
+          </g>
+        );
+      })}
+    </g>
+  );
+}

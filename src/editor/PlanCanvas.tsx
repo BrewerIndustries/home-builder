@@ -16,13 +16,14 @@ import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { wallDragPoints } from '../model/wallEdit.ts';
-import { finishedThickness, uid, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
-import { OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
+import { counterDir, newCounter } from '../calc/counters.ts';
+import { finishedThickness, uid, type Counter, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
+import { CounterGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'calibrate' | 'straighten' | 'moveImage';
+export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'calibrate' | 'straighten' | 'moveImage';
 
 interface View {
   /** Screen pixels per inch. */
@@ -41,6 +42,8 @@ type Drag =
   | { kind: 'switch'; id: string }
   | { kind: 'fixture'; id: string; grab: Point }
   | { kind: 'room'; start: Point; end: Point; raw: Point }
+  | { kind: 'newCounter'; start: Point; end: Point }
+  | { kind: 'counter'; id: string; start: Point; a: Point; b: Point; along: Point | null; started: boolean }
   | { kind: 'underlay'; start: Point; origin: Point };
 
 export interface PlanCanvasHandle {
@@ -72,6 +75,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
   const [cursor, setCursor] = useState<{ p: Point; snapped: 'endpoint' | 'grid' | null } | null>(null);
   const [chain, setChain] = useState<{ start: Point; first: Point } | null>(null);
   const [roomDrag, setRoomDrag] = useState<{ a: Point; b: Point } | null>(null);
+  const [counterDraft, setCounterDraft] = useState<Counter | null>(null);
   const [calPoints, setCalPoints] = useState<Point[]>([]);
   const [calText, setCalText] = useState('');
   const [realW, setRealW] = useState('');
@@ -291,6 +295,10 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
           const along = (raw.x - w.a.x) * wallDir(w).x + (raw.y - w.a.y) * wallDir(w).y;
           dispatch({ type: 'checkpoint' });
           drag.current = { kind: 'opening', id: o.id, grab: along - o.offset };
+        } else if (hit?.kind === 'counter') {
+          const c = project.counters.find((x) => x.id === hit.id)!;
+          // Wall counters slide along their wall; islands move freely.
+          drag.current = { kind: 'counter', id: c.id, start: raw, a: c.a, b: c.b, along: c.island ? null : counterDir(c), started: false };
         } else if (hit?.kind === 'wall') {
           const w = project.walls.find((x) => x.id === hit.id)!;
           drag.current = { kind: 'wall', start: raw, normal: wallNormal(w), moved: 0, current: wallDragPoints(project, w), started: false };
@@ -309,6 +317,12 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const { p } = snap(raw);
         drag.current = { kind: 'room', start: p, end: p, raw };
         setRoomDrag({ a: p, b: p });
+        return;
+      }
+      case 'counter': {
+        const p = { x: Math.round(raw.x), y: Math.round(raw.y) };
+        drag.current = { kind: 'newCounter', start: p, end: p };
+        setCounterDraft(newCounter(project, p, p, 'draft'));
         return;
       }
       case 'door':
@@ -415,6 +429,24 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
       }
       return;
     }
+    if (d?.kind === 'newCounter') {
+      d.end = { x: Math.round(raw.x), y: Math.round(raw.y) };
+      setCounterDraft(newCounter(project, d.start, d.end, 'draft'));
+      return;
+    }
+    if (d?.kind === 'counter') {
+      let dx = Math.round(raw.x - d.start.x);
+      let dy = Math.round(raw.y - d.start.y);
+      if (d.along) {
+        const t = Math.round(dx * d.along.x + dy * d.along.y);
+        [dx, dy] = [d.along.x * t, d.along.y * t];
+      }
+      if (!dx && !dy && !d.started) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'updateCounter', id: d.id, patch: { a: { x: d.a.x + dx, y: d.a.y + dy }, b: { x: d.b.x + dx, y: d.b.y + dy } }, transient: true });
+      return;
+    }
     if (d?.kind === 'switch') {
       const o = project.switches.find((x) => x.id === d.id);
       const w = o && project.walls.find((x) => x.id === o.wallId);
@@ -463,6 +495,13 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
     drag.current = null;
     if (d?.kind === 'room' && e) d.end = snap(toWorld(e.clientX, e.clientY)).p;
     setRoomDrag(null);
+    if (d?.kind === 'newCounter') {
+      setCounterDraft(null);
+      const counter = newCounter(project, d.start, d.end, uid('ct'));
+      dispatch({ type: 'addCounter', counter });
+      setSelection({ kind: 'counter', id: counter.id });
+      return;
+    }
     if (d?.kind === 'room') {
       // Read the rectangle from the ref, not state: a fast drag can release before the last move renders.
       const { start: a, end: b } = d;
@@ -607,6 +646,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
             <PreviewSegment a={chain.start} b={cursor.p} thickness={newWallThickness} px={px} />
           )}
           {roomDrag && <PreviewRect a={roomDrag.a} b={roomDrag.b} px={px} />}
+          {counterDraft && <CounterGlyph c={counterDraft} selected px={px} />}
 
           {calPoints.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={px(5)} className="cal-point" />
@@ -706,6 +746,8 @@ function hintFor(tool: Tool, drawing: boolean): string {
       return 'Click in a room to add a ceiling light — it joins that room’s switches';
     case 'alarm':
       return 'Click in a room to add a smoke alarm (smoke / CO where CO alarms are required)';
+    case 'counter':
+      return 'Drag along a wall for a counter on that face (click = 6 ft) · drag in open floor for an island · add a sink or range in the panel';
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
     case 'straighten':
