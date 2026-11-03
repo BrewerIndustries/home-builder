@@ -35,7 +35,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Lighting v2: exterior lights at outdoor doors (E3903.4), stairway switches at each level, switched receptacles as the E3903.2 alternative, ceiling fans
 - [x] Countertop and island modelling so kitchen receptacles follow real counters, not every wall
 - [ ] Counters v2: follow wall drags; L-shaped counter runs and peninsulas (connecting-edge rule); corner sink / range rules; wall cabinets and appliance symbols (fridge, dishwasher); work-triangle and clearance checks
-- [ ] Outdoor receptacles front + back (E3901.7), dedicated appliance circuits, AFCI
+- [x] Outdoor receptacles front + back (E3901.7): auto GFCI beside an exterior door, front-of-house setting, in-use covers in the estimate
+- [ ] Dedicated appliance circuits, AFCI; outdoor receptacles v2: decks / balconies / porches, height above real grade
 - [ ] Circuits, NEC 220 load calc, panel schedule
 
 ## Editor

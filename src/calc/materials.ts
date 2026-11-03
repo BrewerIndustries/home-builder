@@ -8,6 +8,7 @@ import { siteLines } from './site.ts';
 import { foundationLines } from './foundation.ts';
 import { floorLines } from './floor.ts';
 import { lightingLines } from './lighting.ts';
+import { outdoorLines } from './outdoor.ts';
 import { counterLines, islandReceptacles } from './counters.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
@@ -197,6 +198,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   if (boxes) {
     lines.push({ category: 'Electrical', item: 'Single-gang new-work box', qty: boxes, unit: 'ea', basis: 'one per receptacle and switch' });
   }
+  lines.push(...outdoorLines(project));
   lines.push(...lightingLines(project));
   lines.push(...counterLines(project));
 

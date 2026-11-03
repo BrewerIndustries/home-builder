@@ -32,6 +32,7 @@ import {
   type CutoutKind,
   type RoomType,
   type WindowStyle,
+  type FrontSide,
 } from '../model/types.ts';
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -501,6 +502,14 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           <option value="">Not answered</option>
           <option value="yes">Yes</option>
           <option value="no">No — all electric</option>
+        </select>
+      </Field>
+      <Field label="Front of the house" hint="The plan side facing the street — outdoor receptacles go front and back (E3901.7)">
+        <select value={project.electrical?.front ?? 'bottom'} onChange={(e) => dispatch({ type: 'setElectrical', patch: { front: e.target.value as FrontSide } })}>
+          <option value="bottom">Bottom of the plan</option>
+          <option value="top">Top of the plan</option>
+          <option value="left">Left of the plan</option>
+          <option value="right">Right of the plan</option>
         </select>
       </Field>
 

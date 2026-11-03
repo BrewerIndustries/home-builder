@@ -1,5 +1,6 @@
 import { dist, pointAlong, projectOnWall, wallNormal } from '../model/geometry.ts';
 import { regionEdges } from './regions.ts';
+import { autoOutdoor } from './outdoor.ts';
 import { counterPositions, counterSpans, roomCounters, type CounterSpan } from './counters.ts';
 import { uid, type Outlet, type OutletKind, type Point, type Project, type Room, type RoomType } from '../model/types.ts';
 
@@ -11,6 +12,7 @@ import { uid, type Outlet, type OutletKind, type Point, type Project, type Room,
 //   E3901.6  bathrooms — at least one within 36" of each basin.
 //   E3901.9  garages — at least one per car space.
 //   E3901.10 hallways 10 ft or longer — at least one.
+//   E3901.7  outdoors — one at the front and one at the back (see outdoor.ts).
 //   E3902    GFCI in bathrooms, kitchens (counter), garages, laundry, outdoors.
 //
 // Kitchens with counters drawn get countertop spacing along each counter space
@@ -116,7 +118,7 @@ export function autoOutlets(project: Project): Outlet[] {
       if (placed) out.push({ id: uid('e'), ...placed, kind: kind ?? r.kind, height: height ?? r.height, auto: true });
     }
   }
-  return out;
+  return [...out, ...autoOutdoor(project)];
 }
 
 /** Put a point onto the wall under it, on the face toward `inside`. */

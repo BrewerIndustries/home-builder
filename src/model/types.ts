@@ -94,7 +94,12 @@ export interface WallSwitch {
   auto: boolean;
 }
 
+/** Which side of the plan faces the street — the house's front (E3901.7). */
+export type FrontSide = 'bottom' | 'top' | 'left' | 'right';
+
 export interface ElectricalSettings {
+  /** Which side of the plan is the front of the house; bottom when unset. */
+  front?: FrontSide;
   /** Gas / oil / wood appliances or a fireplace in the house — drives CO alarms (R315). Unset = not answered. */
   fuelAppliances?: boolean;
 }

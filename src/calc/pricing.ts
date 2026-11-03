@@ -50,6 +50,7 @@ const SAMPLE: [RegExp, number][] = [
   [/dedicated receptacle/, 4],
   [/240V receptacle/, 14],
   [/new-work box/, 1.2],
+  [/^In-use \(bubble\) cover/, 18],
   [/^Round ceiling box/, 3],
   [/^Ceiling light fixture/, 40],
   [/^Smoke alarm, hardwired/, 25],
