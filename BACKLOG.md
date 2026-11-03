@@ -45,7 +45,8 @@ Ordered roughly by value. Competitor research behind these lives in
 ## Editor
 
 - [x] Room from enclosed walls (click inside) and non-rectangular rooms
-- [ ] Non-rectangular rooms v2: R304 min dimension and ceiling slopes on the real outline (not the bounding box); auto-name / auto-type rooms from size and doors
+- [x] Non-rectangular rooms v2: R304 min dimension and ceiling slopes on the real outline (not the bounding box); auto-name / auto-type rooms from size and doors
+- [ ] Non-rectangular rooms v3: R304.2 on clear (finished-face) dimensions; tray and coffered ceilings on the real outline; show the narrowest line on the plan; pick the slope direction per room
 - [x] Drag a whole wall (move both ends together); split / join walls
 - [x] Wall edits v2: double-click to split at a point; dragged walls snap in line / flush with parallel walls and the grid; live move readout
 - [ ] Wall edits v3: type an exact move distance while dragging; snap a dragged wall end to other walls' faces; rotate a wall about an end

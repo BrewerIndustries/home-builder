@@ -1,6 +1,7 @@
 import { pointAlong, polygonArea, wallDir, wallLength } from '../model/geometry.ts';
 import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
+import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
 import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
@@ -84,6 +85,56 @@ function bbox(pts: Point[]) {
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
 }
 
+function convex(pts: Point[]): boolean {
+  let sign = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [a, b, c] = [pts[i], pts[(i + 1) % pts.length], pts[(i + 2) % pts.length]];
+    const z = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (Math.abs(z) < 1e-9) continue;
+    if (sign && Math.sign(z) !== sign) return false;
+    sign = Math.sign(z);
+  }
+  return true;
+}
+
+/**
+ * A vaulted or cathedral ceiling over the room's real outline: the sloped surface
+ * (whole pieces where convex, else triangles), plus the wall above the low line
+ * along every edge it rises over.
+ */
+function slopedCeiling(pts: Point[], type: 'vaulted' | 'cathedral', low: number, high: number): Face[] {
+  const frame = slopeFrame(pts);
+  if (!frame || !frame.span) return [];
+  const { dir, d0, span } = frame;
+  const along = (p: Point) => (p.x * dir.x + p.y * dir.y - d0) / span;
+  const h = (p: Point) => {
+    const t = along(p);
+    return low + (high - low) * (type === 'vaulted' ? t : 1 - Math.abs(2 * t - 1));
+  };
+  const lift = (p: Point): V3 => [p.x, h(p), p.y];
+  const mid = d0 + span / 2;
+  const pieces = type === 'vaulted' ? [pts] : [clipHalfPlane(pts, { x: -dir.x, y: -dir.y }, -mid), clipHalfPlane(pts, dir, mid)].filter((q) => q.length);
+  const faces: Face[] = [];
+  for (const q of pieces) {
+    if (convex(q)) faces.push({ kind: 'ceiling', pts: q.map(lift) });
+    else for (const t of triangulate(q)) faces.push({ kind: 'ceiling', pts: t.map(lift) });
+  }
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const top = [a];
+    const [ta, tb] = [along(a), along(b)];
+    if (type === 'cathedral' && (ta - 0.5) * (tb - 0.5) < 0) {
+      const k = (0.5 - ta) / (tb - ta);
+      top.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+    }
+    top.push(b);
+    if (Math.max(...top.map(h)) - low < 0.5) continue;
+    faces.push({ kind: 'gable', pts: [[a.x, low, a.y], [b.x, low, b.y], ...top.reverse().map(lift)] });
+  }
+  return faces;
+}
+
 /** Ceiling geometry for one room. Rooms with nested rooms get a flat ceiling with holes. */
 export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[]; faces: Face[]; boxes: Box[] } {
   const info = ceilingInfo(project, room);
@@ -95,32 +146,15 @@ export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[
     return { flats: [flat(low, room.points, children.map((r) => r.points))], faces: [], boxes: [] };
   }
   const { x0, x1, y0, y1 } = bbox(room.points);
-  const wide = x1 - x0 >= y1 - y0; // long axis along X?
-  // Corner helper: u along the long axis, v across (0..1), height h.
-  const P = (u: number, v: number, h: number): V3 =>
-    wide ? [x0 + u * (x1 - x0), h, y0 + v * (y1 - y0)] : [x0 + v * (x1 - x0), h, y0 + u * (y1 - y0)];
   const faces: Face[] = [];
   const boxes: Box[] = [];
   const flats: FlatSurface[] = [];
 
   switch (c.type) {
-    case 'vaulted': {
-      // Low along v = 0, rising to the peak along v = 1.
-      const hi = info.high;
-      faces.push({ kind: 'ceiling', pts: [P(0, 0, low), P(1, 0, low), P(1, 1, hi), P(0, 1, hi)] });
-      faces.push({ kind: 'gable', pts: [P(0, 0, low), P(0, 1, low), P(0, 1, hi)] });
-      faces.push({ kind: 'gable', pts: [P(1, 0, low), P(1, 1, low), P(1, 1, hi)] });
-      faces.push({ kind: 'gable', pts: [P(0, 1, low), P(1, 1, low), P(1, 1, hi), P(0, 1, hi)] });
+    case 'vaulted':
+    case 'cathedral':
+      faces.push(...slopedCeiling(room.points, c.type, low, info.high));
       break;
-    }
-    case 'cathedral': {
-      const hi = info.high;
-      faces.push({ kind: 'ceiling', pts: [P(0, 0, low), P(1, 0, low), P(1, 0.5, hi), P(0, 0.5, hi)] });
-      faces.push({ kind: 'ceiling', pts: [P(0, 1, low), P(1, 1, low), P(1, 0.5, hi), P(0, 0.5, hi)] });
-      faces.push({ kind: 'gable', pts: [P(0, 0, low), P(0, 1, low), P(0, 0.5, hi)] });
-      faces.push({ kind: 'gable', pts: [P(1, 0, low), P(1, 1, low), P(1, 0.5, hi)] });
-      break;
-    }
     case 'tray': {
       const depth = c.trayDepth ?? 12;
       const inset = Math.min(c.trayInset ?? 24, Math.min(x1 - x0, y1 - y0) / 2 - 6);

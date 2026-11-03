@@ -37,9 +37,11 @@ test('coffered adds beam sides and drops the low point', () => {
   assert.ok(c.beamLength > 0);
 });
 
-test('a low vault is a review flag, a low flat ceiling is a fail', () => {
+test('a low vault passes R305.1.1 when enough floor has headroom; a low flat ceiling fails', () => {
+  // 5' → 12' across 12': the floor clears 7 ft from 41" in, so ~171 of 240 sq ft.
   const vault = ircChecks(project(box(240, 144), [], { rooms: [room({ type: 'vaulted', height: 60, peak: 144 })] }));
-  assert.equal(vault.find((c) => c.rule.startsWith('Minimum ceiling'))!.status, 'warn');
+  const v = vault.find((c) => c.rule.startsWith('Minimum ceiling'))!;
+  assert.deepEqual([v.status, v.section], ['pass', 'R305.1.1']);
   const flat = ircChecks(project(box(240, 144), [], { rooms: [room({ type: 'flat', height: 80 })] }));
   assert.equal(flat.find((c) => c.rule.startsWith('Minimum ceiling'))!.status, 'fail');
 });

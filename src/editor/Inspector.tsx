@@ -1,5 +1,7 @@
 import type { Dispatch, ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
+import { narrowest } from '../calc/outline.ts';
+import { guessRoom } from '../calc/roomGuess.ts';
 import { frameWall, studCount } from '../calc/framing.ts';
 import { netClearOpening } from '../calc/irc.ts';
 import { exclusiveArea } from '../calc/regions.ts';
@@ -433,6 +435,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     if (!r) return null;
     const c: Ceiling = r.ceiling ?? { type: 'flat' };
     const info = ceilingInfo(project, r);
+    const narrow = narrowest(r.points);
     const setCeiling = (patch: Partial<Ceiling>) => dispatch({ type: 'updateRoom', id: r.id, patch: { ceiling: { ...c, ...patch } } });
     return (
       <aside className="inspector">
@@ -449,8 +452,14 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             ))}
           </select>
         </Field>
+        <div className="row">
+          <button title="Garage, kitchen, closet, hall, bath, living or bedroom, from the size, doors and counters" onClick={() => dispatch({ type: 'updateRoom', id: r.id, patch: guessRoom(project, r) })}>
+            Guess name &amp; use
+          </button>
+        </div>
         <div className="stat-grid">
           <Stat label="Floor" value={formatSqFt(exclusiveArea(project, r))} />
+          {narrow && <Stat label="Narrowest" value={formatFtIn(narrow.width)} />}
           <Stat label="Ceiling surface" value={formatSqFt(info.surface)} />
         </div>
         <h4>Ceiling</h4>

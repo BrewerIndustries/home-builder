@@ -1,7 +1,8 @@
-import { dist, pointAlong, wallLength } from '../model/geometry.ts';
+import { dist, pointAlong, polygonArea, wallLength } from '../model/geometry.ts';
 import { HABITABLE, studFor, type Opening, type Point, type Project, type Room, type Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
-import { ceilingInfo } from './ceilings.ts';
+import { areaWithHeadroom, ceilingInfo } from './ceilings.ts';
+import { narrowest } from './outline.ts';
 import { counterGaps, roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
 import { counterLength, freeSpaces, ISLAND_MIN_LONG, ISLAND_MIN_SHORT, peninsulaJoin, roomCounters } from './counters.ts';
 import { exclusiveArea } from './regions.ts';
@@ -92,12 +93,6 @@ function onPolygonEdge(pts: Point[], p: Point, tol: number): boolean {
   return false;
 }
 
-function minDimension(pts: Point[]): number {
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  return Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-}
-
 const sqft = (n: number) => `${n.toFixed(1)} sq ft`;
 
 export function ircChecks(project: Project): CodeCheck[] {
@@ -108,43 +103,59 @@ export function ircChecks(project: Project): CodeCheck[] {
     const area = exclusiveArea(project, room) / SQFT;
     const habitable = HABITABLE.has(room.type);
     const label = room.name || room.type;
+    const ceil = ceilingInfo(project, room);
+    const sloped = ceil.type === 'vaulted' || ceil.type === 'cathedral';
+    // Share of the floor with at least h of headroom (nested rooms scale with it).
+    const own = polygonArea(room.points);
+    const under = (h: number) => (own ? (area * areaWithHeadroom(project, room, h)) / own : 0);
 
-    // R304 — minimum room area and dimension (kitchens exempt).
+    // R304 — minimum room area and dimension (kitchens exempt). Under a sloped
+    // ceiling, floor with less than 5 ft of headroom doesn't count (R304.3).
     if (habitable && room.type !== 'kitchen') {
+      const counted = sloped && ceil.low < 60 ? under(60) : area;
       add({
         rule: 'Minimum habitable room area (70 sq ft)',
-        section: 'R304.1',
-        status: area >= 70 ? 'pass' : 'fail',
-        message: `${label}: ${sqft(area)}`,
+        section: counted < area - 0.05 ? 'R304.3' : 'R304.1',
+        status: counted >= 70 ? 'pass' : 'fail',
+        message: counted < area - 0.05 ? `${label}: ${sqft(counted)} with 5 ft headroom or more (of ${sqft(area)})` : `${label}: ${sqft(area)}`,
         targetId: room.id,
       });
-      const dim = minDimension(room.points);
-      add({
-        rule: 'Minimum habitable room dimension (7 ft)',
-        section: 'R304.2',
-        status: dim >= 84 ? 'pass' : 'fail',
-        message: `${label}: narrowest ${formatFtIn(dim)}`,
-        targetId: room.id,
-      });
+      const narrow = narrowest(room.points);
+      if (narrow) {
+        add({
+          rule: 'Minimum habitable room dimension (7 ft)',
+          section: 'R304.2',
+          status: narrow.width >= 84 - 0.5 ? 'pass' : 'fail',
+          message: `${label}: narrowest ${formatFtIn(narrow.width)} across`,
+          targetId: room.id,
+        });
+      }
     }
 
-    // R305 — ceiling height. Sloped ceilings (R305.1.1 exception) may dip below 7 ft
-    // over part of the room; we flag those for review rather than fail them.
+    // R305 — ceiling height. A sloped ceiling may dip below 7 ft (R305.1.1): the
+    // required floor area needs 5 ft or more, and half of it 7 ft or more. Measured
+    // on the outline for habitable rooms (70 sq ft required); others are flagged.
     if (habitable || ['hall', 'bath', 'utility'].includes(room.type)) {
-      const ceil = ceilingInfo(project, room);
-      const sloped = ceil.type === 'vaulted' || ceil.type === 'cathedral';
-      add({
-        rule: 'Minimum ceiling height (7 ft)',
-        section: sloped && ceil.low < 84 ? 'R305.1.1' : 'R305.1',
-        status: ceil.low >= 84 ? 'pass' : sloped && ceil.high >= 84 ? 'warn' : 'fail',
-        message:
-          ceil.low >= 84
-            ? `${label}: ${ceil.label}`
-            : sloped
-              ? `${label}: low side ${formatFtIn(ceil.low)} — at least half the required floor area needs 7 ft, and anything under 5 ft doesn't count as floor area`
-              : `${label}: ${formatFtIn(ceil.low)}${ceil.type === 'coffered' ? ' under the coffer beams' : ''}`,
-        targetId: room.id,
-      });
+      const base = { rule: 'Minimum ceiling height (7 ft)', targetId: room.id };
+      if (ceil.low >= 84) add({ ...base, section: 'R305.1', status: 'pass', message: `${label}: ${ceil.label}` });
+      else if (!sloped || ceil.high < 84)
+        add({ ...base, section: 'R305.1', status: 'fail', message: `${label}: ${formatFtIn(ceil.low)}${ceil.type === 'coffered' ? ' under the coffer beams' : sloped ? ' to ' + formatFtIn(ceil.high) : ''}` });
+      else if (habitable && room.type !== 'kitchen') {
+        const five = under(60);
+        const seven = under(84);
+        add({
+          ...base,
+          section: 'R305.1.1',
+          status: five >= 70 && seven >= 35 ? 'pass' : 'fail',
+          message: `${label}: ${sqft(seven)} with 7 ft or more (needs 35), ${sqft(five)} with 5 ft or more (needs 70)`,
+        });
+      } else
+        add({
+          ...base,
+          section: 'R305.1.1',
+          status: 'warn',
+          message: `${label}: low side ${formatFtIn(ceil.low)}, ${sqft(under(84))} of ${sqft(area)} has 7 ft or more — check it against R305.1.1`,
+        });
     }
 
     const inRoom = openingsInRoom(project, room);

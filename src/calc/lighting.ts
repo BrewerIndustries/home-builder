@@ -35,7 +35,7 @@ export const BATH_DOOR_CLEAR = 36;
 export const isLight = (k: FixtureKind) => k === 'light' || k === 'fan' || k === 'outdoor';
 const isRoomLight = (k: FixtureKind) => k === 'light' || k === 'fan';
 /** Doors wider than this are vehicle (garage) doors, which E3903.4 leaves out. */
-const VEHICLE_DOOR = 72;
+export const VEHICLE_DOOR = 72;
 /** An exterior light this close to an outdoor door lights it. */
 const DOOR_LIGHT_REACH = 96;
 

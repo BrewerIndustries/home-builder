@@ -16,6 +16,7 @@ import {
 import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
+import { guessRoom } from '../calc/roomGuess.ts';
 import { snapWallMove, splitAt, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounter } from '../calc/counters.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
@@ -518,8 +519,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const walls = rectangleWalls(a, b, (p, q) => makeWall(p, q));
         const id = uid('r');
         const corners = walls.map((w) => ({ ...w.a }));
-        const count = project.rooms.length + 1;
-        dispatch({ type: 'addWalls', walls, room: { id, name: `Room ${count}`, type: 'other', points: corners } });
+        const room = { id, name: '', type: 'other' as const, points: corners };
+        dispatch({ type: 'addWalls', walls, room: { ...room, ...guessRoom(project, room) } });
         setSelection({ kind: 'room', id });
         onRoomCreated?.();
       } else {
@@ -543,7 +544,10 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
       return;
     }
     const id = uid('r');
-    dispatch({ type: 'addWalls', walls: [], room: { id, name: `Room ${project.rooms.length + 1}`, type: 'other', points } });
+    const room = { id, name: '', type: 'other' as const, points };
+    const guess = guessRoom(project, room);
+    dispatch({ type: 'addWalls', walls: [], room: { ...room, ...guess } });
+    onMessage?.(`Named it ${guess.name} from its size and doors — change it in the Room panel.`);
     setSelection({ kind: 'room', id });
     onRoomCreated?.();
   }
