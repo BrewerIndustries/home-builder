@@ -66,6 +66,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Countertop \(allowance\)/, 45],
   [/^Kitchen sink \+ faucet/, 350],
   [/^Range \(allowance\)/, 900],
+  [/^Wall cabinets/, 180],
+  [/^Range hood/, 250],
   [/^Dishwasher \(allowance\)/, 700],
   [/^Refrigerator \(allowance\)/, 1500],
   [/^Roof truss|^Gable-end truss|^Mono \(shed\) truss/, 150],

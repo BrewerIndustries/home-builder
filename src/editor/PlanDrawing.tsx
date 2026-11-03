@@ -1,7 +1,7 @@
 import { exclusiveArea } from '../calc/regions.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
-import { counterCorners, counterPoint, islandReceptacles } from '../calc/counters.ts';
+import { counterCorners, counterPoint, islandReceptacles, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
 import { outerCorners, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
@@ -48,6 +48,18 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {project.counters.map((c) => (
         <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
       ))}
+      {project.counters.flatMap((c) =>
+        // Wall cabinets overhead: dashed, the usual plan convention for things above the cut.
+        upperSpans(project, c).map(([s, e]) => (
+          <polygon
+            key={`${c.id}u${s}`}
+            className="upper"
+            points={[counterPoint(c, s, 0), counterPoint(c, e, 0), counterPoint(c, e, UPPER_DEPTH), counterPoint(c, s, UPPER_DEPTH)].map((p) => `${p.x},${p.y}`).join(' ')}
+            strokeWidth={px(1)}
+            strokeDasharray={`${px(4)} ${px(3)}`}
+          />
+        )),
+      )}
       {outlets && islandReceptacles(project).map((r, i) => <circle key={i} cx={r.at.x} cy={r.at.y} r={4} className="island-recep" strokeWidth={px(1.5)} />)}
 
       {project.walls.map((w) => {

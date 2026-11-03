@@ -85,7 +85,9 @@ test('islands get receptacles in the estimate; counters price and show in 3D', (
   assert.equal(qty('Base cabinets (allowance)'), 20); // 14 ft + 6 ft
   assert.equal(qty('Kitchen sink + faucet (allowance)'), 1);
   assert.equal(qty('Countertop (allowance)'), Math.ceil((168 * 25 + 72 * 36) / 144));
-  assert.equal(buildScene(p).boxes.filter((b) => b.kind === 'counter').length, 2);
+  // Counter, island, and the wall cabinets over the counter.
+  // Counter, island, and the wall cabinets over the counter.
+  assert.equal(buildScene(p).boxes.filter((b) => b.kind === 'counter').length, 3);
 });
 
 test('cutouts stay inside the counter, and deleting a counter removes it', () => {
@@ -127,5 +129,6 @@ test('dishwashers stay under the countertop; fridges cut it and price separately
   assert.equal(qty('Base cabinets (allowance)'), Math.ceil(((168 - 60 + 72) / 12) * 2) / 2);
   assert.equal(qty('Dishwasher (allowance)'), 1);
   assert.equal(qty('Refrigerator (allowance)'), 1);
-  assert.equal(buildScene(p).boxes.filter((b) => b.kind === 'counter').length, 3);
+  // Counter, island, wall cabinets, and the fridge's tall box.
+  assert.equal(buildScene(p).boxes.filter((b) => b.kind === 'counter').length, 4);
 });

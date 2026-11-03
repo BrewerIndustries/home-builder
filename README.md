@@ -84,7 +84,9 @@ A counter can also hold a **dishwasher** (24", sits under the countertop, so it 
 
 Wall counters ride along with their wall: drag it, drag an end, change its length or its studs and the counter keeps its place along the wall, on the new face, cut back if the wall got shorter. Islands stay put.
 
-The Code check adds two **NKBA guidelines** (they warn, never fail): the **work triangle** between sink, range and fridge (each leg 4–9 ft, 26 ft or less in all, measured centre to centre) and the **clearance around each island** (42" work aisle to the nearest counter, 36" walkway to a wall). Peninsulas still count as islands.
+The Code check adds two **NKBA guidelines** (they warn, never fail): the **work triangle** between sink, range and fridge (each leg 4–9 ft, 26 ft or less in all, measured centre to centre) and the **clearance around each island** (42" work aisle to the nearest counter, 36" walkway to a wall).
+
+**L-shaped runs:** draw a counter along each wall from the inside corner. Where they overlap, the corner square counts once in the base cabinets and the countertop. A sink, range, fridge or dishwasher reaching into that square warns (*Appliance in the corner*). **Peninsulas:** start a Counter drag on a wall counter and drag out into the room; an island that runs into a wall counter or butts a wall is a peninsula, and its receptacle spaces are measured from the connecting edge. **Wall cabinets** hang over every wall counter (dashed on the plan, 54"–84" in 3D, 12" deep) except over windows and ranges; untick *Wall cabinets above* to drop them. Each range gets a hood allowance. **Landing areas** (NKBA): 24" one side of the sink and 18" the other, 15" and 12" beside the range, 15" beside the fridge. Countertop over a dishwasher counts, and a run that turns a corner carries on round it.
 
 ### Lights, switches and alarms
 

@@ -36,7 +36,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Lighting v3: stairway switches at each level (needs stairs / storeys); attic and crawlspace equipment lights; fan-only (no light kit) option
 - [x] Countertop and island modelling so kitchen receptacles follow real counters, not every wall
 - [x] Counters v2: follow wall drags; fridge and dishwasher; work-triangle and island-clearance guideline checks
-- [ ] Counters v3: L-shaped counter runs and peninsulas (connecting-edge rule); corner sink / range rules; wall cabinets; range-hood / landing-area checks
+- [x] Counters v3: L-shaped runs (shared corner), peninsulas (connecting-edge rule), appliance-in-corner warning, wall cabinets + range hood, NKBA landing areas
+- [ ] Counters v4: draw an L in one drag; corner cabinets (lazy susan / blind) in the estimate; tall pantry / oven cabinets; island seating overhang and knee space; island / peninsula receptacle note even before any outlets are placed
 - [x] Outdoor receptacles front + back (E3901.7): auto GFCI beside an exterior door, front-of-house setting, in-use covers in the estimate
 - [ ] Dedicated appliance circuits, AFCI; outdoor receptacles v2: decks / balconies / porches, height above real grade
 - [ ] Circuits, NEC 220 load calc, panel schedule

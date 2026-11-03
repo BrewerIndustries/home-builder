@@ -3,7 +3,7 @@ import { HABITABLE, studFor, type Opening, type Point, type Project, type Room, 
 import { formatFtIn } from '../model/units.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { counterGaps, roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
-import { counterLength, counterSpaces, ISLAND_MIN_LONG, ISLAND_MIN_SHORT, roomCounters } from './counters.ts';
+import { counterLength, freeSpaces, ISLAND_MIN_LONG, ISLAND_MIN_SHORT, peninsulaJoin, roomCounters } from './counters.ts';
 import { exclusiveArea } from './regions.ts';
 import { framingTakeoff } from './framing.ts';
 import { roofCalc } from './roof.ts';
@@ -231,14 +231,16 @@ export function ircChecks(project: Project): CodeCheck[] {
           });
         }
         for (const isl of counters.filter((x) => x.island)) {
-          const spaces = counterSpaces(isl).filter(([s, e]) => Math.max(e - s, isl.depth) >= ISLAND_MIN_LONG && Math.min(e - s, isl.depth) >= ISLAND_MIN_SHORT).length;
+          const pen = peninsulaJoin(project, isl);
+          const what = pen ? 'peninsula' : 'island';
+          const spaces = freeSpaces(project, isl).filter(([s, e]) => Math.max(e - s, isl.depth) >= ISLAND_MIN_LONG && Math.min(e - s, isl.depth) >= ISLAND_MIN_SHORT).length;
           add({
-            rule: 'Island receptacle',
+            rule: pen ? 'Peninsula receptacle' : 'Island receptacle',
             section: 'E3901.4',
             status: 'info',
             message: spaces
-              ? `${label}: ${formatFtIn(counterLength(isl), { compact: true })} island — ${spaces} receptacle${spaces > 1 ? 's' : ''} included in the estimate (one per space ${ISLAND_MIN_LONG}" × ${ISLAND_MIN_SHORT}" or larger; code editions differ on islands, so check the one you build under)`
-              : `${label}: island too small to need a receptacle`,
+              ? `${label}: ${formatFtIn(counterLength(isl), { compact: true })} ${what} — ${spaces} receptacle${spaces > 1 ? 's' : ''} included in the estimate (one per space ${ISLAND_MIN_LONG}" × ${ISLAND_MIN_SHORT}" or larger${pen ? ', measured from the connecting edge' : ''}; code editions differ on ${what}s, so check the one you build under)`
+              : `${label}: ${what} too small to need a receptacle`,
             targetId: isl.id,
           });
         }

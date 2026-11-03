@@ -3,7 +3,7 @@ import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
-import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT } from './counters.ts';
+import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
 // Axes: plan x → X, plan y → Z, height → Y (up). Inches throughout.
@@ -184,6 +184,10 @@ export function buildScene(project: Project): Scene3D {
     const d = counterDir(c);
     const mid = counterPoint(c, len / 2, c.depth / 2);
     boxes.push({ kind: 'counter', c: [mid.x, COUNTER_HEIGHT / 2, mid.y], size: [len, COUNTER_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });
+    for (const [s, e] of upperSpans(project, c)) {
+      const at = counterPoint(c, (s + e) / 2, UPPER_DEPTH / 2);
+      boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + UPPER_TOP) / 2, at.y], size: [e - s, UPPER_TOP - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
+    }
     for (const k of c.cutouts.filter((x) => x.kind === 'fridge')) {
       const at = counterPoint(c, k.offset, c.depth / 2);
       boxes.push({ kind: 'counter', c: [at.x, FRIDGE_HEIGHT / 2, at.y], size: [k.width, FRIDGE_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });

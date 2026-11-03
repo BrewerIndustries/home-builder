@@ -325,7 +325,7 @@ export function CodeView({ project, onSelect }: { project: Project; onSelect(h: 
                   <span className="st">{STATUS[s].label}</span>
                   <div>
                     <div>
-                      <strong>{c.rule}</strong> <span className="muted">{/^[A-Z]{2,}/.test(c.section) ? c.section : `IRC ${c.section}`}</span>
+                      <strong>{c.rule}</strong> <span className="muted">{/^[A-Z]\d/.test(c.section) ? `IRC ${c.section}` : c.section}</span>
                     </div>
                     <div className="muted">{c.message}</div>
                   </div>

@@ -586,6 +586,10 @@ svg.plan {
 .counter.sel > polygon {
   stroke: var(--accent);
 }
+.upper {
+  fill: none;
+  stroke: var(--counter-edge);
+}
 .switched-recep {
   fill: var(--outlet);
   font-weight: 600;

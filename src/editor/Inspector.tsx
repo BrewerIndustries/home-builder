@@ -40,7 +40,7 @@ import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
 import { faceSpans, outerSides } from '../calc/faces.ts';
 import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
-import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, MIN_COUNTER_SPACE } from '../calc/counters.ts';
+import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, freeSpaces, MIN_COUNTER_SPACE, peninsulaJoin, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
 interface Props {
@@ -349,10 +349,10 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     const setCutout = (id: string, patch: Partial<Cutout>) => up({ cutouts: c.cutouts.map((k) => (k.id === id ? { ...k, ...patch } : k)) });
     const addCutout = (kind: CutoutKind) => up({ cutouts: [...c.cutouts, { id: uid('cx'), kind, offset: len / 2, width: CUTOUT_WIDTH[kind] }] });
     const room = counterRoom(project, c);
-    const spaces = counterSpaces(c).filter(([s, e]) => e - s >= MIN_COUNTER_SPACE).length;
+    const spaces = (c.island ? freeSpaces(project, c) : counterSpaces(c)).filter(([s, e]) => e - s >= MIN_COUNTER_SPACE).length;
     return (
       <aside className="inspector">
-        <h3>{c.island ? 'Island' : 'Counter'}</h3>
+        <h3>{c.island ? (peninsulaJoin(project, c) ? 'Peninsula' : 'Island') : 'Counter'}</h3>
         <Field label="Length">
           <LengthInput value={len} min={MIN_COUNTER_SPACE} onChange={setLength} />
         </Field>
@@ -371,6 +371,14 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </div>
           </div>
         ))}
+        {!c.island && (
+          <label className="link-row">
+            <input type="checkbox" checked={c.uppers !== false} onChange={(e) => up({ uppers: e.target.checked })} /> Wall cabinets above
+            {c.uppers !== false && (
+              <span className="muted"> · {formatFtIn(upperSpans(project, c).reduce((s, [a, b]) => s + b - a, 0), { compact: true })}, skipping windows and the range hood</span>
+            )}
+          </label>
+        )}
         <div className="row wrap">
           <button onClick={() => addCutout('sink')}>Add sink</button>
           <button onClick={() => addCutout('range')}>Add range</button>

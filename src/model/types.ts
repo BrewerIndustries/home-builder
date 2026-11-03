@@ -132,6 +132,8 @@ export interface Counter {
   side: 1 | -1;
   island: boolean;
   cutouts: Cutout[];
+  /** Wall cabinets above (wall counters only); on unless false. */
+  uppers?: boolean;
 }
 
 export type CeilingType = 'flat' | 'vaulted' | 'cathedral' | 'tray' | 'coffered';
