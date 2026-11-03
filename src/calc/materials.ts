@@ -10,13 +10,14 @@ import { floorLines } from './floor.ts';
 import { lightingLines } from './lighting.ts';
 import { outdoorLines } from './outdoor.ts';
 import { counterLines, islandReceptacles } from './counters.ts';
+import { furnitureLines } from './furniture.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen';
+  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing';
   item: string;
   qty: number;
   unit: string;
@@ -201,6 +202,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   lines.push(...outdoorLines(project));
   lines.push(...lightingLines(project));
   lines.push(...counterLines(project));
+  lines.push(...furnitureLines(project));
 
   // Door and window schedule, by kind and nominal size (e.g. 3068 = 3'0" × 6'8").
   const units = new Map<string, number>();

@@ -12,6 +12,7 @@ import { foundationChecks } from './foundation.ts';
 import { lightingChecks } from './lighting.ts';
 import { outdoorChecks } from './outdoor.ts';
 import { kitchenChecks } from './kitchen.ts';
+import { basinReach, furnitureChecks, roomLavatories } from './furniture.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -213,8 +214,19 @@ export function ircChecks(project: Project): CodeCheck[] {
     for (const room of project.rooms) {
       const label = room.name || room.type;
       if (room.type === 'bath') {
+        const lavs = roomLavatories(project, room);
+        if (lavs.length) {
+          // Basins drawn: measure each one.
+          for (const lav of lavs) {
+            const reach = basinReach(project, lav);
+            add({ rule: 'Bathroom receptacle within 36" of the basin', section: 'E3901.6', status: reach <= 36.5 ? 'pass' : 'fail', message: `${label}: ${Number.isFinite(reach) ? `nearest receptacle ${formatFtIn(reach)} from the vanity` : 'no receptacle'} (max 36")`, targetId: lav.id });
+          }
+          const gfci = roomOutletCount(project, room, 'gfci') === roomOutletCount(project, room);
+          add({ rule: 'Bathroom receptacles GFCI protected', section: 'E3902', status: gfci ? 'pass' : 'fail', message: `${label}: ${gfci ? 'all GFCI' : 'mark every bathroom receptacle GFCI'}`, targetId: room.id });
+          continue;
+        }
         const has = roomOutletCount(project, room, 'gfci') > 0;
-        add({ rule: 'Bathroom GFCI receptacle near the basin', section: 'E3901.6 / E3902', status: has ? 'pass' : 'fail', message: `${label}: ${has ? 'GFCI present — confirm it is within 36" of the basin' : 'needs a GFCI receptacle within 36" of each basin'}`, targetId: room.id });
+        add({ rule: 'Bathroom GFCI receptacle near the basin', section: 'E3901.6 / E3902', status: has ? 'pass' : 'fail', message: `${label}: ${has ? 'GFCI present — confirm it is within 36" of the basin (or draw the vanity with the Fixture tool to measure it)' : 'needs a GFCI receptacle within 36" of each basin'}`, targetId: room.id });
         continue;
       }
       if (room.type === 'hall') {
@@ -388,6 +400,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const c of lightingChecks(project)) add(c);
   for (const c of outdoorChecks(project)) add(c);
   for (const c of kitchenChecks(project)) add(c);
+  for (const c of furnitureChecks(project)) add(c);
 
   return checks;
 }
@@ -400,6 +413,7 @@ export const NOT_CHECKED = [
   'Outdoor receptacle height above grade (E3901.7: grade isn\'t modelled, height is from the floor); balcony, deck and porch receptacles',
   'Stairways, handrails and guards (R311.7, R312)',
   'Hallway width (R311.6)',
+  'Plumbing sizing, venting and fixture units (Chapters 29–31); tub and fixture clearances other than R307.1 water closet / lavatory / shower; the 30" between adjacent water closet and bidet centres',
   'Fire separation, garage–dwelling (R302)',
   'Energy efficiency (Chapter 11)',
   'Footing size for soil bearing and storeys (Table R403.1), foundation reinforcement and floor framing (Chapter 5)',

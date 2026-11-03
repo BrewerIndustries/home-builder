@@ -297,6 +297,7 @@ export function CodeView({ project, onSelect }: { project: Project; onSelect(h: 
     if (project.walls.some((w) => w.id === id)) return { kind: 'wall', id };
     if (project.counters.some((c) => c.id === id)) return { kind: 'counter', id };
     if (project.outlets.some((o) => o.id === id)) return { kind: 'outlet', id };
+    if (project.furniture.some((f) => f.id === id)) return { kind: 'furniture', id };
     return null;
   };
   return (

@@ -586,6 +586,31 @@ svg.plan {
 .counter.sel > polygon {
   stroke: var(--accent);
 }
+.furniture rect,
+.furniture ellipse,
+.furniture circle {
+  fill: var(--canvas);
+  stroke: var(--muted);
+}
+.furniture line {
+  stroke: var(--muted);
+}
+.furniture text {
+  fill: var(--muted);
+  font-weight: 600;
+}
+.furniture.fixture-sym rect,
+.furniture.fixture-sym ellipse,
+.furniture.fixture-sym circle,
+.furniture.fixture-sym line {
+  stroke: var(--wall-ext);
+}
+.furniture.sel rect,
+.furniture.sel ellipse,
+.furniture.sel circle,
+.furniture.sel line {
+  stroke: var(--accent);
+}
 .upper {
   fill: none;
   stroke: var(--counter-edge);
@@ -1264,4 +1289,10 @@ tr.no-pick {
   align-items: center;
   gap: 6px;
   font-size: 13px;
+}
+.check-pass {
+  color: var(--pass);
+}
+.check-fail {
+  color: var(--fail);
 }

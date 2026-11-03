@@ -12,7 +12,8 @@ import { Inspector } from './editor/Inspector.tsx';
 import { PlanCanvas, type PlanCanvasHandle, type Tool } from './editor/PlanCanvas.tsx';
 import { downloadJson, loadSaved, readProjectFile, readUnderlay, save } from './model/persist.ts';
 import { historyReducer, initHistory } from './model/store.ts';
-import type { DimMode, WallKind } from './model/types.ts';
+import type { DimMode, FurnitureKind, WallKind } from './model/types.ts';
+import { FURNITURE, FURNITURE_KINDS } from './calc/furniture.ts';
 import { SiteView } from './site/SiteView.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
@@ -41,6 +42,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'light', label: 'Light', key: 'l', icon: '⊗' },
   { id: 'alarm', label: 'Alarm', key: 'a', icon: '◉' },
   { id: 'counter', label: 'Counter', key: 'k', icon: '▬' },
+  { id: 'furniture', label: 'Fixture', key: 'u', icon: '◫' },
 ];
 
 export function App() {
@@ -48,6 +50,7 @@ export function App() {
   const project = history.present;
   const [tab, setTab] = useState<Tab>('plan');
   const [tool, setTool] = useState<Tool>('select');
+  const [furnitureKind, setFurnitureKind] = useState<FurnitureKind>('toilet');
   const [wallKind, setWallKind] = useState<WallKind>(project.walls.length ? 'interior' : 'exterior');
   const [selection, setSelection] = useState<Hit | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -81,7 +84,7 @@ export function App() {
   // Drop a stale selection after undo / delete.
   useEffect(() => {
     if (!selection) return;
-    const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures, counter: project.counters };
+    const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures, counter: project.counters, furniture: project.furniture };
     if (!lists[selection.kind].some((x) => x.id === selection.id)) setSelection(null);
   }, [project, selection]);
 
@@ -264,6 +267,24 @@ export function App() {
                 <span>{t.label}</span>
               </button>
             ))}
+            {tool === 'furniture' && (
+              <select value={furnitureKind} onChange={(e) => setFurnitureKind(e.target.value as FurnitureKind)} title="What the Fixture tool places" aria-label="Fixture to place">
+                <optgroup label="Fixtures & appliances">
+                  {FURNITURE_KINDS.filter((k) => FURNITURE[k].fixture).map((k) => (
+                    <option key={k} value={k}>
+                      {FURNITURE[k].label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Furniture">
+                  {FURNITURE_KINDS.filter((k) => !FURNITURE[k].fixture).map((k) => (
+                    <option key={k} value={k}>
+                      {FURNITURE[k].label}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            )}
             <div className="sep" />
             <div className="seg" role="group" aria-label="New wall type">
               <button className={wallKind === 'exterior' ? 'active' : ''} onClick={() => setWallKind('exterior')} title="New walls and rooms are exterior">
@@ -308,6 +329,7 @@ export function App() {
             tool={tool}
             setTool={setTool}
             wallKind={wallKind}
+            furnitureKind={furnitureKind}
             selection={selection}
             setSelection={setSelection}
             onRoomCreated={() => wallKind === 'exterior' && setWallKind('interior')}

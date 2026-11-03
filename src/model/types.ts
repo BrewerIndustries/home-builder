@@ -123,6 +123,25 @@ export interface Cutout {
  * Base cabinets + countertop: a rectangle from its back edge a → b, `depth` deep.
  * A wall counter's back edge sits on a wall face; an island stands free.
  */
+export type FurnitureKind =
+  | 'toilet' | 'lavatory' | 'tub' | 'shower' | 'washer' | 'dryer' | 'water-heater'
+  | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser';
+
+/**
+ * A plan symbol: a plumbing fixture or appliance (priced and code-checked) or a
+ * piece of furniture (drawn only). A w × d rectangle centred on `at`; unrotated,
+ * its back is toward −y and its front toward +y; `rot` turns it clockwise on the
+ * plan, in degrees.
+ */
+export interface Furniture {
+  id: string;
+  kind: FurnitureKind;
+  at: Point;
+  rot: number;
+  w: number;
+  d: number;
+}
+
 export interface Counter {
   id: string;
   a: Point;
@@ -247,6 +266,7 @@ export interface Project {
   fixtures: Fixture[];
   switches: WallSwitch[];
   counters: Counter[];
+  furniture: Furniture[];
   /** What the plan's dimensions measure; centrelines when unset. */
   dimMode?: DimMode;
   /** Which wall faces inside / outside dimensions measure to; finished when unset. */
@@ -366,7 +386,7 @@ export const WALL_DEFAULTS: Record<WallKind, { thickness: number; height: number
 };
 
 export function emptyProject(name = 'Untitled house'): Project {
-  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], fixtures: [], switches: [], counters: [], framing: { ...DEFAULT_FRAMING } };
+  return { version: 1, name, walls: [], openings: [], rooms: [], outlets: [], fixtures: [], switches: [], counters: [], furniture: [], framing: { ...DEFAULT_FRAMING } };
 }
 
 let counter = 0;

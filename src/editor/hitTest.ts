@@ -2,6 +2,7 @@ import { dist, pointInPolygon, projectOnWall, wallLength } from '../model/geomet
 import { outletPosition } from './outletGeometry.ts';
 import type { Point, Project } from '../model/types.ts';
 import { counterCorners } from '../calc/counters.ts';
+import { onFurniture } from '../calc/furniture.ts';
 
 export type Hit =
   | { kind: 'outlet'; id: string }
@@ -10,9 +11,10 @@ export type Hit =
   | { kind: 'opening'; id: string }
   | { kind: 'wall'; id: string }
   | { kind: 'counter'; id: string }
+  | { kind: 'furniture'; id: string }
   | { kind: 'room'; id: string };
 
-/** What's under `p` (world inches). `slop` is the pointer tolerance in inches. Wall devices beat ceiling devices beat openings beat walls beat counters beat rooms. */
+/** What's under `p` (world inches). `slop` is the pointer tolerance in inches. Wall devices beat ceiling devices beat openings beat walls beat fixtures / furniture beat counters beat rooms. */
 export function hitTest(project: Project, p: Point, slop: number): Hit | null {
   const walls = new Map(project.walls.map((w) => [w.id, w]));
   for (const o of project.outlets) {
@@ -39,6 +41,8 @@ export function hitTest(project: Project, p: Point, slop: number): Hit | null {
     if (perp <= w.thickness / 2 + slop && (!best || perp < best.perp)) best = { id: w.id, perp };
   }
   if (best) return { kind: 'wall', id: best.id };
+  // Last drawn on top: search from the end.
+  for (const f of [...project.furniture].reverse()) if (onFurniture(f, p)) return { kind: 'furniture', id: f.id };
   for (const c of project.counters) if (pointInPolygon(p, counterCorners(c))) return { kind: 'counter', id: c.id };
   // Smallest containing room wins, so a room drawn inside another stays clickable.
   const rooms = project.rooms.filter((r) => pointInPolygon(p, r.points));

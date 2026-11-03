@@ -1,6 +1,7 @@
 import { dist, pointAlong, projectOnWall, wallNormal } from '../model/geometry.ts';
 import { regionEdges } from './regions.ts';
 import { autoOutdoor } from './outdoor.ts';
+import { lavatoryOutlets, roomLavatories } from './furniture.ts';
 import { counterPositions, counterSpans, roomCounters, type CounterSpan } from './counters.ts';
 import { uid, type Outlet, type OutletKind, type Point, type Project, type Room, type RoomType } from '../model/types.ts';
 
@@ -17,8 +18,8 @@ import { uid, type Outlet, type OutletKind, type Point, type Project, type Room,
 //
 // Kitchens with counters drawn get countertop spacing along each counter space
 // (see counters.ts) and general spacing on the rest of their walls; without
-// counters, every kitchen wall gets countertop spacing. Basins aren't modelled,
-// so bathrooms get one GFCI on the longest run. Treat the result as a starting
+// counters, every kitchen wall gets countertop spacing. Bathrooms get a GFCI over
+// each vanity drawn with the Fixture tool, else one on the longest run. Treat the result as a starting
 // layout to adjust.
 //
 // Layout runs along the room's REGION edges (see regions.ts), one wall line at a
@@ -105,6 +106,10 @@ export function autoOutlets(project: Project): Outlet[] {
           ...openPieces(run, spans).flatMap(([lo, hi]) => layoutRun(hi - lo, GENERAL_MAX_GAP).map((t) => ({ run, t: lo + t, kind: 'gfci' as const, height: 16 }))),
         ];
       });
+    } else if (room.type === 'bath' && roomLavatories(project, room).length) {
+      // Vanities drawn: a GFCI over each (E3901.6), on the wall behind it.
+      for (const o of lavatoryOutlets(project, room)) out.push({ id: uid('e'), ...o, auto: true });
+      targets = [];
     } else if (room.type === 'bath' || room.type === 'hall') {
       const run = longest(runs);
       const wanted = run && (room.type === 'bath' || runs.some((x) => x.length >= 120));

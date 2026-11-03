@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
 import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls } from '../calc/counters.ts';
 
@@ -51,6 +51,8 @@ export type Action =
   | { type: 'updateSwitch'; id: string; patch: Partial<Omit<WallSwitch, 'id'>>; transient?: boolean }
   | { type: 'replaceAutoLighting'; fixtures: Fixture[]; switches: WallSwitch[] }
   | { type: 'addCounter'; counter: Counter }
+  | { type: 'addFurniture'; item: Furniture }
+  | { type: 'updateFurniture'; id: string; patch: Partial<Omit<Furniture, 'id'>>; transient?: boolean }
   | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
   | { type: 'setElectrical'; patch: Partial<ElectricalSettings> }
   | { type: 'setUnderlay'; underlay: Underlay | undefined }
@@ -146,6 +148,12 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'addCounter':
       return { ...p, counters: [...p.counters, action.counter] };
 
+    case 'addFurniture':
+      return { ...p, furniture: [...p.furniture, action.item] };
+
+    case 'updateFurniture':
+      return { ...p, furniture: p.furniture.map((f) => (f.id === action.id ? { ...f, ...action.patch } : f)) };
+
     case 'updateCounter':
       return { ...p, counters: p.counters.map((c) => (c.id === action.id ? clampCutouts({ ...c, ...action.patch }) : c)) };
 
@@ -175,6 +183,7 @@ export function projectReducer(p: Project, action: Action): Project {
         switches: p.switches.filter((s) => !ids.has(s.id) && wallIds.has(s.wallId)).map((s) => (s.controls.some((c) => ids.has(c)) ? { ...s, controls: s.controls.filter((c) => !ids.has(c)) } : s)),
         rooms: p.rooms.filter((r) => !ids.has(r.id)),
         counters: p.counters.filter((c) => !ids.has(c.id)),
+        furniture: p.furniture.filter((f) => !ids.has(f.id)),
         site: p.site && {
           ...p.site,
           lot: ids.has('lot') ? undefined : p.site.lot,
@@ -278,6 +287,7 @@ export function migrate(p: Project): Project {
     fixtures: p.fixtures ?? [],
     switches: p.switches ?? [],
     counters: p.counters ?? [],
+    furniture: p.furniture ?? [],
     rooms: p.rooms.map((r) => ({ ...r, type: r.type ?? 'other' })),
     framing: { ...DEFAULT_FRAMING, ...p.framing },
     roof: { ...DEFAULT_ROOF, ...p.roof },

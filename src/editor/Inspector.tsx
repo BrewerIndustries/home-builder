@@ -1,6 +1,7 @@
 import type { Dispatch, ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
 import { narrowest } from '../calc/outline.ts';
+import { BED_SIZES, FURNITURE, FURNITURE_KINDS, furnitureChecks, furnitureRoom, placeFurniture } from '../calc/furniture.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
 import { frameWall, studCount } from '../calc/framing.ts';
 import { netClearOpening } from '../calc/irc.ts';
@@ -29,6 +30,8 @@ import {
   type LumberSize,
   type OutletKind,
   type FixtureKind,
+  type Furniture,
+  type FurnitureKind,
   type Project,
   type Counter,
   type Cutout,
@@ -425,6 +428,74 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </p>
         <button className="danger" onClick={() => del(c.id)}>
           Delete {c.island ? 'island' : 'counter'}
+        </button>
+      </aside>
+    );
+  }
+
+  if (selection?.kind === 'furniture') {
+    const f = project.furniture.find((x) => x.id === selection.id);
+    if (!f) return null;
+    const spec = FURNITURE[f.kind];
+    const up = (patch: Partial<Furniture>) => dispatch({ type: 'updateFurniture', id: f.id, patch });
+    const room = furnitureRoom(project, f);
+    const checks = furnitureChecks(project).filter((c) => c.targetId === f.id);
+    const bed = BED_SIZES.find(([, w, d]) => w === f.w && d === f.d)?.[0] ?? '';
+    return (
+      <aside className="inspector">
+        <h3>{spec.label}</h3>
+        <Field label="Type">
+          <select value={f.kind} onChange={(e) => up({ kind: e.target.value as FurnitureKind, w: FURNITURE[e.target.value as FurnitureKind].w, d: FURNITURE[e.target.value as FurnitureKind].d })}>
+            {FURNITURE_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {FURNITURE[k].label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {f.kind === 'bed' && (
+          <Field label="Size">
+            <select value={bed} onChange={(e) => {
+              const size = BED_SIZES.find(([n]) => n === e.target.value);
+              if (size) up({ w: size[1], d: size[2] });
+            }}>
+              {!bed && <option value="">Custom</option>}
+              {BED_SIZES.map(([n, w, d]) => (
+                <option key={n} value={n}>
+                  {n} ({w}" × {d}")
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label="Width">
+          <LengthInput value={f.w} min={6} onChange={(v) => up({ w: v })} />
+        </Field>
+        <Field label="Depth" hint="Front to back">
+          <LengthInput value={f.d} min={6} onChange={(v) => up({ d: v })} />
+        </Field>
+        <div className="row wrap">
+          <button onClick={() => up({ rot: (f.rot + 270) % 360 })} title="Turn 90° anticlockwise">
+            ⟲ 90°
+          </button>
+          <button onClick={() => up({ rot: (f.rot + 90) % 360 })} title="Turn 90° clockwise">
+            ⟳ 90°
+          </button>
+          <button onClick={() => up(placeFurniture(project, f, f.at))} title="Back it flat against the nearest wall">
+            Against wall
+          </button>
+        </div>
+        {checks.map((c, i) => (
+          <p key={i} className={`small check-${c.status}`}>
+            {c.status === 'pass' ? '✓' : '✗'} {c.section}: {c.message}
+          </p>
+        ))}
+        <p className="muted small">
+          {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
+          {spec.fixture ? 'Priced in the estimate; ' : 'Drawn on the plan and in 3D only; '}drag to move — it backs onto the wall you drop it by (Shift keeps it free-standing).
+        </p>
+        <button className="danger" onClick={() => del(f.id)}>
+          Delete {spec.label.toLowerCase()}
         </button>
       </aside>
     );

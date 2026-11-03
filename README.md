@@ -46,7 +46,7 @@ From the umbrella folder the desktop app's preview config is `home-builder` in
 
 | Tab | What you get |
 |---|---|
-| **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (click inside closed walls to make a room of exactly that shape — L-shapes and angled walls included — or drag a rectangle; walls already on the plan are reused, never doubled; a new room is named and typed from its size, doors and counters — garage, kitchen, closet, hall, bath, living or bedroom — and Guess name & use in the Room panel re-runs it), Door, Window, Outlet, Switch, Light and Alarm tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; drag a whole wall to slide it sideways (walls tied to it — corners and Ts — stretch to follow, room outlines too; it snaps in line or flush with parallel walls, then to the 6" grid, Shift for whole inches, and a readout shows how far it moved); double-click a wall to split it there (never through a door or window), or Split in two / Join in the wall panel (openings, outlets and switches stay where they are in the plan); undo/redo; per-wall stud size and height; per-room use and ceiling. |
+| **Plan** | SVG editor: Wall (click-click, type a length + ↵, Shift = any angle), Room (click inside closed walls to make a room of exactly that shape — L-shapes and angled walls included — or drag a rectangle; walls already on the plan are reused, never doubled; a new room is named and typed from its size, doors and counters — garage, kitchen, closet, hall, bath, living or bedroom — and Guess name & use in the Room panel re-runs it), Door, Window, Outlet, Switch, Light, Alarm, Counter and Fixture tools; endpoint + 6" grid snapping; drag wall ends, openings and outlets; drag a whole wall to slide it sideways (walls tied to it — corners and Ts — stretch to follow, room outlines too; it snaps in line or flush with parallel walls, then to the 6" grid, Shift for whole inches, and a readout shows how far it moved); double-click a wall to split it there (never through a door or window), or Split in two / Join in the wall panel (openings, outlets and switches stay where they are in the plan); undo/redo; per-wall stud size and height; per-room use and ceiling. |
 | **Floorplan image / PDF** | *Import floorplan* takes a photo, scan or **PDF**. For a PDF, pick the sheet from page thumbnails and, if the title block gives a drawing scale (1/8" … 1" = 1'-0"), it comes in at true size with no calibrating. *Straighten* fixes a photo taken at an angle: click the four corners of anything that's really a rectangle, optionally type its real width and depth (which also sets the scale), and the picture is warped flat and cropped to it. *Calibrate scale*: click both ends of a known dimension and type its real length. Then trace over it. |
 | **Site** | Lot outline (quick rectangle around the house or draw any polygon) with per-edge setbacks → dashed buildable envelope; hardscape / bed areas (pavers, concrete, gravel, mulch, sod, deck) with depth; ~40-species plant library drawn at mature spread; lot coverage and impervious %. Quantities roll into the Estimate. |
 | **3D** | Orbitable three.js model (lazy-loaded): walls cut around doors and windows, glass, floors, and every ceiling type. Cut-away at 4 ft. |
@@ -88,6 +88,22 @@ The Code check adds two **NKBA guidelines** (they warn, never fail): the **work 
 
 **L-shaped runs:** draw a counter along each wall from the inside corner. Where they overlap, the corner square counts once in the base cabinets and the countertop. A sink, range, fridge or dishwasher reaching into that square warns (*Appliance in the corner*). **Peninsulas:** start a Counter drag on a wall counter and drag out into the room; an island that runs into a wall counter or butts a wall is a peninsula, and its receptacle spaces are measured from the connecting edge. **Wall cabinets** hang over every wall counter (dashed on the plan, 54"–84" in 3D, 12" deep) except over windows and ranges; untick *Wall cabinets above* to drop them. Each range gets a hood allowance. **Landing areas** (NKBA): 24" one side of the sink and 18" the other, 15" and 12" beside the range, 15" beside the fridge. Countertop over a dishwasher counts, and a run that turns a corner carries on round it.
 
+### Fixtures and furniture
+
+The **Fixture** tool (U) places plan symbols. Pick what to place from the list beside the tools: **fixtures and appliances** (toilet, vanity + basin, bathtub, shower, washer, dryer, water heater) or **furniture** (bed, sofa, armchair, dining table, desk, dresser). Dropped within a foot of a wall, a symbol's back goes flat against the wall face, turned to face into the room; in open floor it stays where you click. Drag to move it: it re-seats against whichever wall you drop it by, and Shift keeps it free-standing. Select one to change its type, width and depth (beds have Twin / Full / Queen / King), turn it 90°, or push it back *Against wall*.
+
+Fixtures are priced in the estimate (allowances plus a rough-in per plumbing fixture), stand up in 3D, and are checked:
+- **R306.1:** the plan has a toilet, a lavatory and a tub or shower. This is info only until you draw any.
+- **R307.1:**
+  - a toilet needs 15" from its centre to a wall or fixture each side, and 21" clear in front;
+  - a lavatory needs 21" clear in front;
+  - a shower needs 24" clear in front (its front is taken as the opening).
+  - Walls, counters and other fixtures block these clearances; furniture doesn't.
+- **P2708.1:** a shower is at least 900 sq in and 30" each way.
+- **E3901.6:** once a vanity is drawn, each basin is measured to the nearest receptacle (36" max). **Auto outlets** puts a GFCI at 44" on the wall behind each vanity, unless one already serves it.
+
+Furniture is drawn on the plan and in 3D only.
+
 ### Lights, switches and alarms
 
 **Auto lights** puts a ceiling light in every room (at the centre, or the point furthest from the walls in an L-shape), a wall switch 6" past the latch side of the room's main door at 48", and a 3-way pair in halls and garages with two or more doors. Smoke alarms go in each bedroom and one outside each sleeping area, about 3 ft out from the bedroom doors (doors within 20 ft share one). With no bedrooms there is one on the floor. Those outside alarms become **combination smoke / CO** when the Project panel says there are fuel-burning appliances, or a garage has a door into the house (R315).
@@ -127,6 +143,7 @@ store a derived value. All lengths are inches.
 
 - **Estimating, not engineering.** Header sizes are a single-storey rule of thumb, *not* IRC Table R602.7(1) (which needs ground snow load and building width). The Code check tab says so on every plan.
 - **IRC checks are a design aid, not a plan review.** Values match the 2018/2021/2024 IRC for the rules implemented; jurisdictions adopt with amendments. Window net-clear openings are estimated from nominal size + operation type. Only numeric requirements are encoded — no ICC code text is reproduced.
+- Fixture symbols don't follow a wall that's dragged (unlike counters); re-seat them with *Against wall*. Tub clearances and fixture-to-fixture centre spacing aren't checked.
 - Room dimensions are measured on the room outline (wall centrelines), not the clear space between finished faces, so R304.2 reads a few inches generous. The narrowest place only counts edges that face each other within 30°, so a chamfered corner isn't a "width". Tray and coffered ceilings still use the bounding box, and the auto name / use is a size-and-doors guess (a 6' × 10' laundry reads as a bath).
 - Setbacks are local zoning, entered by you; the envelope inset is exact for convex lots, approximate for concave ones. Plant sizes are typical figures, not cultivar-specific.
 - Floor joists and girders are laid out and counted, not sized. "Auto" girders keep spans to 12 ft as a layout default, not a span check (IRC R502.3).

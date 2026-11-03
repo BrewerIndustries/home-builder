@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import { exclusiveArea } from '../calc/regions.ts';
+import { isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { counterCorners, counterPoint, islandReceptacles, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
 import { openingChains, outerCorners, roomClearSize, wallDimLabels, type DimLabel } from '../calc/faces.ts';
-import type { Counter, Fixture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
+import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { outletPosition } from './outletGeometry.ts';
@@ -51,6 +53,9 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         );
       })}
 
+      {project.furniture.map((f) => (
+        <FurnitureGlyph key={f.id} f={f} selected={selection?.kind === 'furniture' && selection.id === f.id} px={px} />
+      ))}
       {project.counters.map((c) => (
         <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
       ))}
@@ -390,6 +395,144 @@ function WallDimension({ l, px }: { l: DimLabel; px(n: number): number }) {
 
 
 /** Counter outline with its sinks (double bowl) and ranges (four burners). */
+/** A fixture or piece of furniture, drawn in its own frame (back toward −y). */
+export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selected: boolean; ghost?: boolean; px(n: number): number }) {
+  const [w, d] = [f.w, f.d];
+  const [l, t, r, b] = [-w / 2, -d / 2, w / 2, d / 2];
+  const sw = px(1);
+  const rect = (x0: number, y0: number, x1: number, y1: number, key?: string, rx = 0) => <rect key={key} x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx={rx} strokeWidth={sw} />;
+  const label = (text: string) => (
+    <text x={0} y={0} fontSize={Math.min(9, w / 3, d / 2)} textAnchor="middle" dominantBaseline="central">
+      {text}
+    </text>
+  );
+  let body: ReactNode;
+  switch (f.kind) {
+    case 'toilet': {
+      const tank = Math.min(9, d / 3);
+      body = (
+        <>
+          {rect(l, t, r, t + tank)}
+          <ellipse cx={0} cy={t + tank + (d - tank) / 2} rx={w / 2 - 1.5} ry={(d - tank) / 2} strokeWidth={sw} />
+        </>
+      );
+      break;
+    }
+    case 'lavatory':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <ellipse cx={0} cy={1} rx={Math.min(w * 0.32, 9)} ry={d * 0.3} strokeWidth={sw} />
+          <circle cx={0} cy={t + 2.5} r={1} strokeWidth={sw} />
+        </>
+      );
+      break;
+    case 'tub':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {rect(l + 3, t + 3, r - 3, b - 3, undefined, Math.min(8, d / 4))}
+          <circle cx={l + 9} cy={0} r={1.5} strokeWidth={sw} />
+        </>
+      );
+      break;
+    case 'shower':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <line x1={l} y1={t} x2={r} y2={b} strokeWidth={sw} />
+          <line x1={r} y1={t} x2={l} y2={b} strokeWidth={sw} />
+          <circle cx={0} cy={0} r={2} strokeWidth={sw} />
+        </>
+      );
+      break;
+    case 'washer':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <circle cx={0} cy={2} r={Math.min(w, d) * 0.32} strokeWidth={sw} />
+          {label('W')}
+        </>
+      );
+      break;
+    case 'dryer':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {label('D')}
+        </>
+      );
+      break;
+    case 'water-heater':
+      body = (
+        <>
+          <circle cx={0} cy={0} r={Math.min(w, d) / 2} strokeWidth={sw} />
+          {label('WH')}
+        </>
+      );
+      break;
+    case 'bed': {
+      const pw = (w - 9) / 2;
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {w > 50 ? [rect(l + 3, t + 3, l + 3 + pw, t + 12, 'p1', 3), rect(r - 3 - pw, t + 3, r - 3, t + 12, 'p2', 3)] : rect(l + 3, t + 3, r - 3, t + 12, 'p', 3)}
+          <line x1={l} y1={t + 22} x2={r} y2={t + 22} strokeWidth={sw} />
+        </>
+      );
+      break;
+    }
+    case 'sofa':
+    case 'chair': {
+      const [back, arm] = f.kind === 'sofa' ? [9, 7] : [7, 5];
+      body = (
+        <>
+          {rect(l, t, r, b, undefined, 3)}
+          {rect(l + arm, t, r - arm, t + back)}
+          <line x1={l + arm} y1={t + back} x2={l + arm} y2={b} strokeWidth={sw} />
+          <line x1={r - arm} y1={t + back} x2={r - arm} y2={b} strokeWidth={sw} />
+        </>
+      );
+      break;
+    }
+    case 'table': {
+      const n = Math.max(1, Math.floor(w / 30));
+      const seats = Array.from({ length: n }, (_, i) => l + (w * (i + 0.5)) / n);
+      body = (
+        <>
+          {seats.flatMap((x) => [rect(x - 8, t - 14, x + 8, t - 2, `t${x}`, 2), rect(x - 8, b + 2, x + 8, b + 14, `b${x}`, 2)])}
+          {rect(l, t, r, b)}
+        </>
+      );
+      break;
+    }
+    case 'desk':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {rect(-9, b + 2, 9, b + 18, undefined, 3)}
+        </>
+      );
+      break;
+    case 'dresser':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {[1, 2].map((i) => (
+            <line key={i} x1={l + (w * i) / 3} y1={t} x2={l + (w * i) / 3} y2={b} strokeWidth={sw} />
+          ))}
+        </>
+      );
+      break;
+  }
+  const cls = ['furniture', isFixture(f) ? 'fixture-sym' : '', selected ? 'sel' : '', ghost ? 'ghost' : ''].filter(Boolean).join(' ');
+  return (
+    <g className={cls} transform={`translate(${f.at.x} ${f.at.y}) rotate(${f.rot})`}>
+      {body}
+    </g>
+  );
+}
+
 export function CounterGlyph({ c, selected, px }: { c: Counter; selected: boolean; px(n: number): number }) {
   const poly = (pts: { x: number; y: number }[]) => pts.map((p) => `${p.x},${p.y}`).join(' ');
   return (

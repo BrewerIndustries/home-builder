@@ -1,6 +1,7 @@
 import { pointAlong, polygonArea, wallDir, wallLength } from '../model/geometry.ts';
 import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
+import { FURNITURE, isFixture } from './furniture.ts';
 import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
@@ -13,7 +14,7 @@ export type V3 = [number, number, number];
 
 /** Axis-aligned-in-wall-space box: a wall piece or a coffer beam. */
 export interface Box {
-  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter';
+  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture';
   /** Centre. */
   c: V3;
   /** Size along the wall, height, thickness. */
@@ -226,6 +227,10 @@ export function buildScene(project: Project): Scene3D {
       const at = counterPoint(c, k.offset, c.depth / 2);
       boxes.push({ kind: 'counter', c: [at.x, FRIDGE_HEIGHT / 2, at.y], size: [k.width, FRIDGE_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });
     }
+  }
+  for (const f of project.furniture) {
+    const h = FURNITURE[f.kind].h;
+    boxes.push({ kind: isFixture(f) ? 'fixture' : 'furniture', c: [f.at.x, h / 2, f.at.y], size: [f.w, h, f.d], rotY: (-f.rot * Math.PI) / 180 });
   }
   faces.push(...roofFaces(project).map((f) => ({ ...f, roofPart: true })));
   const pts = project.walls.flatMap((w) => [w.a, w.b]);

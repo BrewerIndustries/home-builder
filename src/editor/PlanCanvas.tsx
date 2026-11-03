@@ -19,13 +19,14 @@ import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
 import { snapWallMove, splitAt, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounter } from '../calc/counters.ts';
-import { finishedThickness, uid, type Counter, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
-import { CounterGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
+import { newFurniture, placeFurniture } from '../calc/furniture.ts';
+import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
+import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'calibrate' | 'straighten' | 'moveImage';
+export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage';
 
 interface View {
   /** Screen pixels per inch. */
@@ -43,6 +44,7 @@ type Drag =
   | { kind: 'outlet'; id: string }
   | { kind: 'switch'; id: string }
   | { kind: 'fixture'; id: string; grab: Point }
+  | { kind: 'furniture'; id: string; grab: Point; started: boolean }
   | { kind: 'room'; start: Point; end: Point; raw: Point }
   | { kind: 'newCounter'; start: Point; end: Point }
   | { kind: 'counter'; id: string; start: Point; a: Point; b: Point; along: Point | null; started: boolean }
@@ -61,6 +63,8 @@ interface Props {
   tool: Tool;
   setTool(t: Tool): void;
   wallKind: WallKind;
+  /** What the Fixture tool places. */
+  furnitureKind: FurnitureKind;
   selection: Hit | null;
   setSelection(h: Hit | null): void;
   onRoomCreated?(): void;
@@ -71,7 +75,7 @@ interface Props {
 const SNAP_PX = 10;
 const GRID = 6;
 
-export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selection, setSelection, onRoomCreated, onMessage, ref }: Props) {
+export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitureKind, selection, setSelection, onRoomCreated, onMessage, ref }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState<View>({ scale: 1.2, ox: 80, oy: 80 });
   const [cursor, setCursor] = useState<{ p: Point; snapped: 'endpoint' | 'grid' | null } | null>(null);
@@ -292,6 +296,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
           const f = project.fixtures.find((x) => x.id === hit.id)!;
           dispatch({ type: 'checkpoint' });
           drag.current = { kind: 'fixture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y } };
+        } else if (hit?.kind === 'furniture') {
+          const f = project.furniture.find((x) => x.id === hit.id)!;
+          drag.current = { kind: 'furniture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y }, started: false };
         } else if (hit?.kind === 'opening') {
           const o = project.openings.find((x) => x.id === hit.id)!;
           const w = project.walls.find((x) => x.id === o.wallId)!;
@@ -374,6 +381,12 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const linkTo = tool === 'light' ? project.switches.filter((s) => s.controls.some((c) => lights.has(c))).map((s) => s.id) : [];
         dispatch({ type: 'addFixture', fixture, linkTo });
         setSelection({ kind: 'fixture', id: fixture.id });
+        return;
+      }
+      case 'furniture': {
+        const item = newFurniture(project, furnitureKind, { x: Math.round(raw.x), y: Math.round(raw.y) }, uid('fu'));
+        dispatch({ type: 'addFurniture', item });
+        setSelection({ kind: 'furniture', id: item.id });
         return;
       }
       case 'calibrate': {
@@ -464,6 +477,19 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const along = Math.round(Math.max(2, Math.min(wallLength(w) - 2, (raw.x - w.a.x) * dir.x + (raw.y - w.a.y) * dir.y)));
         if (along !== o.offset) dispatch({ type: 'updateSwitch', id: o.id, patch: { offset: along, auto: false }, transient: true });
       }
+      return;
+    }
+    if (d?.kind === 'furniture') {
+      const f = project.furniture.find((x) => x.id === d.id);
+      if (!f) return;
+      const p = { x: Math.round(raw.x - d.grab.x), y: Math.round(raw.y - d.grab.y) };
+      if (!d.started && dist(p, f.at) < 2) return;
+      // Re-seats against whichever wall it's dragged to; Shift keeps it free-standing.
+      const next = shift ? { ...f, at: p } : placeFurniture(project, f, p);
+      if (next.at.x === f.at.x && next.at.y === f.at.y && next.rot === f.rot) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'updateFurniture', id: f.id, patch: { at: next.at, rot: next.rot }, transient: true });
       return;
     }
     if (d?.kind === 'fixture') {
@@ -601,6 +627,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
     const near = nearestWall(project.walls, cursor.p, 18 / s + 6);
     if (near) ghost = { wall: near.wall, opening: newOpening(tool, near.wall, near.along) };
   }
+  const furnitureGhost = tool === 'furniture' && cursor ? newFurniture(project, furnitureKind, { x: Math.round(cursor.p.x), y: Math.round(cursor.p.y) }, 'ghost') : null;
 
   const u = project.underlay;
 
@@ -665,6 +692,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
 
           <PlanDrawing project={project} selection={selection} px={px} wallDims={s * 12 > 4} overallDims={s * 12 > 2} />
           {ghost && <OpeningGlyph wall={ghost.wall} o={ghost.opening} selected={false} ghost px={px} />}
+          {furnitureGhost && <FurnitureGlyph f={furnitureGhost} selected={false} ghost px={px} />}
 
           {selectedWall &&
             [selectedWall.a, selectedWall.b].map((p, i) => (
@@ -776,6 +804,8 @@ function hintFor(tool: Tool, drawing: boolean): string {
       return 'Click in a room to add a ceiling light — it joins that room’s switches';
     case 'alarm':
       return 'Click in a room to add a smoke alarm (smoke / CO where CO alarms are required)';
+    case 'furniture':
+      return 'Click to place the chosen fixture or furniture — near a wall its back goes flat against it · drag to move (Shift = free-standing) · turn it in the panel';
     case 'counter':
       return 'Drag along a wall for a counter on that face (click = 6 ft) · drag in open floor for an island · add a sink or range in the panel';
     case 'calibrate':
