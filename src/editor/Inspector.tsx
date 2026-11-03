@@ -20,6 +20,7 @@ import {
   JOIST_SIZES,
   type JoistSize,
   studFor,
+  uid,
   type Ceiling,
   type CeilingType,
   type LumberSize,
@@ -32,6 +33,7 @@ import {
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { LengthInput } from './LengthInput.tsx';
+import { joinCandidates, splitPoint } from '../model/wallEdit.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
 interface Props {
@@ -72,6 +74,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     if (!w) return null;
     const f = frameWall(w, project);
     const def = w.kind === 'exterior' ? project.framing.exteriorStud : project.framing.interiorStud;
+    const splitAt = splitPoint(project, w);
     return (
       <aside className="inspector">
         <h3>Wall W{project.walls.indexOf(w) + 1}</h3>
@@ -110,6 +113,25 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             {n}
           </p>
         ))}
+        <div className="row">
+          <button
+            disabled={splitAt === null}
+            title={splitAt === null ? 'Too short, or openings leave no room for a split' : `Two walls meeting ${formatFtIn(splitAt)} from the start`}
+            onClick={() => {
+              if (splitAt === null) return;
+              const newId = uid('w');
+              dispatch({ type: 'splitWall', id: w.id, at: splitAt, newId });
+              setSelection({ kind: 'wall', id: newId });
+            }}
+          >
+            Split in two
+          </button>
+          {joinCandidates(project, w).map((o) => (
+            <button key={o.id} onClick={() => dispatch({ type: 'joinWalls', id: w.id, otherId: o.id })} title="Merge into one straight wall; openings and outlets stay put">
+              Join W{project.walls.indexOf(o) + 1}
+            </button>
+          ))}
+        </div>
         <button className="danger" onClick={() => del(w.id)}>
           Delete wall
         </button>

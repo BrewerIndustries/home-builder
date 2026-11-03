@@ -15,6 +15,7 @@ import {
 import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
+import { wallDragPoints } from '../model/wallEdit.ts';
 import { finishedThickness, uid, type Fixture, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
 import { OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
@@ -33,6 +34,8 @@ interface View {
 type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
   | { kind: 'vertex'; current: Point }
+  /** Whole-wall drag: slides across its own length; `current` = the points travelling with it. */
+  | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean }
   | { kind: 'opening'; id: string; grab: number }
   | { kind: 'outlet'; id: string }
   | { kind: 'switch'; id: string }
@@ -288,6 +291,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
           const along = (raw.x - w.a.x) * wallDir(w).x + (raw.y - w.a.y) * wallDir(w).y;
           dispatch({ type: 'checkpoint' });
           drag.current = { kind: 'opening', id: o.id, grab: along - o.offset };
+        } else if (hit?.kind === 'wall') {
+          const w = project.walls.find((x) => x.id === hit.id)!;
+          drag.current = { kind: 'wall', start: raw, normal: wallNormal(w), moved: 0, current: wallDragPoints(project, w), started: false };
         } else if (!hit) {
           drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
         }
@@ -392,6 +398,20 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
         const along = (raw.x - w.a.x) * dir.x + (raw.y - w.a.y) * dir.y - d.grab;
         const offset = clampOpeningOffset(w, o.width, Math.round(along));
         if (offset !== o.offset) dispatch({ type: 'updateOpening', id: o.id, patch: { offset }, transient: true });
+      }
+      return;
+    }
+    if (d?.kind === 'wall') {
+      // Whole inches across the wall; attached walls stretch to follow.
+      const perp = Math.round((raw.x - d.start.x) * d.normal.x + (raw.y - d.start.y) * d.normal.y);
+      if (perp !== d.moved) {
+        // Checkpoint on the first real move, so a plain click to select adds no undo step.
+        if (!d.started) dispatch({ type: 'checkpoint' });
+        d.started = true;
+        const delta = { x: d.normal.x * (perp - d.moved), y: d.normal.y * (perp - d.moved) };
+        dispatch({ type: 'translatePoints', from: d.current, delta, transient: true });
+        d.current = d.current.map((q) => ({ x: q.x + delta.x, y: q.y + delta.y }));
+        d.moved = perp;
       }
       return;
     }
@@ -670,7 +690,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, selecti
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to pan · drag wall ends or openings to move · ⌫ deletes';
+      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow) · drag its ends or openings to move them · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':

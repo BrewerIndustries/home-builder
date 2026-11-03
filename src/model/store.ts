@@ -1,5 +1,6 @@
 import { clampOpeningOffset, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
 import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation } from './types.ts';
+import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -20,6 +21,10 @@ export type Action =
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
   | { type: 'moveVertex'; from: Point; to: Point; transient?: boolean }
+  /** Slide wall ends and room corners at `from` by `delta` (whole-wall drag; see wallDragPoints). */
+  | { type: 'translatePoints'; from: Point[]; delta: Point; transient?: boolean }
+  | { type: 'splitWall'; id: string; at: number; newId: string }
+  | { type: 'joinWalls'; id: string; otherId: string }
   | { type: 'addOpening'; opening: Opening }
   | { type: 'updateOpening'; id: string; patch: Partial<Omit<Opening, 'id'>>; transient?: boolean }
   | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>> }
@@ -116,6 +121,15 @@ export function projectReducer(p: Project, action: Action): Project {
         rooms: p.rooms.map((r) => ({ ...r, points: r.points.map(move) })),
       });
     }
+
+    case 'translatePoints':
+      return reclampOpenings(translatePoints(p, action.from, action.delta));
+
+    case 'splitWall':
+      return splitWall(p, action.id, action.at, action.newId);
+
+    case 'joinWalls':
+      return reclampOpenings(joinWalls(p, action.id, action.otherId));
 
     case 'addOpening':
       return reclampOpenings({ ...p, openings: [...p.openings, action.opening] });
