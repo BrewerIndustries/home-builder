@@ -2,6 +2,7 @@ import { wallAreas } from '../calc/materials.ts';
 import { PlanDrawing } from '../editor/PlanDrawing.tsx';
 import type { DimMode, Project } from '../model/types.ts';
 import { DIM_ROOM, pickScale } from '../calc/sheet.ts';
+import { fixtureSchedule } from '../calc/furniture.ts';
 
 // A to-scale floor plan sheet for printing / Save as PDF: US Letter landscape,
 // largest standard architectural scale that fits, title block and scale bar.
@@ -30,43 +31,75 @@ export function PrintSheet({ project }: { project: Project }) {
   const px = (n: number) => ((n * 0.75) / 72) * scale.denom;
   const floor = wallAreas(project).floor;
   const barFt = scale.denom >= 96 ? 20 : 10;
+  const schedule = fixtureSchedule(project);
+  const marks = schedule.flatMap((r) => r.at.map((at) => ({ at, text: r.mark })));
 
   return (
-    <div className="print-only print-sheet">
-      <svg
-        width={`${vbW / scale.denom}in`}
-        height={`${vbH / scale.denom}in`}
-        viewBox={`${minX - lead} ${minY - lead} ${vbW} ${vbH}`}
-        className="print-plan"
-      >
-        <PlanDrawing project={project} px={px} outlets />
-        <g transform={`translate(${minX} ${minY + h + trail - px(22)})`}>
-          {Array.from({ length: barFt / 5 }, (_, i) => (
-            <rect key={i} x={i * 60} y={0} width={60} height={px(5)} fill={i % 2 ? 'none' : 'currentColor'} stroke="currentColor" strokeWidth={px(0.6)} />
-          ))}
-          <text x={0} y={px(16)} fontSize={px(9)}>
-            0
-          </text>
-          <text x={barFt * 12} y={px(16)} fontSize={px(9)} textAnchor="middle">
-            {barFt}'
-          </text>
-        </g>
-      </svg>
-      <div className="title-block">
-        <div>
-          <div className="tb-name">{project.name}</div>
-          <div>Floor plan · {Math.round(floor).toLocaleString()} sq ft · {DIM_NOTE[project.dimMode ?? 'centre']}</div>
+    <>
+      <div className="print-only print-sheet">
+        <svg
+          width={`${vbW / scale.denom}in`}
+          height={`${vbH / scale.denom}in`}
+          viewBox={`${minX - lead} ${minY - lead} ${vbW} ${vbH}`}
+          className="print-plan"
+        >
+          <PlanDrawing project={project} px={px} outlets marks={marks} />
+          <g transform={`translate(${minX} ${minY + h + trail - px(22)})`}>
+            {Array.from({ length: barFt / 5 }, (_, i) => (
+              <rect key={i} x={i * 60} y={0} width={60} height={px(5)} fill={i % 2 ? 'none' : 'currentColor'} stroke="currentColor" strokeWidth={px(0.6)} />
+            ))}
+            <text x={0} y={px(16)} fontSize={px(9)}>
+              0
+            </text>
+            <text x={barFt * 12} y={px(16)} fontSize={px(9)} textAnchor="middle">
+              {barFt}'
+            </text>
+          </g>
+        </svg>
+        <div className="title-block">
+          <div>
+            <div className="tb-name">{project.name}</div>
+            <div>Floor plan · {Math.round(floor).toLocaleString()} sq ft · {DIM_NOTE[project.dimMode ?? 'centre']}</div>
+          </div>
+          <div>
+            <div className="tb-label">Scale</div>
+            <div>{scale.label}</div>
+          </div>
+          <div>
+            <div className="tb-label">Date</div>
+            <div>{new Date().toLocaleDateString()}</div>
+          </div>
+          <div className="tb-note">Design drawing — not for construction without code / engineering review.</div>
         </div>
-        <div>
-          <div className="tb-label">Scale</div>
-          <div>{scale.label}</div>
-        </div>
-        <div>
-          <div className="tb-label">Date</div>
-          <div>{new Date().toLocaleDateString()}</div>
-        </div>
-        <div className="tb-note">Design drawing — not for construction without code / engineering review.</div>
       </div>
-    </div>
+      {schedule.length > 0 && (
+        <div className="print-only schedule-page">
+          <div className="tb-name">{project.name} — fixture schedule</div>
+          <table className="schedule">
+            <thead>
+              <tr>
+                <th>Mark</th>
+                <th>Fixture / appliance</th>
+                <th>Size (w × d)</th>
+                <th>Qty</th>
+                <th>Room</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedule.map((r) => (
+                <tr key={r.mark}>
+                  <td>{r.mark}</td>
+                  <td>{r.item}</td>
+                  <td>{r.size}</td>
+                  <td>{r.qty}</td>
+                  <td>{r.rooms || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="tb-note">Marks match the tags on the floor plan. Sizes are the drawn symbol; confirm rough-in dimensions against the chosen product.</div>
+        </div>
+      )}
+    </>
   );
 }

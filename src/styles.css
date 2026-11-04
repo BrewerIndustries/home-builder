@@ -1228,6 +1228,13 @@ tr.no-pick {
   .print-only {
     display: block;
   }
+  .schedule-page {
+    break-before: page;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10pt;
+  }
   .print-sheet {
     color: #000;
     height: 7.4in;
@@ -1300,4 +1307,28 @@ tr.no-pick {
   stroke: transparent;
   pointer-events: stroke;
   cursor: move;
+}
+
+/* Fixture schedule (print sheet, page 2) and its tags on the plan */
+.fixture-mark {
+  fill: #000;
+  stroke: #fff;
+  paint-order: stroke;
+  font-weight: 700;
+}
+table.schedule {
+  border-collapse: collapse;
+  font-size: 9pt;
+  width: 100%;
+}
+table.schedule th,
+table.schedule td {
+  border: 0.75pt solid #000;
+  padding: 3pt 6pt;
+  text-align: left;
+}
+table.schedule th {
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }

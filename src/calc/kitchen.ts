@@ -4,6 +4,7 @@ import { formatFtIn } from '../model/units.ts';
 import { CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, roomCounters } from './counters.ts';
 import type { Counter, Cutout } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
+import { roomAt } from './lighting.ts';
 
 // Kitchen planning guidelines (NKBA, not code — so they warn, never fail):
 //   work triangle: sink, range and fridge, each leg 4'–9', the three ≤ 26' in all;
@@ -64,9 +65,11 @@ export function outlineGap(p: Point[], q: Point[]): number {
 export function workTriangle(project: Project, roomId: string): { sink: Point; range: Point; fridge: Point; legs: number[] } | null {
   const room = project.rooms.find((r) => r.id === roomId);
   if (!room) return null;
-  const at = (kind: string) => {
+  // In a counter first; else a free-standing sink base, range or fridge in the room.
+  const free = { sink: 'kitchen-sink', range: 'range', fridge: 'fridge' } as const;
+  const at = (kind: keyof typeof free) => {
     for (const c of roomCounters(project, room)) for (const k of c.cutouts) if (k.kind === kind) return counterPoint(c, k.offset, c.depth / 2);
-    return null;
+    return project.furniture.find((f) => f.kind === free[kind] && roomAt(project, f.at)?.id === room.id)?.at ?? null;
   };
   const [sink, range, fridge] = [at('sink'), at('range'), at('fridge')];
   if (!sink || !range || !fridge) return null;
@@ -77,11 +80,12 @@ export function kitchenChecks(project: Project): CodeCheck[] {
   const out: CodeCheck[] = [];
   for (const room of project.rooms.filter((r) => r.type === 'kitchen')) {
     const counters = roomCounters(project, room);
-    if (!counters.length) continue;
+    const appliances = project.furniture.some((f) => ['kitchen-sink', 'range', 'fridge'].includes(f.kind) && roomAt(project, f.at)?.id === room.id);
+    if (!counters.length && !appliances) continue;
     const label = room.name || 'Kitchen';
     const tri = workTriangle(project, room.id);
     if (!tri) {
-      out.push({ rule: 'Work triangle', section: SECTION, status: 'info', message: `${label}: add a sink, range and fridge to the counters to check it`, targetId: room.id });
+      out.push({ rule: 'Work triangle', section: SECTION, status: 'info', message: `${label}: add a sink, range and fridge (in the counters or free-standing) to check it`, targetId: room.id });
     } else {
       const total = tri.legs.reduce((s, l) => s + l, 0);
       const bad = tri.legs.filter((l) => l < LEG_MIN - 0.5 || l > LEG_MAX + 0.5);

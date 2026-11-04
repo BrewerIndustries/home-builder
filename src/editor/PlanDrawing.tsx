@@ -21,9 +21,11 @@ interface Props {
   wallDims?: boolean;
   overallDims?: boolean;
   outlets?: boolean;
+  /** Schedule tags (WC-1, LAV-1 …) printed beside fixtures. */
+  marks?: { at: Point; text: string }[];
 }
 
-export function PlanDrawing({ project, px, selection = null, wallDims = true, overallDims = true, outlets = true }: Props) {
+export function PlanDrawing({ project, px, selection = null, wallDims = true, overallDims = true, outlets = true, marks = [] }: Props) {
   const wallsById = new Map(project.walls.map((w) => [w.id, w]));
   return (
     <g className="plan-drawing">
@@ -109,6 +111,11 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {wallDims && wallDimLabels(project, project.dimMode ?? 'centre').map((l, i) => <WallDimension key={`${l.wall.id}-${i}`} l={l} px={px} />)}
       {wallDims && openingChains(project, project.dimMode ?? 'centre').map((c) => <OpeningChain key={c.wall.id} {...c} extra={project.dimOffsets?.[`chain:${c.wall.id}`] ?? 0} px={px} />)}
       {overallDims && <OverallDimensions project={project} px={px} />}
+      {marks.map((m, i) => (
+        <text key={`mark${i}`} x={m.at.x} y={m.at.y} className="fixture-mark" fontSize={px(8)} strokeWidth={px(2.5)} textAnchor="middle" dominantBaseline="central">
+          {m.text}
+        </text>
+      ))}
     </g>
   );
 }
@@ -460,6 +467,57 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
           <line x1={l} y1={t} x2={r} y2={b} strokeWidth={sw} />
           <line x1={r} y1={t} x2={l} y2={b} strokeWidth={sw} />
           <circle cx={0} cy={0} r={2} strokeWidth={sw} />
+        </>
+      );
+      break;
+    case 'bidet':
+      body = (
+        <>
+          <ellipse cx={0} cy={0} rx={w / 2 - 0.5} ry={d / 2 - 0.5} strokeWidth={sw} />
+          <ellipse cx={0} cy={2} rx={w / 4} ry={d / 4} strokeWidth={sw} />
+          <circle cx={0} cy={t + 3} r={1} strokeWidth={sw} />
+        </>
+      );
+      break;
+    case 'kitchen-sink': {
+      // Double bowl, faucet at the back.
+      const bw = (w - 9) / 2;
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {rect(l + 3, t + 5, l + 3 + bw, b - 3, 'b1', 2)}
+          {rect(r - 3 - bw, t + 5, r - 3, b - 3, 'b2', 2)}
+          <circle cx={0} cy={t + 2.5} r={1} strokeWidth={sw} />
+        </>
+      );
+      break;
+    }
+    case 'laundry-sink':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {rect(l + 3, t + 5, r - 3, b - 3, undefined, 2)}
+          <circle cx={0} cy={t + 2.5} r={1} strokeWidth={sw} />
+        </>
+      );
+      break;
+    case 'range': {
+      const [bx, by] = [w / 4, d / 5];
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {[-1, 1].flatMap((i) => [-1, 1].map((j) => <circle key={`${i}${j}`} cx={i * bx} cy={j * by + 1} r={Math.min(w, d) / 7} strokeWidth={sw} />))}
+          <line x1={l} y1={t + 3} x2={r} y2={t + 3} strokeWidth={sw} />
+        </>
+      );
+      break;
+    }
+    case 'fridge':
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <line x1={l} y1={b - 2} x2={r} y2={b - 2} strokeWidth={sw} />
+          {label('REF')}
         </>
       );
       break;

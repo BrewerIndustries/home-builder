@@ -1,10 +1,10 @@
-import { dist, pointAlong, projectOnWall, wallLength, wallNormal } from '../model/geometry.ts';
-import type { Furniture, FurnitureKind, Outlet, Point, Project, Room, Wall } from '../model/types.ts';
+import { dist, pointAlong, projectOnWall, samePoint, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
+import type { Furniture, FurnitureKind, Opening, Outlet, Point, Project, Room, Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
-import { convexOverlap, counterCorners } from './counters.ts';
+import { convexOverlap, counterCorners, counterPoint, CUTOUT_LABEL } from './counters.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
-import { roomAt } from './lighting.ts';
+import { roomAt, VEHICLE_DOOR } from './lighting.ts';
 
 // Plan symbols: plumbing fixtures and appliances (priced, code-checked, drawn in
 // 3D) and furniture (drawn, so a plan reads as rooms people use). Each is a
@@ -32,12 +32,17 @@ export interface FurnitureSpec {
 
 export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   toilet: { label: 'Toilet', w: 20, d: 28, h: 30, fixture: true },
+  bidet: { label: 'Bidet', w: 15, d: 24, h: 15, fixture: true },
   lavatory: { label: 'Vanity + basin', w: 30, d: 21, h: 34, fixture: true },
   tub: { label: 'Bathtub', w: 60, d: 30, h: 20, fixture: true },
   shower: { label: 'Shower', w: 36, d: 36, h: 4, fixture: true },
+  'kitchen-sink': { label: 'Kitchen sink (sink base)', w: 33, d: 24, h: 36, fixture: true },
+  'laundry-sink': { label: 'Laundry sink', w: 24, d: 22, h: 34, fixture: true },
   washer: { label: 'Washer', w: 27, d: 30, h: 38, fixture: true },
   dryer: { label: 'Dryer', w: 27, d: 30, h: 38, fixture: true },
   'water-heater': { label: 'Water heater', w: 24, d: 24, h: 60, fixture: true },
+  range: { label: 'Range (freestanding)', w: 30, d: 26, h: 36, fixture: true },
+  fridge: { label: 'Refrigerator (freestanding)', w: 36, d: 30, h: 70, fixture: true },
   bed: { label: 'Bed', w: 60, d: 80, h: 24, fixture: false },
   sofa: { label: 'Sofa', w: 84, d: 36, h: 32, fixture: false },
   chair: { label: 'Armchair', w: 34, d: 34, h: 32, fixture: false },
@@ -151,6 +156,7 @@ export function clearZones(f: Furniture): [string, Point[]][] {
   const [hw, hd] = [f.w / 2, f.d / 2];
   switch (f.kind) {
     case 'toilet':
+    case 'bidet':
       return [
         ['15" from its centre to the side', localRect(f, -15, -hd + 1, 15, hd)],
         ['21" clear in front', localRect(f, -hw, hd, hw, hd + 21)],
@@ -251,8 +257,12 @@ export function furnitureChecks(project: Project): CodeCheck[] {
       out.push({ rule: 'Shower size (900 sq in, 30" each way)', section: 'P2708.1', status: ok ? 'pass' : 'fail', message: `${name}: ${formatFtIn(f.w)} × ${formatFtIn(f.d)} = ${Math.round(f.w * f.d)} sq in`, targetId: f.id });
     }
   }
+  out.push(...doorSwingChecks(project));
   return out;
 }
+
+/** Fixtures that need a supply, drain and vent. */
+const WET: ReadonlySet<FurnitureKind> = new Set(['toilet', 'bidet', 'lavatory', 'tub', 'shower', 'kitchen-sink', 'laundry-sink', 'washer']);
 
 export function furnitureLines(project: Project): MaterialLine[] {
   const count = (k: FurnitureKind) => project.furniture.filter((f) => f.kind === k).length;
@@ -262,10 +272,184 @@ export function furnitureLines(project: Project): MaterialLine[] {
   add('Vanity + lavatory faucet (allowance)', count('lavatory'), 'lavatories on the plan');
   add('Bathtub + valve (allowance)', count('tub'), 'tubs on the plan');
   add('Shower pan + valve + door (allowance)', count('shower'), 'showers on the plan');
+  add('Bidet (allowance)', count('bidet'), 'bidets on the plan');
+  add('Kitchen sink + faucet (allowance)', count('kitchen-sink'), 'free-standing sink bases on the plan');
+  add('Laundry sink + faucet (allowance)', count('laundry-sink'), 'laundry sinks on the plan');
+  add('Range (allowance)', count('range'), 'free-standing ranges on the plan');
+  add('Refrigerator (allowance)', count('fridge'), 'free-standing refrigerators on the plan');
   add('Washer outlet box', count('washer'), 'one per washer');
   add('Dryer vent kit', count('dryer'), 'one per dryer');
   add('Water heater (allowance)', count('water-heater'), 'water heaters on the plan');
-  const rough = project.furniture.filter((f) => ['toilet', 'lavatory', 'tub', 'shower', 'washer'].includes(f.kind)).length;
+  const rough = project.furniture.filter((f) => WET.has(f.kind)).length;
   add('Plumbing rough-in per fixture (allowance)', rough, 'supply, drain and vent per fixture; size runs with a plumber (IRC Chapters 29–31)');
   return lines;
+}
+
+// ── v2: follow dragged walls, door swings, fixture schedule ────────────────
+
+/** The wall an item's back sits flat on (as placeFurniture leaves it), with where along it and which side. */
+export function furnitureHost(project: Project, f: Furniture): { wall: Wall; along: number; side: 1 | -1 } | null {
+  const back = furniturePoint(f, 0, -f.d / 2);
+  const front = { x: furniturePoint(f, 0, 1).x - f.at.x, y: furniturePoint(f, 0, 1).y - f.at.y };
+  for (const w of project.walls) {
+    const { along, perp } = projectOnWall(w, back);
+    if (Math.abs(Math.abs(perp) - w.thickness / 2) > 1 || along < -1 || along > wallLength(w) + 1) continue;
+    const n = wallNormal(w);
+    const dot = front.x * n.x + front.y * n.y;
+    if (Math.abs(dot) < 0.99) continue;
+    const side: 1 | -1 = dot > 0 ? 1 : -1;
+    // The back must be on the face the item looks out from, not the far one.
+    const foot = pointAlong(w, along);
+    if ((back.x - foot.x) * n.x * side + (back.y - foot.y) * n.y * side < 0) continue;
+    return { wall: w, along, side };
+  }
+  return null;
+}
+
+/**
+ * After walls move, carry the items backed onto them along: same distance along
+ * the wall, back on its new face, turned with it (kept on the wall if it got
+ * shorter). Free-standing items stay put.
+ */
+export function followFurniture(prev: Project, next: Project): Project {
+  if (prev.walls === next.walls || !next.furniture.length) return next;
+  const after = new Map(next.walls.map((w) => [w.id, w]));
+  let changed = false;
+  const furniture = next.furniture.map((f) => {
+    const host = furnitureHost(prev, f);
+    const w = host && after.get(host.wall.id);
+    if (!host || !w) return f;
+    const old = host.wall;
+    if (samePoint(old.a, w.a) && samePoint(old.b, w.b) && old.thickness === w.thickness) return f;
+    const len = wallLength(w);
+    const along = len >= f.w ? Math.max(f.w / 2, Math.min(len - f.w / 2, host.along)) : len / 2;
+    const n = wallNormal(w);
+    const front = { x: n.x * host.side, y: n.y * host.side };
+    const foot = pointAlong(w, along);
+    const off = w.thickness / 2 + f.d / 2;
+    const at = { x: tidy(foot.x + front.x * off), y: tidy(foot.y + front.y * off) };
+    const rot = norm((Math.atan2(front.y, front.x) * 180) / Math.PI - 90);
+    changed = true;
+    return { ...f, at, rot };
+  });
+  return changed ? { ...next, furniture } : next;
+}
+
+/** The floor a hinged door sweeps: a quarter circle from the hinge, the leaf's width in radius. Null for windows and vehicle doors. */
+export function doorSwing(project: Project, o: Opening): Point[] | null {
+  if (o.kind !== 'door' || o.width > VEHICLE_DOOR) return null;
+  const wall = project.walls.find((w) => w.id === o.wallId);
+  if (!wall) return null;
+  const d = wallDir(wall);
+  const n = wallNormal(wall);
+  const side = o.swing?.side ?? 1;
+  const hingeAtA = (o.swing?.hinge ?? 'a') === 'a';
+  const c = pointAlong(wall, o.offset);
+  const k = hingeAtA ? -1 : 1;
+  const t = wall.thickness / 2;
+  // Same geometry as the plan symbol: hinge on the face, leaf square to the wall when open.
+  const h = { x: c.x + d.x * k * (o.width / 2) + n.x * t * side, y: c.y + d.y * k * (o.width / 2) + n.y * t * side };
+  const u = { x: n.x * side, y: n.y * side };
+  const v = { x: -d.x * k, y: -d.y * k };
+  const pts = [h];
+  for (let i = 0; i <= 8; i++) {
+    const a = (i / 8) * (Math.PI / 2);
+    pts.push({ x: h.x + o.width * (u.x * Math.cos(a) + v.x * Math.sin(a)), y: h.y + o.width * (u.y * Math.cos(a) + v.y * Math.sin(a)) });
+  }
+  return pts;
+}
+
+/** Doors whose swing runs into a fixture, piece of furniture or counter. */
+export function doorSwingChecks(project: Project): CodeCheck[] {
+  const doors = project.openings.filter((o) => doorSwing(project, o));
+  if (!doors.length || (!project.furniture.length && !project.counters.length)) return [];
+  const out: CodeCheck[] = [];
+  const things: [string, Point[]][] = [
+    ...project.furniture.map((f): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}`, furnitureCorners(f)]),
+    ...project.counters.map((c): [string, Point[]] => [c.island ? 'an island' : 'a counter', counterCorners(c)]),
+  ];
+  for (const o of doors) {
+    const swing = doorSwing(project, o)!;
+    const hits = [...new Set(things.filter(([, outline]) => blocked(swing, [outline])).map(([what]) => what))];
+    if (!hits.length) continue;
+    const wall = project.walls.find((w) => w.id === o.wallId)!;
+    const where = roomAt(project, swing[Math.floor(swing.length / 2)])?.name;
+    out.push({
+      rule: 'Door swing clear',
+      section: 'Layout',
+      status: 'warn',
+      message: `${formatFtIn(o.width)} door on ${wall.id}${where ? ` into ${where}` : ''} swings into ${hits.join(' and ')} — move it or flip the swing`,
+      targetId: o.id,
+    });
+  }
+  if (!out.length) out.push({ rule: 'Door swing clear', section: 'Layout', status: 'pass', message: `${doors.length} door swing${doors.length === 1 ? '' : 's'} clear of fixtures, furniture and counters` });
+  return out;
+}
+
+/** Plan-schedule tag prefixes. Counter appliances share the free-standing ones. */
+const MARK: Partial<Record<FurnitureKind, string>> = {
+  toilet: 'WC', bidet: 'BD', lavatory: 'LAV', tub: 'T', shower: 'SH', 'kitchen-sink': 'S', 'laundry-sink': 'LS',
+  washer: 'W', dryer: 'D', 'water-heater': 'WH', range: 'R', fridge: 'REF',
+};
+const CUTOUT_KIND = { sink: 'kitchen-sink', range: 'range', fridge: 'fridge', dishwasher: null } as const;
+
+export interface ScheduleRow {
+  mark: string;
+  item: string;
+  size: string;
+  qty: number;
+  rooms: string;
+  /** Where each one is, for its tag on the printed plan. */
+  at: Point[];
+}
+
+/**
+ * The fixture schedule: one row per kind and size, tagged WC-1, LAV-1 … in
+ * plan order. Sinks, ranges and fridges set in counters count too; a dishwasher
+ * gets DW.
+ */
+export function fixtureSchedule(project: Project): ScheduleRow[] {
+  type Entry = { prefix: string; item: string; size: string; room?: string; at: Point; order: number };
+  const entries: Entry[] = [];
+  const kinds = Object.keys(MARK) as FurnitureKind[];
+  for (const f of project.furniture.filter(isFixture)) {
+    entries.push({
+      prefix: MARK[f.kind]!,
+      item: FURNITURE[f.kind].label,
+      size: `${formatFtIn(f.w)} × ${formatFtIn(f.d)}`,
+      room: furnitureRoom(project, f)?.name,
+      at: furniturePoint(f, 0, f.d / 2 + 6),
+      order: kinds.indexOf(f.kind),
+    });
+  }
+  for (const c of project.counters) {
+    for (const k of c.cutouts) {
+      const kind = CUTOUT_KIND[k.kind];
+      const p = counterPoint(c, k.offset, c.depth / 2);
+      entries.push({
+        prefix: kind ? MARK[kind]! : 'DW',
+        item: `${CUTOUT_LABEL[k.kind]} (in counter)`,
+        size: `${formatFtIn(k.width)} wide`,
+        room: roomAt(project, p)?.name,
+        at: counterPoint(c, k.offset, c.depth + 6),
+        order: kind ? kinds.indexOf(kind) + 0.5 : kinds.length,
+      });
+    }
+  }
+  entries.sort((a, b) => a.order - b.order);
+  const rows: ScheduleRow[] = [];
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    let row = rows.find((r) => r.mark.startsWith(`${e.prefix}-`) && r.item === e.item && r.size === e.size);
+    if (!row) {
+      const n = (counts.get(e.prefix) ?? 0) + 1;
+      counts.set(e.prefix, n);
+      row = { mark: `${e.prefix}-${n}`, item: e.item, size: e.size, qty: 0, rooms: '', at: [] };
+      rows.push(row);
+    }
+    row.qty++;
+    row.at.push(e.at);
+    if (e.room && !row.rooms.split(', ').includes(e.room)) row.rooms = row.rooms ? `${row.rooms}, ${e.room}` : e.room;
+  }
+  return rows;
 }

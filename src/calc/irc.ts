@@ -9,7 +9,7 @@ import { exclusiveArea } from './regions.ts';
 import { framingTakeoff } from './framing.ts';
 import { roofCalc } from './roof.ts';
 import { foundationChecks } from './foundation.ts';
-import { lightingChecks } from './lighting.ts';
+import { lightingChecks, roomAt } from './lighting.ts';
 import { outdoorChecks } from './outdoor.ts';
 import { kitchenChecks } from './kitchen.ts';
 import { basinReach, furnitureChecks, roomLavatories } from './furniture.ts';
@@ -288,7 +288,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const room of project.rooms.filter((r) => r.type === 'kitchen')) {
     const label = room.name || room.type;
     const counters = roomCounters(project, room);
-    const sink = counters.some((x) => x.cutouts.some((k) => k.kind === 'sink'));
+    const sink = counters.some((x) => x.cutouts.some((k) => k.kind === 'sink')) || project.furniture.some((f) => f.kind === 'kitchen-sink' && roomAt(project, f.at)?.id === room.id);
     add({
       rule: 'Kitchen sink',
       section: 'R306.2',

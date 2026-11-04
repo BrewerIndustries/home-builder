@@ -90,17 +90,23 @@ The Code check adds two **NKBA guidelines** (they warn, never fail): the **work 
 
 ### Fixtures and furniture
 
-The **Fixture** tool (U) places plan symbols. Pick what to place from the list beside the tools: **fixtures and appliances** (toilet, vanity + basin, bathtub, shower, washer, dryer, water heater) or **furniture** (bed, sofa, armchair, dining table, desk, dresser). Dropped within a foot of a wall, a symbol's back goes flat against the wall face, turned to face into the room; in open floor it stays where you click. Drag to move it: it re-seats against whichever wall you drop it by, and Shift keeps it free-standing. Select one to change its type, width and depth (beds have Twin / Full / Queen / King), turn it 90°, or push it back *Against wall*.
+The **Fixture** tool (U) places plan symbols. Pick what to place from the list beside the tools: **fixtures and appliances** (toilet, bidet, vanity + basin, bathtub, shower, kitchen sink base, laundry sink, washer, dryer, water heater, freestanding range and refrigerator) or **furniture** (bed, sofa, armchair, dining table, desk, dresser). Dropped within a foot of a wall, a symbol's back goes flat against the wall face, turned to face into the room; in open floor it stays where you click. Drag to move it: it re-seats against whichever wall you drop it by, and Shift keeps it free-standing. Select one to change its type, width and depth (beds have Twin / Full / Queen / King), turn it 90°, or push it back *Against wall*. A symbol backed onto a wall rides along when that wall is dragged, stretched or turned, like a wall counter; free-standing ones stay put.
 
 Fixtures are priced in the estimate (allowances plus a rough-in per plumbing fixture), stand up in 3D, and are checked:
 - **R306.1:** the plan has a toilet, a lavatory and a tub or shower. This is info only until you draw any.
 - **R307.1:**
-  - a toilet needs 15" from its centre to a wall or fixture each side, and 21" clear in front;
+  - a toilet or bidet needs 15" from its centre to a wall or fixture each side, and 21" clear in front;
   - a lavatory needs 21" clear in front;
   - a shower needs 24" clear in front (its front is taken as the opening).
   - Walls, counters and other fixtures block these clearances; furniture doesn't.
 - **P2708.1:** a shower is at least 900 sq in and 30" each way.
 - **E3901.6:** once a vanity is drawn, each basin is measured to the nearest receptacle (36" max). **Auto outlets** puts a GFCI at 44" on the wall behind each vanity, unless one already serves it.
+
+A free-standing kitchen sink base counts as the kitchen's sink (R306.2), and a free-standing sink, range and fridge count toward the work triangle the same as ones set in a counter.
+
+**Door swings:** a hinged door whose quarter-circle swing runs into a fixture, piece of furniture or counter gets a *Door swing clear* warning (a layout check, not an IRC rule) with the door to click to.
+
+**Fixture schedule:** the printed plan tags every fixture and appliance (WC-1, LAV-1, S-1, R-1, REF-1, DW-1 …, counter sinks / ranges / fridges / dishwashers included) and adds a second page listing mark, item, size, quantity and room — one row per kind and size.
 
 Furniture is drawn on the plan and in 3D only.
 
@@ -143,7 +149,7 @@ store a derived value. All lengths are inches.
 
 - **Estimating, not engineering.** Header sizes are a single-storey rule of thumb, *not* IRC Table R602.7(1) (which needs ground snow load and building width). The Code check tab says so on every plan.
 - **IRC checks are a design aid, not a plan review.** Values match the 2018/2021/2024 IRC for the rules implemented; jurisdictions adopt with amendments. Window net-clear openings are estimated from nominal size + operation type. Only numeric requirements are encoded — no ICC code text is reproduced.
-- Fixture symbols don't follow a wall that's dragged (unlike counters); re-seat them with *Against wall*. Tub clearances and fixture-to-fixture centre spacing aren't checked.
+- Fixture symbols follow only the wall their back sits on; after a wall is split, the half that got a new id leaves its fixtures where they were (*Against wall* re-seats them). Tub clearances and fixture-to-fixture centre spacing aren't checked, and the door-swing check doesn't look at other doors' swings.
 - The partition strings only stop at interior walls square to the plan; angled partitions and T- or U-shaped rooms get no string or clear size.
 - Room dimensions are measured on the room outline (wall centrelines), not the clear space between finished faces, so R304.2 reads a few inches generous. The narrowest place only counts edges that face each other within 30°, so a chamfered corner isn't a "width". Tray and coffered ceilings still use the bounding box, and the auto name / use is a size-and-doors guess (a 6' × 10' laundry reads as a bath).
 - Setbacks are local zoning, entered by you; the envelope inset is exact for convex lots, approximate for concave ones. Plant sizes are typical figures, not cultivar-specific.

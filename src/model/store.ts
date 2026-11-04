@@ -1,7 +1,8 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
 import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
 import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
-import { followWalls } from '../calc/counters.ts';
+import { followWalls as followCounters } from '../calc/counters.ts';
+import { followFurniture } from '../calc/furniture.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -90,6 +91,9 @@ export function historyReducer(h: History, action: Action): History {
 function push(h: History, next: Project): History {
   return { past: [...h.past, h.present].slice(-HISTORY_LIMIT), present: next, future: [] };
 }
+
+/** Counters and wall-backed fixtures ride along when walls move. */
+const followWalls = (prev: Project, next: Project) => followFurniture(prev, followCounters(prev, next));
 
 export function projectReducer(p: Project, action: Action): Project {
   switch (action.type) {

@@ -124,7 +124,8 @@ export interface Cutout {
  * A wall counter's back edge sits on a wall face; an island stands free.
  */
 export type FurnitureKind =
-  | 'toilet' | 'lavatory' | 'tub' | 'shower' | 'washer' | 'dryer' | 'water-heater'
+  | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'shower' | 'kitchen-sink' | 'laundry-sink'
+  | 'washer' | 'dryer' | 'water-heater' | 'range' | 'fridge'
   | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser';
 
 /**

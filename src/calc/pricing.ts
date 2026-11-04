@@ -71,6 +71,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Dishwasher \(allowance\)/, 700],
   [/^Refrigerator \(allowance\)/, 1500],
   [/^Toilet \(allowance\)/, 280],
+  [/^Bidet \(allowance\)/, 450],
+  [/^Laundry sink \+ faucet/, 300],
   [/^Vanity \+ lavatory faucet/, 450],
   [/^Bathtub \+ valve/, 700],
   [/^Shower pan \+ valve/, 900],
