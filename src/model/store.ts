@@ -53,6 +53,7 @@ export type Action =
   | { type: 'updateSwitch'; id: string; patch: Partial<Omit<WallSwitch, 'id'>>; transient?: boolean }
   | { type: 'replaceAutoLighting'; fixtures: Fixture[]; switches: WallSwitch[] }
   | { type: 'addCounter'; counter: Counter }
+  | { type: 'addCounters'; counters: Counter[] }
   | { type: 'addFurniture'; item: Furniture }
   | { type: 'updateFurniture'; id: string; patch: Partial<Omit<Furniture, 'id'>>; transient?: boolean }
   | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
@@ -158,6 +159,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'addCounter':
       return { ...p, counters: [...p.counters, action.counter] };
+
+    case 'addCounters':
+      return { ...p, counters: [...p.counters, ...action.counters] };
 
     case 'addFurniture':
       return { ...p, furniture: [...p.furniture, action.item] };

@@ -112,7 +112,7 @@ export interface ElectricalSettings {
 
 export type SpaceUse = 'none' | 'storage' | 'equipment';
 
-export type CutoutKind = 'sink' | 'range' | 'dishwasher' | 'fridge';
+export type CutoutKind = 'sink' | 'range' | 'dishwasher' | 'fridge' | 'pantry' | 'oven';
 
 /**
  * Something set into a counter run. Sinks, ranges and fridges split it into
@@ -165,7 +165,13 @@ export interface Counter {
   cutouts: Cutout[];
   /** Wall cabinets above (wall counters only); on unless false. */
   uppers?: boolean;
+  /** Islands / peninsulas: how much of the depth, at the front, is seating overhang (knee space, no cabinets under). */
+  seating?: number;
+  /** The corner cabinet where this counter meets another (an L or a peninsula's end); see cornerCabinets. */
+  corner?: CornerCabinet;
 }
+
+export type CornerCabinet = 'lazy-susan' | 'blind';
 
 export type CeilingType = 'flat' | 'vaulted' | 'cathedral' | 'tray' | 'coffered';
 

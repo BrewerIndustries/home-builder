@@ -30,7 +30,9 @@ test('an L shares its corner square: the top and cabinets are not counted twice'
   const lenTop = 120 - top.a.x;
   const lenLeft = 100 - left.a.y;
   assert.equal(qty(p, 'Countertop (allowance)'), Math.ceil(((lenTop + lenLeft) * 25 - 625) / 144));
-  assert.equal(qty(p, 'Base cabinets (allowance)'), Math.ceil(((lenTop + lenLeft - 25) / 12) * 2) / 2);
+  // The corner square is one cabinet, priced as a corner unit (Counters v4), so it leaves the run entirely.
+  assert.equal(qty(p, 'Base cabinets (allowance)'), Math.ceil(((lenTop + lenLeft - 50) / 12) * 2) / 2);
+  assert.equal(qty(p, 'Corner base cabinet, lazy susan (allowance)'), 1);
 });
 
 test('a sink in the corner warns; landing area carries on round the corner', () => {

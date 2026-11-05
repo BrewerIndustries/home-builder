@@ -1,7 +1,7 @@
 import { dist } from '../model/geometry.ts';
 import type { Point, Project } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
-import { CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, roomCounters } from './counters.ts';
+import { CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, KNEE_SPACE, roomCounters, SEAT_WIDTH, seatingDepth, seats } from './counters.ts';
 import type { Counter, Cutout } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
 import { roomAt } from './lighting.ts';
@@ -25,7 +25,7 @@ export const WALKWAY = 36;
 const SECTION = 'NKBA guideline';
 
 /** [larger side, smaller side] needed beside each kind; none for a dishwasher. */
-export const LANDING: Partial<Record<Cutout['kind'], [number, number]>> = { sink: [24, 18], range: [15, 12], fridge: [15, 0] };
+export const LANDING: Partial<Record<Cutout['kind'], [number, number]>> = { sink: [24, 18], range: [15, 12], fridge: [15, 0], oven: [15, 0] };
 
 /** Clear countertop either side of a cutout, along its counter. Infinity where the run carries on round a corner. */
 export function landing(project: Project, c: Counter, k: Cutout): [number, number] {
@@ -135,6 +135,19 @@ export function kitchenChecks(project: Project): CodeCheck[] {
       const tight = aisle < WORK_AISLE - 0.5 || walk < WALKWAY - 0.5;
       const parts = [Number.isFinite(aisle) ? `${formatFtIn(aisle)} to the nearest counter (min 42")` : null, Number.isFinite(walk) ? `${formatFtIn(Math.max(0, walk))} to the nearest wall (min 36")` : null].filter(Boolean);
       out.push({ rule: 'Clearance around the island', section: SECTION, status: tight ? 'warn' : 'pass', message: `${label}: ${parts.join(', ')}`, targetId: isl.id });
+      // Seating: knee space under the overhang, and room for the stools.
+      const knee = seatingDepth(isl);
+      if (knee > 0) {
+        const n = seats(project, isl).length;
+        const ok = knee >= KNEE_SPACE - 0.5 && n > 0;
+        out.push({
+          rule: `Seating knee space (${KNEE_SPACE}" deep, ${SEAT_WIDTH}" per seat)`,
+          section: SECTION,
+          status: ok ? 'pass' : 'warn',
+          message: `${label}: ${formatFtIn(knee)} overhang, ${n} seat${n === 1 ? '' : 's'}${knee < KNEE_SPACE - 0.5 ? ` — wants ${KNEE_SPACE}" of knee space at counter height` : ''}${n ? '' : ` — too short for a ${SEAT_WIDTH}" seat`}`,
+          targetId: isl.id,
+        });
+      }
     }
   }
   return out;

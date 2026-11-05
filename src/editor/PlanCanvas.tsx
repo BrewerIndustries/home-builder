@@ -18,7 +18,7 @@ import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts'
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
 import { snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
-import { counterDir, newCounter } from '../calc/counters.ts';
+import { counterDir, newCounters } from '../calc/counters.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
@@ -90,7 +90,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const [cursor, setCursor] = useState<{ p: Point; snapped: 'endpoint' | 'grid' | null } | null>(null);
   const [chain, setChain] = useState<{ start: Point; first: Point } | null>(null);
   const [roomDrag, setRoomDrag] = useState<{ a: Point; b: Point } | null>(null);
-  const [counterDraft, setCounterDraft] = useState<Counter | null>(null);
+  const [counterDraft, setCounterDraft] = useState<Counter[]>([]);
   const [calPoints, setCalPoints] = useState<Point[]>([]);
   const [calText, setCalText] = useState('');
   const [realW, setRealW] = useState('');
@@ -421,7 +421,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       case 'counter': {
         const p = { x: Math.round(raw.x), y: Math.round(raw.y) };
         drag.current = { kind: 'newCounter', start: p, end: p };
-        setCounterDraft(newCounter(project, p, p, 'draft'));
+        setCounterDraft(newCounters(project, p, p, ['draft', 'draft2']));
         return;
       }
       case 'door':
@@ -564,7 +564,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     }
     if (d?.kind === 'newCounter') {
       d.end = { x: Math.round(raw.x), y: Math.round(raw.y) };
-      setCounterDraft(newCounter(project, d.start, d.end, 'draft'));
+      setCounterDraft(newCounters(project, d.start, d.end, ['draft', 'draft2']));
       return;
     }
     if (d?.kind === 'counter') {
@@ -651,10 +651,11 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     if (d?.kind === 'room' && e) d.end = snap(toWorld(e.clientX, e.clientY)).p;
     setRoomDrag(null);
     if (d?.kind === 'newCounter') {
-      setCounterDraft(null);
-      const counter = newCounter(project, d.start, d.end, uid('ct'));
-      dispatch({ type: 'addCounter', counter });
-      setSelection({ kind: 'counter', id: counter.id });
+      setCounterDraft([]);
+      // One drag can make an L: two counters, one undo step.
+      const counters = newCounters(project, d.start, d.end, [uid('ct'), uid('ct')]);
+      dispatch({ type: 'addCounters', counters });
+      setSelection({ kind: 'counter', id: counters[0].id });
       return;
     }
     if (d?.kind === 'room') {
@@ -829,7 +830,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             <PreviewSegment a={chain.start} b={cursor.p} thickness={newWallThickness} px={px} />
           )}
           {roomDrag && <PreviewRect a={roomDrag.a} b={roomDrag.b} px={px} />}
-          {counterDraft && <CounterGlyph c={counterDraft} selected px={px} />}
+          {counterDraft.map((c) => (
+            <CounterGlyph key={c.id} c={c} selected px={px} />
+          ))}
 
           {calPoints.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={px(5)} className="cal-point" />
@@ -943,7 +946,7 @@ function hintFor(tool: Tool, drawing: boolean): string {
     case 'furniture':
       return 'Click to place the chosen fixture or furniture — near a wall its back goes flat against it · drag to move (Shift = free-standing) · turn it in the panel';
     case 'counter':
-      return 'Drag along a wall for a counter on that face (click = 6 ft) · drag in open floor for an island · add a sink or range in the panel';
+      return 'Drag along a wall for a counter on that face (click = 6 ft) · carry the drag round a corner onto the next wall for an L · drag in open floor for an island · add a sink, range or tall cabinet in the panel';
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
     case 'straighten':

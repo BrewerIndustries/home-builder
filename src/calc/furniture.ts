@@ -1,5 +1,5 @@
 import { dist, pointAlong, projectOnWall, samePoint, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
-import type { Furniture, FurnitureKind, Opening, Outlet, Point, Project, Room, Wall } from '../model/types.ts';
+import type { CutoutKind, Furniture, FurnitureKind, Opening, Outlet, Point, Project, Room, Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { convexOverlap, counterCorners, counterPoint, CUTOUT_LABEL } from './counters.ts';
 import type { CodeCheck } from './irc.ts';
@@ -393,7 +393,8 @@ const MARK: Partial<Record<FurnitureKind, string>> = {
   toilet: 'WC', bidet: 'BD', lavatory: 'LAV', tub: 'T', shower: 'SH', 'kitchen-sink': 'S', 'laundry-sink': 'LS',
   washer: 'W', dryer: 'D', 'water-heater': 'WH', range: 'R', fridge: 'REF',
 };
-const CUTOUT_KIND = { sink: 'kitchen-sink', range: 'range', fridge: 'fridge', dishwasher: null } as const;
+/** Counter cutouts: the free-standing kind they share a tag with, or their own tag (a pantry is a cabinet, not scheduled). */
+const CUTOUT_KIND: Record<CutoutKind, FurnitureKind | 'DW' | 'OV' | null> = { sink: 'kitchen-sink', range: 'range', fridge: 'fridge', dishwasher: 'DW', oven: 'OV', pantry: null };
 
 export interface ScheduleRow {
   mark: string;
@@ -426,10 +427,12 @@ export function fixtureSchedule(project: Project): ScheduleRow[] {
   }
   for (const c of project.counters) {
     for (const k of c.cutouts) {
-      const kind = CUTOUT_KIND[k.kind];
+      const tag = CUTOUT_KIND[k.kind];
+      if (!tag) continue;
+      const kind = tag === 'DW' || tag === 'OV' ? null : tag;
       const p = counterPoint(c, k.offset, c.depth / 2);
       entries.push({
-        prefix: kind ? MARK[kind]! : 'DW',
+        prefix: kind ? MARK[kind]! : tag,
         item: `${CUTOUT_LABEL[k.kind]} (in counter)`,
         size: `${formatFtIn(k.width)} wide`,
         room: roomAt(project, p)?.name,

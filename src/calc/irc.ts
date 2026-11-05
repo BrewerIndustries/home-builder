@@ -207,6 +207,26 @@ export function ircChecks(project: Project): CodeCheck[] {
     }
   }
 
+  // E3901.4 — island / peninsula receptacles: a note from the counters alone, before any outlets are placed.
+  for (const room of project.rooms) {
+    const label = room.name || room.type;
+    const counters = roomCounters(project, room);
+    for (const isl of counters.filter((x) => x.island)) {
+      const pen = peninsulaJoin(project, isl);
+      const what = pen ? 'peninsula' : 'island';
+      const spaces = freeSpaces(project, isl).filter(([s, e]) => Math.max(e - s, isl.depth) >= ISLAND_MIN_LONG && Math.min(e - s, isl.depth) >= ISLAND_MIN_SHORT).length;
+      add({
+        rule: pen ? 'Peninsula receptacle' : 'Island receptacle',
+        section: 'E3901.4',
+        status: 'info',
+        message: spaces
+          ? `${label}: ${formatFtIn(counterLength(isl), { compact: true })} ${what} — ${spaces} receptacle${spaces > 1 ? 's' : ''} included in the estimate (one per space ${ISLAND_MIN_LONG}" × ${ISLAND_MIN_SHORT}" or larger${pen ? ', measured from the connecting edge' : ''}; code editions differ on ${what}s, so check the one you build under)`
+          : `${label}: ${what} too small to need a receptacle`,
+        targetId: isl.id,
+      });
+    }
+  }
+
   // E3901 — receptacle layout. Only once the plan has outlets; before that, one nudge.
   if (project.rooms.length && !project.outlets.length) {
     add({ rule: 'Receptacles', section: 'E3901', status: 'info', message: 'no receptacles on the plan yet — use “Auto-place outlets” on the Plan tab' });
@@ -251,20 +271,6 @@ export function ircChecks(project: Project): CodeCheck[] {
               ? `${label}: a countertop space 12" or wider has no receptacle`
               : `${label}: ${c.spaces} countertop space${c.spaces > 1 ? 's' : ''}, widest gap ${formatFtIn(c.worst)} (max ${formatFtIn(c.limit, { compact: true })})`,
             targetId: room.id,
-          });
-        }
-        for (const isl of counters.filter((x) => x.island)) {
-          const pen = peninsulaJoin(project, isl);
-          const what = pen ? 'peninsula' : 'island';
-          const spaces = freeSpaces(project, isl).filter(([s, e]) => Math.max(e - s, isl.depth) >= ISLAND_MIN_LONG && Math.min(e - s, isl.depth) >= ISLAND_MIN_SHORT).length;
-          add({
-            rule: pen ? 'Peninsula receptacle' : 'Island receptacle',
-            section: 'E3901.4',
-            status: 'info',
-            message: spaces
-              ? `${label}: ${formatFtIn(counterLength(isl), { compact: true })} ${what} — ${spaces} receptacle${spaces > 1 ? 's' : ''} included in the estimate (one per space ${ISLAND_MIN_LONG}" × ${ISLAND_MIN_SHORT}" or larger${pen ? ', measured from the connecting edge' : ''}; code editions differ on ${what}s, so check the one you build under)`
-              : `${label}: ${what} too small to need a receptacle`,
-            targetId: isl.id,
           });
         }
       }

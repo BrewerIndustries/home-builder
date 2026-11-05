@@ -5,7 +5,7 @@ import { FURNITURE, isFixture } from './furniture.ts';
 import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
-import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
+import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT, seatingDepth, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
 // Axes: plan x → X, plan y → Z, height → Y (up). Inches throughout.
@@ -217,15 +217,23 @@ export function buildScene(project: Project): Scene3D {
     const len = counterLength(c);
     if (len < 0.5) continue;
     const d = counterDir(c);
-    const mid = counterPoint(c, len / 2, c.depth / 2);
-    boxes.push({ kind: 'counter', c: [mid.x, COUNTER_HEIGHT / 2, mid.y], size: [len, COUNTER_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });
+    // Cabinets to the floor; a seating overhang is just the top, 1-1/2" thick.
+    const knee = seatingDepth(c);
+    const base = c.depth - knee;
+    const mid = counterPoint(c, len / 2, base / 2);
+    boxes.push({ kind: 'counter', c: [mid.x, COUNTER_HEIGHT / 2, mid.y], size: [len, COUNTER_HEIGHT, base], rotY: -Math.atan2(d.y, d.x) });
+    if (knee > 0) {
+      const top = counterPoint(c, len / 2, base + knee / 2);
+      boxes.push({ kind: 'counter', c: [top.x, COUNTER_HEIGHT - 0.75, top.y], size: [len, 1.5, knee], rotY: -Math.atan2(d.y, d.x) });
+    }
     for (const [s, e] of upperSpans(project, c)) {
       const at = counterPoint(c, (s + e) / 2, UPPER_DEPTH / 2);
       boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + UPPER_TOP) / 2, at.y], size: [e - s, UPPER_TOP - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
     }
-    for (const k of c.cutouts.filter((x) => x.kind === 'fridge')) {
+    for (const k of c.cutouts.filter((x) => x.kind === 'fridge' || x.kind === 'pantry' || x.kind === 'oven')) {
+      const h = k.kind === 'fridge' ? FRIDGE_HEIGHT : TALL_HEIGHT;
       const at = counterPoint(c, k.offset, c.depth / 2);
-      boxes.push({ kind: 'counter', c: [at.x, FRIDGE_HEIGHT / 2, at.y], size: [k.width, FRIDGE_HEIGHT, c.depth], rotY: -Math.atan2(d.y, d.x) });
+      boxes.push({ kind: 'counter', c: [at.x, h / 2, at.y], size: [k.width, h, c.depth], rotY: -Math.atan2(d.y, d.x) });
     }
   }
   for (const f of project.furniture) {

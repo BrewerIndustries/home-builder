@@ -32,6 +32,7 @@ import {
   type FixtureKind,
   type Furniture,
   type SpaceUse,
+  type CornerCabinet,
   type FurnitureKind,
   type Project,
   type Counter,
@@ -46,7 +47,7 @@ import type { Hit } from './hitTest.ts';
 import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { centrelineForFace, faceSpans, outerSides } from '../calc/faces.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
-import { counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, freeSpaces, MIN_COUNTER_SPACE, peninsulaJoin, upperSpans } from '../calc/counters.ts';
+import { cornerCabinets, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, KNEE_SPACE, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
 interface Props {
@@ -400,6 +401,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     const setCutout = (id: string, patch: Partial<Cutout>) => up({ cutouts: c.cutouts.map((k) => (k.id === id ? { ...k, ...patch } : k)) });
     const addCutout = (kind: CutoutKind) => up({ cutouts: [...c.cutouts, { id: uid('cx'), kind, offset: len / 2, width: CUTOUT_WIDTH[kind] }] });
     const room = counterRoom(project, c);
+    const corners = cornerCabinets(project).filter((k) => k.a.id === c.id || k.b.id === c.id);
     const spaces = (c.island ? freeSpaces(project, c) : counterSpaces(c)).filter(([s, e]) => e - s >= MIN_COUNTER_SPACE).length;
     return (
       <aside className="inspector">
@@ -435,7 +437,39 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           <button onClick={() => addCutout('range')}>Add range</button>
           <button onClick={() => addCutout('dishwasher')}>Add dishwasher</button>
           <button onClick={() => addCutout('fridge')}>Add fridge</button>
+          <button onClick={() => addCutout('pantry')} title="Full-height pantry cabinet: no countertop or wall cabinets there">Add tall pantry</button>
+          <button onClick={() => addCutout('oven')} title="Full-height wall-oven cabinet">Add wall oven</button>
         </div>
+        {corners.map((k) => {
+          const other = k.a.id === c.id ? k.b : k.a;
+          // Both counters at a corner show the choice. It's stored on whichever already has it, else on the one with
+          // fewer corners (a U's middle run meets two, so its ends hold their own choice).
+          const count = (id: string) => cornerCabinets(project).filter((x) => x.a.id === id || x.b.id === id).length;
+          const owner = k.a.corner ? k.a : k.b.corner ? k.b : count(other.id) < count(c.id) ? other : c;
+          return (
+            <Field key={other.id} label={`Corner with the ${other.island ? 'peninsula' : 'counter'}`} hint="One corner base cabinet, priced on its own">
+              <select value={k.kind} onChange={(e) => dispatch({ type: 'updateCounter', id: owner.id, patch: { corner: e.target.value as CornerCabinet } })}>
+                <option value="lazy-susan">Lazy susan</option>
+                <option value="blind">Blind corner</option>
+              </select>
+            </Field>
+          );
+        })}
+        {c.island && (
+          <>
+            <Field label="Seating overhang" hint={`Knee space at the front, no cabinets under; ${KNEE_SPACE}" suits a 36" counter (NKBA). 0 = no seating`}>
+              <LengthInput value={c.seating ?? 0} min={0} onChange={(v) => up({ seating: v > 0 ? Math.min(v, c.depth - MIN_COUNTER_SPACE) : undefined })} />
+            </Field>
+            {(c.seating ?? 0) > 0 && (
+              <p className="muted small">
+                {seats(project, c).length} seat{seats(project, c).length === 1 ? '' : 's'} at 24" each.{' '}
+                <button className="link" onClick={() => up(flipCounter(c))}>
+                  Seats on the other side
+                </button>
+              </p>
+            )}
+          </>
+        )}
         <div className="stat-grid">
           <Stat label="Countertop" value={`${Math.round((len * c.depth) / 144)} sq ft`} />
           <Stat label="Counter spaces" value={spaces} />

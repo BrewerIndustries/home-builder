@@ -3,7 +3,7 @@ import { exclusiveArea } from '../calc/regions.ts';
 import { isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
-import { counterCorners, counterPoint, islandReceptacles, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
+import { counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
 import { interiorStrings, openingChains, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
@@ -65,7 +65,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         <FurnitureGlyph key={f.id} f={f} selected={selection?.kind === 'furniture' && selection.id === f.id} px={px} />
       ))}
       {project.counters.map((c) => (
-        <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
+        <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} seatAt={seats(project, c)} />
       ))}
       {project.counters.flatMap((c) =>
         // Wall cabinets overhead: dashed, the usual plan convention for things above the cut.
@@ -635,11 +635,24 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
   );
 }
 
-export function CounterGlyph({ c, selected, px }: { c: Counter; selected: boolean; px(n: number): number }) {
+export function CounterGlyph({ c, selected, px, seatAt = [] }: { c: Counter; selected: boolean; px(n: number): number; seatAt?: number[] }) {
   const poly = (pts: { x: number; y: number }[]) => pts.map((p) => `${p.x},${p.y}`).join(' ');
+  const knee = seatingDepth(c);
+  const cab = c.depth - knee;
+  const [face0, face1] = [counterPoint(c, 0, cab), counterPoint(c, counterLength(c), cab)];
   return (
     <g className={selected ? 'counter sel' : 'counter'}>
       <polygon points={poly(counterCorners(c))} strokeWidth={px(1.2)} />
+      {knee > 0 && (
+        <g className="seating">
+          {/* Cabinet face under the top (hidden line), then a stool per seat past the edge. */}
+          <line x1={face0.x} y1={face0.y} x2={face1.x} y2={face1.y} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} />
+          {seatAt.map((t) => {
+            const s = counterPoint(c, t, c.depth + 2);
+            return <circle key={t} cx={s.x} cy={s.y} r={7} strokeWidth={px(1)} />;
+          })}
+        </g>
+      )}
       {c.cutouts.map((k) => {
         const [s, e] = [k.offset - k.width / 2, k.offset + k.width / 2];
         const box = (t0: number, t1: number, i0: number, i1: number) => [counterPoint(c, t0, i0), counterPoint(c, t1, i0), counterPoint(c, t1, i1), counterPoint(c, t0, i1)];
@@ -652,13 +665,13 @@ export function CounterGlyph({ c, selected, px }: { c: Counter; selected: boolea
             </g>
           );
         }
-        if (k.kind === 'dishwasher' || k.kind === 'fridge') {
+        if (k.kind === 'dishwasher' || k.kind === 'fridge' || k.kind === 'pantry' || k.kind === 'oven') {
           const at = counterPoint(c, k.offset, c.depth / 2);
           return (
             <g key={k.id} className={`cutout ${k.kind}`}>
               <polygon points={poly(box(s + 0.5, e - 0.5, 0.5, c.depth - 0.5))} strokeWidth={px(1)} strokeDasharray={k.kind === 'dishwasher' ? `${px(3)} ${px(2)}` : undefined} />
               <text x={at.x} y={at.y} fontSize={Math.min(7, (e - s) / 4)} textAnchor="middle" dominantBaseline="central">
-                {k.kind === 'fridge' ? 'REF' : 'DW'}
+                {{ fridge: 'REF', dishwasher: 'DW', pantry: 'PAN', oven: 'OV' }[k.kind]}
               </text>
             </g>
           );
