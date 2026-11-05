@@ -1,18 +1,25 @@
 import { dist, pointAlong, pointInPolygon, polygonArea, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { attach, roomOutletCount, roomRuns } from './electrical.ts';
 import { childRooms, exclusiveArea, regionEdges, type RegionEdge } from './regions.ts';
-import { HABITABLE, uid, type Fixture, type FixtureKind, type Opening, type Point, type Project, type Room, type Wall, type WallSwitch } from '../model/types.ts';
+import { HABITABLE, uid, type Fixture, type FixtureKind, type Opening, type Point, type Project, type Room, type SpaceUse, type Wall, type WallSwitch } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { formatFtIn } from '../model/units.ts';
 import { outerSides } from './faces.ts';
+import { foundationOf } from './foundation.ts';
+import { roofOf } from './roof.ts';
+import { isStairs, needsTwoSwitches, risersOf, stairFoot, stairLights, stairSwitchWall, STAIR_SWITCH_REACH } from './stairs.ts';
 
 // Lighting outlets, wall switches and smoke / CO alarms.
 //   E3903.2  a wall-switched lighting outlet in every habitable room and bathroom
 //            (rooms other than kitchens and baths may use a switched receptacle instead).
-//   E3903.3  the same in hallways, stairways and garages.
-//   E3903.4  a wall-switched lighting outlet on the exterior side of each outdoor
-//            egress door with grade-level access (vehicle doors excepted).
+//   E3903.3  the same in hallways, stairways and garages; one on the exterior side
+//            of each outdoor egress door with grade-level access (vehicle doors
+//            excepted); a stairway of six or more risers switched at each floor level.
+//   E3903.4  a lighting outlet, switched at the usual point of entry, in attics,
+//            under-floor spaces, utility rooms and basements used for storage or
+//            holding equipment that needs servicing (here: a room with a water heater,
+//            and the attic / crawlspace as answered in the Project panel).
 //   R314.3   smoke alarms in each sleeping room, outside each separate sleeping area
 //            in the immediate vicinity of the bedrooms, and on each storey; not within
 //            3 ft of a bathroom door (where that doesn't block a required one).
@@ -33,7 +40,10 @@ export const BATH_DOOR_CLEAR = 36;
 
 /** Lighting outlets: ceiling lights, ceiling fans (with a light kit) and exterior wall lights. */
 export const isLight = (k: FixtureKind) => k === 'light' || k === 'fan' || k === 'outdoor';
-const isRoomLight = (k: FixtureKind) => k === 'light' || k === 'fan';
+/** Lights a room: a ceiling light, or a fan with its light kit (a fan-only doesn't). */
+export const lightsRoom = (f: Fixture) => f.kind === 'light' || (f.kind === 'fan' && f.lightKit !== false);
+/** Does a room hold equipment that needs servicing (E3903.4)? */
+export const hasEquipment = (project: Project, room: Room) => project.furniture.some((f) => f.kind === 'water-heater' && roomAt(project, f.at)?.id === room.id);
 /** Doors wider than this are vehicle (garage) doors, which E3903.4 leaves out. */
 export const VEHICLE_DOOR = 72;
 /** An exterior light this close to an outdoor door lights it. */
@@ -214,16 +224,20 @@ export function autoLighting(project: Project): { fixtures: Fixture[]; switches:
   const switches: WallSwitch[] = [];
   const manual = project.fixtures.filter((f) => !f.auto);
   const manualIn = (room: Room, test: (k: FixtureKind) => boolean) => manual.filter((f) => test(f.kind) && roomAt(project, f.at)?.id === room.id);
+  const manualLightsIn = (room: Room) => manual.filter((f) => lightsRoom(f) && roomAt(project, f.at)?.id === room.id);
   const manualSwitches = project.switches.filter((s) => !s.auto);
   const manualSwitched = new Set(manualSwitches.flatMap((s) => s.controls));
   const manualSwitchRooms = new Set(manualSwitches.map((s) => switchRoom(project, s)?.id));
 
   for (const room of project.rooms) {
-    if (!LIGHTED.has(room.type) || exclusiveArea(project, room) < CLOSET_SQIN) continue;
+    if (!LIGHTED.has(room.type) || (exclusiveArea(project, room) < CLOSET_SQIN && !hasEquipment(project, room))) continue;
     const center = roomCenter(project, room);
-    const lights = manualIn(room, isRoomLight).map((f) => f.id);
+    const lights = manualLightsIn(room).map((f) => f.id);
     if (!lights.length) {
-      const f: Fixture = { id: uid('lt'), kind: 'light', at: center, auto: true };
+      // Keep clear of a fan-only already hung in the middle.
+      const fan = manual.find((f) => f.kind === 'fan' && dist(f.at, center) < 24);
+      const beside = fan && { x: center.x + 36, y: center.y };
+      const f: Fixture = { id: uid('lt'), kind: 'light', at: beside && inRegion(project, room, beside) ? beside : center, auto: true };
       fixtures.push(f);
       lights.push(f.id);
     }
@@ -263,7 +277,22 @@ export function autoLighting(project: Project): { fixtures: Fixture[]; switches:
     for (const s of spots) switches.push({ id: uid('sw'), ...s, height: SWITCH_HEIGHT, controls: [...lights], auto: true });
   }
 
-  // E3903.4 — a switched light outside each outdoor door, switched at the door inside.
+  // E3903.3 — stairways: a light over the flight, switched by the foot on this floor.
+  for (const st of project.furniture.filter(isStairs)) {
+    const have = stairLights(project, st, lightsRoom).filter((f) => !f.auto);
+    const lights = have.map((f) => f.id);
+    if (!lights.length) {
+      const f: Fixture = { id: uid('lt'), kind: 'light', at: { x: Math.round(st.at.x), y: Math.round(st.at.y) }, auto: true };
+      fixtures.push(f);
+      lights.push(f.id);
+    }
+    if (manualSwitches.some((s) => s.controls.some((c) => lights.includes(c)))) continue;
+    const spot = stairSwitchWall(project, st);
+    const s = spot && attach(project, spot.p, stairFoot(st));
+    if (s) switches.push({ id: uid('sw'), ...s, height: SWITCH_HEIGHT, controls: lights, auto: true });
+  }
+
+  // E3903.3 — a switched light outside each outdoor door, switched at the door inside.
   for (const x of outdoorDoors(project)) {
     if (manual.some((f) => f.kind === 'outdoor' && dist(f.at, x.outside) <= DOOR_LIGHT_REACH)) continue;
     const spot = doorLightSpot(project, x);
@@ -373,9 +402,27 @@ export function switchWays(project: Project): Map<string, 1 | 3 | 4> {
       const w = group.indexOf(s.id) < 2 ? 3 : 4;
       if (w > ways) ways = w;
     }
+    if (ways === 1 && stairPartner(project).has(s.id)) ways = 3;
     out.set(s.id, ways);
   }
   return out;
+}
+
+/** Switches on this floor controlling the light of a stair that needs one at each level: each pairs with a 3-way upstairs (or down). */
+export function stairPartner(project: Project): Set<string> {
+  const out = new Set<string>();
+  for (const st of project.furniture.filter(needsTwoSwitches)) {
+    const lights = new Set(stairLights(project, st, lightsRoom).map((f) => f.id));
+    const foot = stairFoot(st);
+    const mine = project.switches.find((s) => s.controls.some((c) => lights.has(c)) && switchNear(project, s, foot));
+    if (mine) out.add(mine.id);
+  }
+  return out;
+}
+
+function switchNear(project: Project, s: WallSwitch, p: Point): boolean {
+  const w = project.walls.find((x) => x.id === s.wallId);
+  return !!w && dist(pointAlong(w, s.offset), p) <= STAIR_SWITCH_REACH + w.thickness;
 }
 
 export function lightingLines(project: Project): MaterialLine[] {
@@ -383,7 +430,9 @@ export function lightingLines(project: Project): MaterialLine[] {
   const add = (item: string, qty: number, basis: string) => qty > 0 && lines.push({ category: 'Electrical', item, qty, unit: 'ea', basis });
   const count = (k: FixtureKind) => project.fixtures.filter((f) => f.kind === k).length;
   add('Ceiling light fixture (allowance)', count('light'), 'one per lighting outlet on the plan');
-  add('Ceiling fan with light kit (allowance)', count('fan'), 'from the plan');
+  const fanOnly = project.fixtures.filter((f) => f.kind === 'fan' && f.lightKit === false).length;
+  add('Ceiling fan with light kit (allowance)', count('fan') - fanOnly, 'from the plan');
+  add('Ceiling fan, no light kit (allowance)', fanOnly, 'from the plan; not a lighting outlet');
   add('Exterior wall light (allowance)', count('outdoor'), 'wet-location rated, one per outdoor door light (E3903.4)');
   add('Smoke alarm, hardwired, battery backup', count('smoke'), 'interconnected (R314.4, R314.6)');
   add('Combination smoke / CO alarm, hardwired', count('smoke-co'), 'interconnected, battery backup (R314, R315)');
@@ -393,6 +442,10 @@ export function lightingLines(project: Project): MaterialLine[] {
   const ways = [...switchWays(project).values()];
   add('Single-pole switch, 15A', ways.filter((w) => w === 1).length, 'from the plan');
   add('3-way switch, 15A', ways.filter((w) => w === 3).length, 'two per light switched from two places');
+  add('3-way switch, 15A, at the other floor level', stairPartner(project).size, 'pairs with the switch by each stair foot (E3903.3, six or more risers)');
+  for (const [where, use] of equipmentSpaces(project)) {
+    if (use && use !== 'none') add(`Attic / crawlspace light + switch (${where})`, 1, `${use} space: a light at the equipment, switched at the access (E3903.4)`);
+  }
   add('4-way switch, 15A', ways.filter((w) => w === 4).length, 'between the 3-ways of a light switched from three or more places');
   return lines;
 }
@@ -415,7 +468,7 @@ export function lightingChecks(project: Project): CodeCheck[] {
     const strict = room.type === 'kitchen' || room.type === 'bath' || room.type === 'hall' || room.type === 'garage';
     if (!strict && !HABITABLE.has(room.type)) continue;
     const section = room.type === 'hall' || room.type === 'garage' ? 'E3903.3' : 'E3903.2';
-    const lights = inRoom(room, (f) => isRoomLight(f.kind));
+    const lights = inRoom(room, lightsRoom);
     const byReceptacle = !strict && switchedOutlets.length > 0 && roomOutletCount({ ...project, outlets: switchedOutlets }, room) > 0;
     const ok = lights.some((f) => switched.has(f.id)) || byReceptacle;
     const why = !lights.length ? 'no lighting outlet' : 'its light has no wall switch';
@@ -434,10 +487,56 @@ export function lightingChecks(project: Project): CodeCheck[] {
     const ok = lit.some((f) => switched.has(f.id));
     out.push({
       rule: 'Light outside each outdoor door',
-      section: 'E3903.4',
+      section: 'E3903.3',
       status: ok ? 'pass' : 'fail',
       message: `${x.room ? `${x.room.name || x.room.type} door` : 'Exterior door'}: ${ok ? 'wall-switched exterior light' : lit.length ? 'its exterior light has no wall switch' : 'no exterior light beside it'}`,
       targetId: x.door.id,
+    });
+  }
+
+  // E3903.3 — stairways.
+  const ways = switchWays(project);
+  for (const st of project.furniture.filter(isStairs)) {
+    const lights = stairLights(project, st, lightsRoom);
+    const sw = project.switches.filter((s) => s.controls.some((c) => lights.some((f) => f.id === c)));
+    const label = `Stairs (${risersOf(st)} risers ${st.down ? 'down' : 'up'})`;
+    out.push({
+      rule: 'Wall-switched stairway light',
+      section: 'E3903.3',
+      status: sw.length ? 'pass' : 'fail',
+      message: sw.length ? label : `${label}: ${lights.length ? 'its light has no wall switch' : 'no light over the flight'}`,
+      targetId: st.id,
+    });
+    if (!needsTwoSwitches(st) || !lights.length) continue;
+    const foot = stairFoot(st);
+    const here = sw.find((s) => switchNear(project, s, foot));
+    out.push({
+      rule: 'Stairway switched at each floor level (6+ risers)',
+      section: 'E3903.3',
+      status: here ? 'pass' : 'fail',
+      message: here
+        ? `${label}: ${ways.get(here.id) === 4 ? '4-way' : '3-way'} by the foot here; its 3-way at the ${st.down ? 'lower' : 'upper'} level is counted in the estimate`
+        : `${label}: needs a switch within ${formatFtIn(STAIR_SWITCH_REACH)} of the foot on this floor (and one at the other level)`,
+      targetId: st.id,
+    });
+  }
+
+  // E3903.4 — storage / equipment spaces.
+  for (const room of project.rooms.filter((r) => hasEquipment(project, r))) {
+    const ok = inRoom(room, lightsRoom).some((f) => switched.has(f.id));
+    out.push({ rule: 'Light at equipment needing service', section: 'E3903.4', status: ok ? 'pass' : 'fail', message: `${room.name || room.type} (water heater): ${ok ? 'wall-switched light' : 'needs a light switched at the door'}`, targetId: room.id });
+  }
+  for (const [where, use] of equipmentSpaces(project)) {
+    out.push({
+      rule: `Light in the ${where}`,
+      section: 'E3903.4',
+      status: use === undefined ? 'info' : 'pass',
+      message:
+        use === undefined
+          ? `say how the ${where} is used (Project panel): storage or equipment there needs a light switched at the access`
+          : use === 'none'
+            ? `${where} not used for storage or equipment — no light required`
+            : `${where} (${use}): light at the equipment, switched at the access — counted in the estimate`,
     });
   }
 
@@ -496,5 +595,13 @@ export function lightingChecks(project: Project): CodeCheck[] {
       message: project.electrical?.fuelAppliances === false ? 'not required: no fuel-burning appliances and no attached garage' : 'say whether the house has gas, oil or wood appliances (Project panel) to check CO alarms',
     });
   }
+  return out;
+}
+
+/** The attic (if there's a roof) and crawlspace (if that's the foundation), with how each is used. */
+export function equipmentSpaces(project: Project): ['attic' | 'crawlspace', SpaceUse | undefined][] {
+  const out: ['attic' | 'crawlspace', SpaceUse | undefined][] = [];
+  if (roofOf(project).type !== 'none') out.push(['attic', project.electrical?.attic]);
+  if (foundationOf(project).type === 'crawl') out.push(['crawlspace', project.electrical?.crawl]);
   return out;
 }

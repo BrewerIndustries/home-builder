@@ -230,6 +230,7 @@ export function buildScene(project: Project): Scene3D {
   }
   for (const f of project.furniture) {
     const h = FURNITURE[f.kind].h;
+    if (!h) continue; // stairs: plan only
     boxes.push({ kind: isFixture(f) ? 'fixture' : 'furniture', c: [f.at.x, h / 2, f.at.y], size: [f.w, h, f.d], rotY: (-f.rot * Math.PI) / 180 });
   }
   faces.push(...roofFaces(project).map((f) => ({ ...f, roofPart: true })));

@@ -80,6 +80,8 @@ export interface Fixture {
   at: Point;
   /** Placed by auto-layout (see Outlet.auto). */
   auto: boolean;
+  /** Fans: false = fan only, no light kit (doesn't count as the room's lighting outlet). */
+  lightKit?: boolean;
 }
 
 /** A wall switch. Sits on a wall face like a receptacle and controls lighting outlets. */
@@ -103,7 +105,12 @@ export interface ElectricalSettings {
   front?: FrontSide;
   /** Gas / oil / wood appliances or a fireplace in the house — drives CO alarms (R315). Unset = not answered. */
   fuelAppliances?: boolean;
+  /** How the attic and crawlspace are used: storage or equipment needs a light (E3903.4). Unset = not answered. */
+  attic?: SpaceUse;
+  crawl?: SpaceUse;
 }
+
+export type SpaceUse = 'none' | 'storage' | 'equipment';
 
 export type CutoutKind = 'sink' | 'range' | 'dishwasher' | 'fridge';
 
@@ -126,7 +133,8 @@ export interface Cutout {
 export type FurnitureKind =
   | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'shower' | 'kitchen-sink' | 'laundry-sink'
   | 'washer' | 'dryer' | 'water-heater' | 'range' | 'fridge'
-  | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser';
+  | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser'
+  | 'stairs';
 
 /**
  * A plan symbol: a plumbing fixture or appliance (priced and code-checked) or a
@@ -141,6 +149,9 @@ export interface Furniture {
   rot: number;
   w: number;
   d: number;
+  /** Stairs: risers in the flight, and whether it goes down from this floor (else up). The foot on this floor is the front (+y). */
+  risers?: number;
+  down?: boolean;
 }
 
 export interface Counter {

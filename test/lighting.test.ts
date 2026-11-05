@@ -89,7 +89,7 @@ test('smoke alarms: each bedroom plus one hall alarm shared by both bedroom door
   assert.ok(hall.every((f) => f.kind === 'smoke'), 'no CO without fuel appliances or a garage');
   const checks = ircChecks(p);
   assert.ok(checks.filter((c) => c.section === 'R314.3').every((c) => c.status !== 'fail'), JSON.stringify(checks.filter((c) => c.section === 'R314.3')));
-  assert.ok(checks.filter((c) => c.section.startsWith('E3903')).every((c) => c.status === 'pass'));
+  assert.ok(checks.filter((c) => c.section.startsWith('E3903') && c.status !== 'info').every((c) => c.status === 'pass'));
 });
 
 test('fuel-burning appliances make the hallway alarm a smoke / CO combination', () => {

@@ -408,7 +408,7 @@ export function ircChecks(project: Project): CodeCheck[] {
 /** Things this checker does not look at — shown so nobody mistakes silence for compliance. */
 export const NOT_CHECKED = [
   'Wall bracing (R602.10)',
-  'Dedicated appliance circuits, AFCI (E3703, E3902.16); stairway switches at each level, lights for equipment in attics and crawlspaces (E3903.3, E3903.4)',
+  'Dedicated appliance circuits, AFCI (E3703, E3902.16); stairway switches on the other floor itself (only counted here — the plan is one storey); equipment other than a water heater on the plan (E3903.3, E3903.4)',
   'Smoke alarm distance from cooking appliances and exact ceiling position (R314.3, NFPA 72); CO alarms inside bedrooms with a fuel-burning appliance (R315.3)',
   'Outdoor receptacle height above grade (E3901.7: grade isn\'t modelled, height is from the floor); balcony, deck and porch receptacles',
   'Stairways, handrails and guards (R311.7, R312)',

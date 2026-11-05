@@ -31,6 +31,7 @@ import {
   type OutletKind,
   type FixtureKind,
   type Furniture,
+  type SpaceUse,
   type FurnitureKind,
   type Project,
   type Counter,
@@ -362,13 +363,19 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Type">
           <select value={f.kind} onChange={(e) => dispatch({ type: 'updateFixture', id: f.id, patch: { kind: e.target.value as FixtureKind, auto: false } })}>
             <option value="light">Lighting outlet</option>
-            <option value="fan">Ceiling fan with light</option>
+            <option value="fan">Ceiling fan</option>
             <option value="outdoor">Exterior wall light</option>
             <option value="smoke">Smoke alarm</option>
             <option value="smoke-co">Smoke / CO alarm</option>
             <option value="co">CO alarm</option>
           </select>
         </Field>
+        {f.kind === 'fan' && (
+          <label className="link-row">
+            <input type="checkbox" checked={f.lightKit !== false} onChange={(e) => dispatch({ type: 'updateFixture', id: f.id, patch: { lightKit: e.target.checked ? undefined : false, auto: false } })} />
+            Light kit {f.lightKit === false && <span className="muted small">— fan only: not the room's lighting outlet</span>}
+          </label>
+        )}
         <p className="muted small">
           {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
           {isLight(f.kind) && (by ? `Switched from ${by} place${by > 1 ? 's' : ''}.` : 'No switch yet — select a switch and tick this light.')}
@@ -482,9 +489,22 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Width">
           <LengthInput value={f.w} min={6} onChange={(v) => up({ w: v })} />
         </Field>
-        <Field label="Depth" hint="Front to back">
+        <Field label="Depth" hint={f.kind === 'stairs' ? 'The run, from the foot (on this floor) to the far end' : 'Front to back'}>
           <LengthInput value={f.d} min={6} onChange={(v) => up({ d: v })} />
         </Field>
+        {f.kind === 'stairs' && (
+          <>
+            <Field label="Risers" hint="Six or more: a light switch at each floor level (E3903.3)">
+              <input type="number" min={1} max={30} value={f.risers ?? 13} onChange={(e) => up({ risers: Math.max(1, Math.min(30, Math.round(Number(e.target.value) || 1))) })} />
+            </Field>
+            <Field label="Goes">
+              <select value={f.down ? 'down' : 'up'} onChange={(e) => up({ down: e.target.value === 'down' ? true : undefined })}>
+                <option value="up">Up from this floor</option>
+                <option value="down">Down from this floor</option>
+              </select>
+            </Field>
+          </>
+        )}
         <div className="row wrap">
           <button onClick={() => up({ rot: (f.rot + 270) % 360 })} title="Turn 90° anticlockwise">
             ⟲ 90°
@@ -682,6 +702,17 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           <option value="right">Right of the plan</option>
         </select>
       </Field>
+
+      {roofOf(project).type !== 'none' && (
+        <Field label="Attic used for" hint="Storage, or equipment that needs servicing (furnace, air handler) — then it needs a light switched at the access (E3903.4)">
+          <SpaceUseSelect value={project.electrical?.attic} set={(attic) => dispatch({ type: 'setElectrical', patch: { attic } })} />
+        </Field>
+      )}
+      {foundationOf(project).type === 'crawl' && (
+        <Field label="Crawlspace used for" hint="Storage, or equipment that needs servicing — then it needs a light switched at the access (E3903.4)">
+          <SpaceUseSelect value={project.electrical?.crawl} set={(crawl) => dispatch({ type: 'setElectrical', patch: { crawl } })} />
+        </Field>
+      )}
 
       <RoofFields roof={roofOf(project)} set={(patch) => dispatch({ type: 'setRoof', patch })} />
       <FoundationFields f={foundationOf(project)} set={(patch) => dispatch({ type: 'setFoundation', patch })} />
@@ -914,5 +945,16 @@ export function Stat({ label, value }: { label: ReactNode; value: ReactNode }) {
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
     </div>
+  );
+}
+
+function SpaceUseSelect({ value, set }: { value: SpaceUse | undefined; set(v: SpaceUse | undefined): void }) {
+  return (
+    <select value={value ?? ''} onChange={(e) => set(e.target.value === '' ? undefined : (e.target.value as SpaceUse))}>
+      <option value="">Not answered</option>
+      <option value="none">Nothing</option>
+      <option value="storage">Storage</option>
+      <option value="equipment">Equipment</option>
+    </select>
   );
 }

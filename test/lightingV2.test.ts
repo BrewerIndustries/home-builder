@@ -23,7 +23,7 @@ const lit = (p: Project) => {
 test('each outdoor door gets a switched light outside it; vehicle doors are left out', () => {
   const p = house();
   assert.deepEqual(outdoorDoors(p).map((d) => d.door.id), ['front']);
-  assert.equal(lightingChecks({ ...p, fixtures: [{ id: 'x', kind: 'light', at: { x: 180, y: 120 }, auto: false }] }).find((c) => c.section === 'E3903.4')!.status, 'fail');
+  assert.equal(lightingChecks({ ...p, fixtures: [{ id: 'x', kind: 'light', at: { x: 180, y: 120 }, auto: false }] }).find((c) => c.rule === 'Light outside each outdoor door')!.status, 'fail');
   const q = lit(p);
   const outside = q.fixtures.filter((f) => f.kind === 'outdoor');
   assert.equal(outside.length, 1);
@@ -32,7 +32,7 @@ test('each outdoor door gets a switched light outside it; vehicle doors are left
   assert.equal(Math.abs(outside[0].at.x - 180), 28);
   // Switched from inside at that door — the room's own switch is there too, so they share it.
   assert.ok(q.switches.some((s) => s.controls.includes(outside[0].id)));
-  assert.equal(lightingChecks(q).find((c) => c.section === 'E3903.4')!.status, 'pass');
+  assert.equal(lightingChecks(q).find((c) => c.rule === 'Light outside each outdoor door')!.status, 'pass');
   assert.equal(materialsList(q).find((l) => l.item.startsWith('Exterior wall light'))!.qty, 1);
 });
 

@@ -373,6 +373,12 @@ function FixtureGlyph({ f, selected, px }: { f: Fixture; selected: boolean; px(n
           <ellipse key={deg} cx={x + 8} cy={y} rx={5} ry={2} transform={`rotate(${deg + 45} ${x} ${y})`} fill="var(--canvas)" stroke={stroke} strokeWidth={px(1.1)} />
         ))}
         <circle cx={x} cy={y} r={3.5} fill="var(--canvas)" stroke={stroke} strokeWidth={px(1.5)} />
+        {f.lightKit !== false && (
+          <>
+            <line x1={x - 2.5} y1={y - 2.5} x2={x + 2.5} y2={y + 2.5} stroke={stroke} strokeWidth={px(1)} />
+            <line x1={x - 2.5} y1={y + 2.5} x2={x + 2.5} y2={y - 2.5} stroke={stroke} strokeWidth={px(1)} />
+          </>
+        )}
       </g>
     );
   }
@@ -589,6 +595,27 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
         </>
       );
       break;
+    case 'stairs': {
+      // Treads across the flight, an arrow from the foot (front, +y) up the run, cut line past halfway.
+      const n = Math.max(1, (f.risers ?? 13) - 1);
+      const tread = d / n;
+      const arrow = f.down ? 'DN' : 'UP';
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {Array.from({ length: n - 1 }, (_, i) => (
+            <line key={i} x1={l} y1={b - tread * (i + 1)} x2={r} y2={b - tread * (i + 1)} strokeWidth={sw} />
+          ))}
+          <line x1={0} y1={b - 4} x2={0} y2={t + 6} strokeWidth={sw} />
+          <polyline points={`${-4},${t + 12} 0,${t + 6} 4,${t + 12}`} fill="none" strokeWidth={sw} />
+          <line x1={l} y1={-d * 0.1 + 6} x2={r} y2={-d * 0.1 - 6} strokeWidth={sw} strokeDasharray={`${px(4)} ${px(3)}`} />
+          <text x={0} y={b - 8} fontSize={Math.min(8, w / 4)} textAnchor="middle" dominantBaseline="central" className="stair-label">
+            {arrow}
+          </text>
+        </>
+      );
+      break;
+    }
     case 'dresser':
       body = (
         <>

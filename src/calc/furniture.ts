@@ -49,6 +49,7 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   table: { label: 'Dining table', w: 60, d: 36, h: 30, fixture: false },
   desk: { label: 'Desk', w: 48, d: 24, h: 30, fixture: false },
   dresser: { label: 'Dresser', w: 60, d: 20, h: 36, fixture: false },
+  stairs: { label: 'Stairs', w: 36, d: 120, h: 0, fixture: false },
 };
 
 export const FURNITURE_KINDS = Object.keys(FURNITURE) as FurnitureKind[];
@@ -121,7 +122,8 @@ export function placeFurniture(project: Project, f: Furniture, p: Point): Furnit
 
 export function newFurniture(project: Project, kind: FurnitureKind, p: Point, id: string): Furniture {
   const s = FURNITURE[kind];
-  return placeFurniture(project, { id, kind, at: p, rot: 0, w: s.w, d: s.d }, p);
+  const extra = kind === 'stairs' ? { risers: 13 } : {};
+  return placeFurniture(project, { id, kind, at: p, rot: 0, w: s.w, d: s.d, ...extra }, p);
 }
 
 export const furnitureRoom = (project: Project, f: Furniture): Room | undefined => roomAt(project, f.at);

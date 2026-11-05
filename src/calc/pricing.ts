@@ -54,6 +54,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Round ceiling box/, 3],
   [/^Ceiling light fixture/, 40],
   [/^Ceiling fan with light kit/, 180],
+  [/^Ceiling fan, no light kit/, 150],
+  [/^Attic \/ crawlspace light/, 60],
   [/^Exterior wall light/, 60],
   [/^Fan-rated ceiling box/, 15],
   [/^Smoke alarm, hardwired/, 25],
