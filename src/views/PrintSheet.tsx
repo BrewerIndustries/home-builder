@@ -81,8 +81,10 @@ export function PrintSheet({ project }: { project: Project }) {
                 <th>Mark</th>
                 <th>Fixture / appliance</th>
                 <th>Size (w × d)</th>
+                <th>Model</th>
                 <th>Qty</th>
                 <th>Room</th>
+                <th>Rough-in / notes</th>
               </tr>
             </thead>
             <tbody>
@@ -91,8 +93,10 @@ export function PrintSheet({ project }: { project: Project }) {
                   <td>{r.mark}</td>
                   <td>{r.item}</td>
                   <td>{r.size}</td>
+                  <td>{r.model || '—'}</td>
                   <td>{r.qty}</td>
                   <td>{r.rooms || '—'}</td>
+                  <td>{r.notes || '—'}</td>
                 </tr>
               ))}
             </tbody>

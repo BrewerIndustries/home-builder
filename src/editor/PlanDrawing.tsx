@@ -711,6 +711,15 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       );
       break;
     }
+    case 'closet-rod':
+      // The shelf above (dashed, it's overhead) and the rod under it, a little in from the front.
+      body = (
+        <>
+          <rect x={l} y={t} width={w} height={d} strokeWidth={sw} strokeDasharray={`${px(4)} ${px(3)}`} fill="none" />
+          <line x1={l + 1} y1={0} x2={r - 1} y2={0} strokeWidth={px(1.5)} strokeDasharray={`${px(10)} ${px(3)} ${px(2)} ${px(3)}`} />
+        </>
+      );
+      break;
     case 'dresser':
       body = (
         <>

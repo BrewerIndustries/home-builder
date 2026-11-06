@@ -12,9 +12,10 @@ import { roomAt, VEHICLE_DOOR } from './lighting.ts';
 //
 // Checks (fixtures only, never furniture, which moves):
 //   R306.1  a dwelling has a water closet, a lavatory and a tub or shower;
-//   R307.1  water closet 15" from its centre to a wall or fixture each side and
-//           21" clear in front; lavatory 21" in front; shower 24" in front of its
-//           opening (taken as its front);
+//   R307.1  water closet (and bidet) 15" from its centre to a wall or fixture
+//           each side, 21" clear in front, and 30" centre to centre from the
+//           next one; lavatory and bathtub 21" in front; shower 24" in front of
+//           its opening (taken as its front);
 //   P2708.1 shower 900 sq in or more, 30" or more each way;
 //   E3901.6 a receptacle within 36" of each lavatory basin (measured to the vanity).
 // Clear zones are rectangles in the fixture's own frame; anything solid (a wall,
@@ -50,6 +51,7 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   desk: { label: 'Desk', w: 48, d: 24, h: 30, fixture: false },
   dresser: { label: 'Dresser', w: 60, d: 20, h: 36, fixture: false },
   stairs: { label: 'Stairs', w: 36, d: 120, h: 0, fixture: false },
+  'closet-rod': { label: 'Closet rod + shelf', w: 48, d: 12, h: 1, fixture: false },
 };
 
 export const FURNITURE_KINDS = Object.keys(FURNITURE) as FurnitureKind[];
@@ -164,6 +166,7 @@ export function clearZones(f: Furniture): [string, Point[]][] {
         ['21" clear in front', localRect(f, -hw, hd, hw, hd + 21)],
       ];
     case 'lavatory':
+    case 'tub':
       return [['21" clear in front', localRect(f, -hw, hd, hw, hd + 21)]];
     case 'shower':
       return [['24" clear in front of the opening', localRect(f, -hw, hd, hw, hd + 24)]];
@@ -259,7 +262,38 @@ export function furnitureChecks(project: Project): CodeCheck[] {
       out.push({ rule: 'Shower size (900 sq in, 30" each way)', section: 'P2708.1', status: ok ? 'pass' : 'fail', message: `${name}: ${formatFtIn(f.w)} × ${formatFtIn(f.d)} = ${Math.round(f.w * f.d)} sq in`, targetId: f.id });
     }
   }
+  out.push(...spacingChecks(project));
   out.push(...doorSwingChecks(project));
+  return out;
+}
+
+/** R307.1: water closets and bidets 30" or more centre to centre from each other. */
+export const WC_SPACING = 30;
+
+export function spacingChecks(project: Project): CodeCheck[] {
+  const wcs = project.furniture.filter((f) => f.kind === 'toilet' || f.kind === 'bidet');
+  if (wcs.length < 2) return [];
+  const out: CodeCheck[] = [];
+  let pairs = 0;
+  for (let i = 0; i < wcs.length; i++) {
+    for (let j = i + 1; j < wcs.length; j++) {
+      const [a, b] = [wcs[i], wcs[j]];
+      const room = furnitureRoom(project, a);
+      if (room?.id !== furnitureRoom(project, b)?.id) continue;
+      pairs++;
+      const gap = dist(a.at, b.at);
+      if (gap >= WC_SPACING - 0.5) continue;
+      const what = (f: Furniture) => FURNITURE[f.kind].label.toLowerCase();
+      out.push({
+        rule: 'Fixture spacing (30" centre to centre)',
+        section: 'R307.1',
+        status: 'fail',
+        message: `${room ? `${room.name}: ` : ''}${what(a)} and ${what(b)} centres ${formatFtIn(gap)} apart — wants 2' 6"`,
+        targetId: b.id,
+      });
+    }
+  }
+  if (pairs && !out.length) out.push({ rule: 'Fixture spacing (30" centre to centre)', section: 'R307.1', status: 'pass', message: `${pairs} water closet / bidet pair${pairs === 1 ? '' : 's'} 2' 6" or more apart` });
   return out;
 }
 
@@ -282,6 +316,11 @@ export function furnitureLines(project: Project): MaterialLine[] {
   add('Washer outlet box', count('washer'), 'one per washer');
   add('Dryer vent kit', count('dryer'), 'one per dryer');
   add('Water heater (allowance)', count('water-heater'), 'water heaters on the plan');
+  const rods = project.furniture.filter((f) => f.kind === 'closet-rod');
+  if (rods.length) {
+    const ft = Math.ceil(rods.reduce((t, f) => t + f.w, 0) / 12);
+    lines.push({ category: 'Lumber', item: 'Closet rod + shelf (allowance)', qty: ft, unit: 'lf', basis: `${rods.length} closet run${rods.length === 1 ? '' : 's'}, rounded up to whole feet` });
+  }
   const rough = project.furniture.filter((f) => WET.has(f.kind)).length;
   add('Plumbing rough-in per fixture (allowance)', rough, 'supply, drain and vent per fixture; size runs with a plumber (IRC Chapters 29–31)');
   return lines;
@@ -361,18 +400,22 @@ export function doorSwing(project: Project, o: Opening): Point[] | null {
   return pts;
 }
 
-/** Doors whose swing runs into a fixture, piece of furniture or counter. */
+/** Doors whose swing runs into a fixture, piece of furniture, counter or another door's swing. */
 export function doorSwingChecks(project: Project): CodeCheck[] {
   const doors = project.openings.filter((o) => doorSwing(project, o));
-  if (!doors.length || (!project.furniture.length && !project.counters.length)) return [];
+  if (!doors.length || (!project.furniture.length && !project.counters.length && doors.length < 2)) return [];
   const out: CodeCheck[] = [];
+  // Closet rods hang above the floor: a door swings under them.
   const things: [string, Point[]][] = [
-    ...project.furniture.map((f): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}`, furnitureCorners(f)]),
+    ...project.furniture.filter((f) => f.kind !== 'closet-rod').map((f): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}`, furnitureCorners(f)]),
     ...project.counters.map((c): [string, Point[]] => [c.island ? 'an island' : 'a counter', counterCorners(c)]),
   ];
+  const swings = new Map(doors.map((o) => [o.id, doorSwing(project, o)!]));
+  const doorName = (o: Opening) => `the ${formatFtIn(o.width)} door on ${o.wallId}`;
   for (const o of doors) {
-    const swing = doorSwing(project, o)!;
-    const hits = [...new Set(things.filter(([, outline]) => blocked(swing, [outline])).map(([what]) => what))];
+    const swing = swings.get(o.id)!;
+    const others = doors.filter((x) => x.id !== o.id && blocked(swing, [swings.get(x.id)!])).map(doorName);
+    const hits = [...new Set([...things.filter(([, outline]) => blocked(swing, [outline])).map(([what]) => what), ...others.map((x) => `${x}'s swing`)])];
     if (!hits.length) continue;
     const wall = project.walls.find((w) => w.id === o.wallId)!;
     const where = roomAt(project, swing[Math.floor(swing.length / 2)])?.name;
@@ -384,7 +427,7 @@ export function doorSwingChecks(project: Project): CodeCheck[] {
       targetId: o.id,
     });
   }
-  if (!out.length) out.push({ rule: 'Door swing clear', section: 'Layout', status: 'pass', message: `${doors.length} door swing${doors.length === 1 ? '' : 's'} clear of fixtures, furniture and counters` });
+  if (!out.length) out.push({ rule: 'Door swing clear', section: 'Layout', status: 'pass', message: `${doors.length} door swing${doors.length === 1 ? '' : 's'} clear of fixtures, furniture, counters and each other` });
   return out;
 }
 
@@ -402,7 +445,10 @@ export interface ScheduleRow {
   size: string;
   qty: number;
   rooms: string;
-  /** Where each one is, for its tag on the printed plan. */
+  /** The product picked (rows split by model). */
+  model: string;
+  /** Rough-in and other notes, each distinct one once. */
+  notes: string;
   at: Point[];
 }
 
@@ -412,7 +458,7 @@ export interface ScheduleRow {
  * gets DW.
  */
 export function fixtureSchedule(project: Project): ScheduleRow[] {
-  type Entry = { prefix: string; item: string; size: string; room?: string; at: Point; order: number };
+  type Entry = { prefix: string; item: string; size: string; model?: string; note?: string; room?: string; at: Point; order: number };
   const entries: Entry[] = [];
   const kinds = Object.keys(MARK) as FurnitureKind[];
   for (const f of project.furniture.filter(isFixture)) {
@@ -420,6 +466,8 @@ export function fixtureSchedule(project: Project): ScheduleRow[] {
       prefix: MARK[f.kind]!,
       item: FURNITURE[f.kind].label,
       size: `${formatFtIn(f.w)} × ${formatFtIn(f.d)}`,
+      model: f.model?.trim() || undefined,
+      note: f.note?.trim() || undefined,
       room: furnitureRoom(project, f)?.name,
       at: furniturePoint(f, 0, f.d / 2 + 6),
       order: kinds.indexOf(f.kind),
@@ -445,16 +493,18 @@ export function fixtureSchedule(project: Project): ScheduleRow[] {
   const rows: ScheduleRow[] = [];
   const counts = new Map<string, number>();
   for (const e of entries) {
-    let row = rows.find((r) => r.mark.startsWith(`${e.prefix}-`) && r.item === e.item && r.size === e.size);
+    const model = e.model ?? '';
+    let row = rows.find((r) => r.mark.startsWith(`${e.prefix}-`) && r.item === e.item && r.size === e.size && r.model === model);
     if (!row) {
       const n = (counts.get(e.prefix) ?? 0) + 1;
       counts.set(e.prefix, n);
-      row = { mark: `${e.prefix}-${n}`, item: e.item, size: e.size, qty: 0, rooms: '', at: [] };
+      row = { mark: `${e.prefix}-${n}`, item: e.item, size: e.size, model, notes: '', qty: 0, rooms: '', at: [] };
       rows.push(row);
     }
     row.qty++;
     row.at.push(e.at);
     if (e.room && !row.rooms.split(', ').includes(e.room)) row.rooms = row.rooms ? `${row.rooms}, ${e.room}` : e.room;
+    if (e.note && !row.notes.split('; ').includes(e.note)) row.notes = row.notes ? `${row.notes}; ${e.note}` : e.note;
   }
   return rows;
 }

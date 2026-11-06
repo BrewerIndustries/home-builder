@@ -80,6 +80,7 @@ const SAMPLE: [RegExp, number][] = [
   [/^Countertop support brackets/, 35],
   [/^Toilet \(allowance\)/, 280],
   [/^Bidet \(allowance\)/, 450],
+  [/^Closet rod \+ shelf/, 18],
   [/^Laundry sink \+ faucet/, 300],
   [/^Vanity \+ lavatory faucet/, 450],
   [/^Bathtub \+ valve/, 700],

@@ -64,7 +64,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Plan versions with change-order diffs
 - [x] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)
 - [x] Fixtures v2: symbols follow dragged walls; door-swing clearance; a kitchen sink fixture outside counters; bidet, laundry sink, freestanding range / fridge; fixture schedule on the print sheet
-- [ ] Fixtures v3: door-to-door swing clashes; tub clearances; WC–bidet 30" centre spacing; follow walls through a split; schedule columns for model / rough-in notes; closet rod + shelf, stairs symbol
+- [x] Fixtures v3: door-to-door swing clashes; tub clearances; WC–bidet 30" centre spacing; follow walls through a split; schedule columns for model / rough-in notes; closet rod + shelf, stairs symbol
+- [ ] Fixtures v4: door swing vs. fixture clearance zones (not just bodies); double / pocket / bifold door swings; schedule sort by room; closet rod double-hang and shelf-only options; tub-shower combo
 - [ ] AI plan recognition: suggest walls / doors / windows from the underlay image (after PDF + perspective)
 
 ## Housekeeping

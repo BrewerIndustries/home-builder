@@ -134,7 +134,7 @@ export type FurnitureKind =
   | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'shower' | 'kitchen-sink' | 'laundry-sink'
   | 'washer' | 'dryer' | 'water-heater' | 'range' | 'fridge'
   | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser'
-  | 'stairs';
+  | 'stairs' | 'closet-rod';
 
 /**
  * A plan symbol: a plumbing fixture or appliance (priced and code-checked) or a
@@ -152,6 +152,9 @@ export interface Furniture {
   /** Stairs: risers in the flight, and whether it goes down from this floor (else up). The foot on this floor is the front (+y). */
   risers?: number;
   down?: boolean;
+  /** Fixtures: the product picked, and rough-in or other notes, for the schedule. */
+  model?: string;
+  note?: string;
 }
 
 export interface Counter {

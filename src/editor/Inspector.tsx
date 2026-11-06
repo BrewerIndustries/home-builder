@@ -580,6 +580,16 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </Field>
           </>
         )}
+        {spec.fixture && (
+          <>
+            <Field label="Model" hint="Shown on the fixture schedule; different models get their own mark">
+              <input value={f.model ?? ''} placeholder="Make / model" onChange={(e) => up({ model: e.target.value || undefined })} />
+            </Field>
+            <Field label="Rough-in / notes" hint="Shown on the fixture schedule — e.g. the rough-in from the finished wall the chosen product needs">
+              <input value={f.note ?? ''} placeholder={'e.g. 12" rough-in'} onChange={(e) => up({ note: e.target.value || undefined })} />
+            </Field>
+          </>
+        )}
         <div className="row wrap">
           <button onClick={() => up({ rot: (f.rot + 270) % 360 })} title="Turn 90° anticlockwise">
             ⟲ 90°
@@ -598,7 +608,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         ))}
         <p className="muted small">
           {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
-          {spec.fixture ? 'Priced in the estimate; ' : 'Drawn on the plan and in 3D only; '}drag to move — it backs onto the wall you drop it by (Shift keeps it free-standing).
+          {spec.fixture || f.kind === 'closet-rod' ? 'Priced in the estimate; ' : 'Drawn on the plan and in 3D only; '}drag to move — it backs onto the wall you drop it by (Shift keeps it free-standing).
         </p>
         <button className="danger" onClick={() => del(f.id)}>
           Delete {spec.label.toLowerCase()}

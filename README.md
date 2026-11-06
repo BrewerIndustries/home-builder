@@ -96,7 +96,8 @@ Fixtures are priced in the estimate (allowances plus a rough-in per plumbing fix
 - **R306.1:** the plan has a toilet, a lavatory and a tub or shower. This is info only until you draw any.
 - **R307.1:**
   - a toilet or bidet needs 15" from its centre to a wall or fixture each side, and 21" clear in front;
-  - a lavatory needs 21" clear in front;
+  - toilets and bidets in the same room need 30" centre to centre (*Fixture spacing*);
+  - a lavatory or bathtub needs 21" clear in front;
   - a shower needs 24" clear in front (its front is taken as the opening).
   - Walls, counters and other fixtures block these clearances; furniture doesn't.
 - **P2708.1:** a shower is at least 900 sq in and 30" each way.
@@ -104,11 +105,13 @@ Fixtures are priced in the estimate (allowances plus a rough-in per plumbing fix
 
 A free-standing kitchen sink base counts as the kitchen's sink (R306.2), and a free-standing sink, range and fridge count toward the work triangle the same as ones set in a counter.
 
-**Door swings:** a hinged door whose quarter-circle swing runs into a fixture, piece of furniture or counter gets a *Door swing clear* warning (a layout check, not an IRC rule) with the door to click to.
+**Door swings:** a hinged door whose quarter-circle swing runs into a fixture, piece of furniture, counter or **another door's swing** gets a *Door swing clear* warning (a layout check, not an IRC rule) with the door to click to. Two doors that clash each get one. Closet rods hang overhead, so doors swing under them.
 
-**Fixture schedule:** the printed plan tags every fixture and appliance (WC-1, LAV-1, S-1, R-1, REF-1, DW-1 …, counter sinks / ranges / fridges / dishwashers included) and adds a second page listing mark, item, size, quantity and room — one row per kind and size.
+**Wall splits:** a fixture backed onto a wall you split stays on the piece it sits on and follows that piece when it moves.
 
-Furniture is drawn on the plan and in 3D only.
+**Fixture schedule:** the printed plan tags every fixture and appliance (WC-1, LAV-1, S-1, R-1, REF-1, DW-1 …, counter sinks / ranges / fridges / dishwashers included) and adds a second page listing mark, item, size, **model**, quantity, room and **rough-in / notes**. There's one row per kind, size and model. Set a fixture's *Model* and *Rough-in / notes* in its panel; different models get their own mark, and each distinct note is listed once.
+
+Furniture is drawn on the plan and in 3D only. The exception is **Closet rod + shelf** (48" × 12" by default; the dashed shelf overhead with the rod under it, a shelf at 5' 6" in 3D), which is priced per foot of run. Stairs have their own symbol (treads, UP / DN arrow, cut line) from Lighting v3.
 
 ### Lights, switches and alarms
 
