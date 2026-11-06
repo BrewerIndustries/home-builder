@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
 import { joinWalls, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
@@ -22,6 +22,9 @@ export type Action =
   | { type: 'setDimMode'; mode: DimMode }
   | { type: 'setDimFaces'; faces: 'finished' | 'framing' }
   | { type: 'setDimOffset'; id: string; offset: number; transient?: boolean }
+  | { type: 'setDimHidden'; id: string; hidden: boolean }
+  | { type: 'showAllDims' }
+  | { type: 'addDim'; dim: UserDim; offset: number }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
@@ -110,6 +113,18 @@ export function projectReducer(p: Project, action: Action): Project {
       const dimOffsets = action.offset ? { ...rest, [action.id]: action.offset } : rest;
       return { ...p, dimOffsets: Object.keys(dimOffsets).length ? dimOffsets : undefined };
     }
+
+    case 'setDimHidden': {
+      const rest = (p.hiddenDims ?? []).filter((x) => x !== action.id);
+      const hiddenDims = action.hidden ? [...rest, action.id] : rest;
+      return { ...p, hiddenDims: hiddenDims.length ? hiddenDims : undefined };
+    }
+
+    case 'showAllDims':
+      return { ...p, hiddenDims: undefined };
+
+    case 'addDim':
+      return { ...p, dims: [...(p.dims ?? []), action.dim], dimOffsets: action.offset ? { ...p.dimOffsets, [action.dim.id]: action.offset } : p.dimOffsets };
 
     case 'setDimFaces':
       return { ...p, dimFaces: action.faces };
@@ -203,6 +218,10 @@ export function projectReducer(p: Project, action: Action): Project {
         rooms: p.rooms.filter((r) => !ids.has(r.id)),
         counters: p.counters.filter((c) => !ids.has(c.id)),
         furniture: p.furniture.filter((f) => !ids.has(f.id)),
+        ...(p.dims?.some((d) => ids.has(d.id)) && {
+          dims: p.dims.filter((d) => !ids.has(d.id)),
+          dimOffsets: Object.fromEntries(Object.entries(p.dimOffsets ?? {}).filter(([k]) => !ids.has(k))),
+        }),
         site: p.site && {
           ...p.site,
           lot: ids.has('lot') ? undefined : p.site.lot,

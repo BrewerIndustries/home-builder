@@ -1308,6 +1308,14 @@ tr.no-pick {
   pointer-events: stroke;
   cursor: move;
 }
+.dims .selected .dim-line,
+.dims.selected .dim-line {
+  stroke: var(--accent);
+}
+.dims .selected .dim,
+.dims.selected .dim {
+  fill: var(--accent);
+}
 
 /* Fixture schedule (print sheet, page 2) and its tags on the plan */
 .fixture-mark {

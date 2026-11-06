@@ -274,6 +274,12 @@ export interface Underlay {
 /** Dimensions to wall centrelines, room-side faces, or the outside face of the exterior walls. */
 export type DimMode = 'centre' | 'inside' | 'outside';
 
+export interface UserDim {
+  id: string;
+  a: Point;
+  b: Point;
+}
+
 export interface Project {
   version: 1;
   name: string;
@@ -291,6 +297,10 @@ export interface Project {
   dimFaces?: 'finished' | 'framing';
   /** Dimension strings dragged out from where they're drawn: id → extra inches outward. */
   dimOffsets?: Record<string, number>;
+  /** Dimension strings switched off (same ids as dimOffsets): skipped on screen and in print. */
+  hiddenDims?: string[];
+  /** Dimensions the user placed by picking two points; drawn aligned with a → b, offset by dimOffsets[id]. */
+  dims?: UserDim[];
   electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;

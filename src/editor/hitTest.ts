@@ -12,7 +12,9 @@ export type Hit =
   | { kind: 'wall'; id: string }
   | { kind: 'counter'; id: string }
   | { kind: 'furniture'; id: string }
-  | { kind: 'room'; id: string };
+  | { kind: 'room'; id: string }
+  /** A dimension string (picked from the drawing, not by hitTest): a built-in string's id or a placed dimension's. */
+  | { kind: 'dim'; id: string };
 
 /** What's under `p` (world inches). `slop` is the pointer tolerance in inches. Wall devices beat ceiling devices beat openings beat walls beat fixtures / furniture beat counters beat rooms. */
 export function hitTest(project: Project, p: Point, slop: number): Hit | null {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { interiorStrings, openingChains, roomClearSize, roomClearSizes } from '../src/calc/faces.ts';
+import { openingChains, partitionStrings, roomClearSize, roomClearSizes } from '../src/calc/faces.ts';
 import { projectReducer } from '../src/model/store.ts';
 import type { Point, Project, Wall } from '../src/model/types.ts';
 import { box, door, project, wall } from './helpers.ts';
@@ -19,11 +19,12 @@ const ends = { x: [0, 240] as [number, number], y: [0, 144] as [number, number] 
 
 test('strings across the plan stop at every interior wall', () => {
   const p = plan();
-  assert.deepEqual(interiorStrings(p, 'centre', ends), { x: [0, 120, 240], y: [0, 72, 144] });
-  // To faces: both faces of each 4-1/2" partition.
-  assert.deepEqual(interiorStrings(p, 'inside', ends), { x: [0, 117.75, 122.25, 240], y: [0, 69.75, 74.25, 144] });
+  const strings = (mode: 'centre' | 'inside') => partitionStrings(p, mode, ends).map((s) => [s.axis, s.stops]);
+  assert.deepEqual(strings('centre'), [['x', [0, 120, 240]], ['y', [0, 72, 144]]]);
+  // To faces: both faces of each 4-1/2" partition, out to the exterior walls' outside faces.
+  assert.deepEqual(strings('inside'), [['x', [-3.25, 117.75, 122.25, 243.25]], ['y', [-3.25, 69.75, 74.25, 147.25]]]);
   // No interior walls, no string.
-  assert.deepEqual(interiorStrings(project(box(240, 144)), 'centre', ends), { x: [], y: [] });
+  assert.deepEqual(partitionStrings(project(box(240, 144)), 'centre', ends), []);
 });
 
 /** An L-shaped house and room: 20' × 8' across the top, a 10' × 8' leg down the left. */

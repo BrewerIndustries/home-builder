@@ -389,6 +389,38 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     );
   }
 
+  if (selection?.kind === 'dim') {
+    const id = selection.id;
+    const placed = project.dims?.find((d) => d.id === id);
+    const offset = project.dimOffsets?.[id] ?? 0;
+    return (
+      <aside className="inspector">
+        <h3>{dimName(project, id)}</h3>
+        {placed && (
+          <Field label="Measures" hint="Straight from the first point picked to the second">
+            <span>{formatFtIn(dist(placed.a, placed.b))}</span>
+          </Field>
+        )}
+        <p className="muted small">Drag it in or out; double-click it to put it back. {placed ? 'Delete removes it.' : 'Hiding it takes it off the plan and the print sheet (Delete hides it too).'}</p>
+        {(placed ? offset !== 12 : offset !== 0) && <button onClick={() => dispatch({ type: 'setDimOffset', id, offset: placed ? 12 : 0 })}>Put it back</button>}{' '}
+        {placed ? (
+          <button className="danger" onClick={() => del(id)}>
+            Delete dimension
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              dispatch({ type: 'setDimHidden', id, hidden: true });
+              setSelection(null);
+            }}
+          >
+            Hide this string
+          </button>
+        )}
+      </aside>
+    );
+  }
+
   if (selection?.kind === 'counter') {
     const c = project.counters.find((x) => x.id === selection.id);
     if (!c) return null;
@@ -1002,4 +1034,25 @@ function SpaceUseSelect({ value, set }: { value: SpaceUse | undefined; set(v: Sp
       <option value="equipment">Equipment</option>
     </select>
   );
+}
+
+/** What a dimension string is, for the panel: the built-in strings by where they run, chains by their wall, placed ones by number. */
+export function dimName(project: Project, id: string): string {
+  const fixed: Record<string, string> = {
+    'top-chain': 'Corner chain along the top',
+    'top-overall': 'Overall width',
+    'left-chain': 'Corner chain down the left',
+    'left-overall': 'Overall depth',
+    'bottom-interior': 'Partitions, left to right',
+    'right-interior': 'Partitions, top to bottom',
+  };
+  if (fixed[id]) return fixed[id];
+  const inside = /^interior-(x|y)-(\d+)$/.exec(id);
+  if (inside) return `Partitions, ${inside[1] === 'x' ? 'left to right' : 'top to bottom'} (${Number(inside[2]) + 1})`;
+  if (id.startsWith('chain:')) {
+    const i = project.walls.findIndex((w) => w.id === id.slice(6));
+    return `Openings along W${i + 1}`;
+  }
+  const i = project.dims?.findIndex((d) => d.id === id) ?? -1;
+  return i >= 0 ? `Dimension D${i + 1}` : 'Dimension';
 }

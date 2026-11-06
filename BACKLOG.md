@@ -57,7 +57,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Inside / outside dimension modes (centreline / inside faces / outside face)
 - [x] Dimensions v2: type a length as inside / outside in the wall panel; opening chains on exterior walls; room clear sizes; finished vs framing faces
 - [x] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it
-- [ ] Dimensions v4: partition strings at several heights through the plan (not just one each way); clear sizes for T / U rooms; user-placed dimensions (click two points); hide / show individual strings
+- [x] Dimensions v4: partition strings at several heights through the plan (not just one each way); clear sizes for T / U rooms; user-placed dimensions (click two points); hide / show individual strings
+- [ ] Dimensions v5: strings through angled partitions; keep inside strings clear of room labels automatically; placed dimensions that follow the walls they were snapped to; a running (ordinate) string option
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
 - [ ] Plan versions with change-order diffs
 - [x] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)

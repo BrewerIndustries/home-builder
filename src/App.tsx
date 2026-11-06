@@ -43,6 +43,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'alarm', label: 'Alarm', key: 'a', icon: '◉' },
   { id: 'counter', label: 'Counter', key: 'k', icon: '▬' },
   { id: 'furniture', label: 'Fixture', key: 'u', icon: '◫' },
+  { id: 'dimension', label: 'Dimension', key: 'm', icon: '↔' },
 ];
 
 export function App() {
@@ -84,6 +85,11 @@ export function App() {
   // Drop a stale selection after undo / delete.
   useEffect(() => {
     if (!selection) return;
+    if (selection.kind === 'dim') {
+      // A placed dimension that's gone, or a string now hidden.
+      if ((selection.id.startsWith('dm_') && !project.dims?.some((d) => d.id === selection.id)) || project.hiddenDims?.includes(selection.id)) setSelection(null);
+      return;
+    }
     const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures, counter: project.counters, furniture: project.furniture };
     if (!lists[selection.kind].some((x) => x.id === selection.id)) setSelection(null);
   }, [project, selection]);
@@ -105,7 +111,9 @@ export function App() {
       }
       if (mod) return;
       if ((e.key === 'Delete' || e.key === 'Backspace') && selection && tab === 'plan') {
-        dispatch({ type: 'delete', ids: [selection.id] });
+        // A built-in dimension string can't be deleted, only hidden.
+        if (selection.kind === 'dim' && !selection.id.startsWith('dm_')) dispatch({ type: 'setDimHidden', id: selection.id, hidden: true });
+        else dispatch({ type: 'delete', ids: [selection.id] });
         setSelection(null);
         e.preventDefault();
         return;
@@ -311,6 +319,11 @@ export function App() {
                 </button>
               ))}
             </div>
+            {!!project.hiddenDims?.length && (
+              <button onClick={() => dispatch({ type: 'showAllDims' })} title="Show every dimension string you hid">
+                Show {project.hiddenDims.length} hidden
+              </button>
+            )}
             <div className="spacer" />
             <button onClick={() => canvas.current?.zoom(1.25)} title="Zoom in">
               +

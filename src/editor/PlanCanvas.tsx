@@ -24,9 +24,10 @@ import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind,
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
+import { faceSpans } from '../calc/faces.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage';
+export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
 
 interface View {
   /** Screen pixels per inch. */
@@ -220,6 +221,15 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     [endpoints, shift, project.walls],
   );
 
+  // The Dimension tool also snaps to wall face corners (where faces meet or end), not just centreline ends.
+  const faceCorners = tool === 'dimension' ? faceSpans(project).flatMap((f) => [f.a, f.b]) : [];
+  const snapDim = (raw: Point, origin?: Point): { p: Point; snapped: 'endpoint' | 'grid' | null; note?: string } => {
+    const tol = SNAP_PX / viewRef.current.scale;
+    let best: Point | null = null;
+    for (const e of [...endpoints, ...faceCorners]) if (dist(e, raw) <= tol && (!best || dist(e, raw) < dist(best, raw))) best = e;
+    return best ? { p: { ...best }, snapped: 'endpoint' } : snap(raw, { origin });
+  };
+
   const { framing } = project;
   const newWallThickness = finishedThickness(wallKind === 'exterior' ? framing.exteriorStud : framing.interiorStud);
   const makeWall = useCallback(
@@ -278,7 +288,10 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       if (e.key === 'Escape') {
         if (lengthText) setLengthText('');
         else if (chain) setChain(null);
-        else setTool('select');
+        else if (tool === 'dimension' && calPoints.length) {
+          setCalPoints([]);
+          setMoveText(null);
+        } else setTool('select');
       }
       if (tool === 'wall' && chain) {
         if (/^[0-9'". /-]$/.test(e.key) && !(e.key === ' ' && !lengthText)) {
@@ -310,7 +323,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       window.removeEventListener('keydown', down, true);
       window.removeEventListener('keyup', up);
     };
-  }, [tool, chain, lengthText, cursor, shift, placeWall, setTool, entry]);
+  }, [tool, chain, lengthText, cursor, shift, placeWall, setTool, entry, calPoints.length]);
 
   /** Set the last drag exactly from typed text: a distance moved, an end's length, or a swing's angle. */
   function applyEntry(last: LastEdit, text: string) {
@@ -390,6 +403,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       const id = dimEl.getAttribute('data-dim')!;
       const [ox, oy] = (dimEl.getAttribute('data-out') ?? '0,0').split(',').map(Number);
       drag.current = { kind: 'dim', id, out: { x: ox, y: oy }, start: raw, base: project.dimOffsets?.[id] ?? 0, started: false };
+      setSelection({ kind: 'dim', id });
       return;
     }
 
@@ -510,6 +524,22 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       }
       case 'calibrate': {
         setCalPoints((prev) => (prev.length >= 2 ? [raw] : [...prev, raw]));
+        return;
+      }
+      case 'dimension': {
+        // First click: where it starts; second: where it ends. It goes in 1' out to the left of the pick direction.
+        const from = calPoints[0];
+        const p = snapDim(raw, from).p;
+        if (!from) {
+          setCalPoints([p]);
+          return;
+        }
+        if (dist(from, p) < 1) return;
+        const dim = { id: uid('dm'), a: from, b: p };
+        dispatch({ type: 'addDim', dim, offset: 12 });
+        setSelection({ kind: 'dim', id: dim.id });
+        setCalPoints([]);
+        onMessage?.(`Dimension ${formatFtIn(dist(from, p))} — drag it in or out with Select; Delete removes it.`);
         return;
       }
       case 'straighten': {
@@ -670,7 +700,11 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       setMoveText(s.note ? `Angle ${s.note}` : null);
     }
     else if (tool === 'room') setCursor(snap(raw));
-    else setCursor({ p: raw, snapped: null });
+    else if (tool === 'dimension') {
+      const c = snapDim(raw, calPoints[0]);
+      setCursor(c);
+      setMoveText(calPoints[0] ? `${formatFtIn(dist(calPoints[0], c.p))} · click to place · Shift = any angle · Esc cancels` : null);
+    } else setCursor({ p: raw, snapped: null });
   }
 
   function onPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
@@ -820,7 +854,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           const dimEl = (e.target as Element).closest?.('[data-dim]');
           if (dimEl) {
             const id = dimEl.getAttribute('data-dim')!;
-            if (project.dimOffsets?.[id]) dispatch({ type: 'setDimOffset', id, offset: 0 });
+            // A placed dimension's usual place is 1' out from its points.
+            const home = project.dims?.some((d) => d.id === id) ? 12 : 0;
+            if ((project.dimOffsets?.[id] ?? 0) !== home) dispatch({ type: 'setDimOffset', id, offset: home });
             return;
           }
           // Double-click a wall to split it there.
@@ -890,6 +926,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           {tool === 'straighten' && calPoints.length > 1 && (
             <polyline points={[...calPoints, ...(calPoints.length === 4 ? [calPoints[0]] : cursor ? [cursor.p] : [])].map((p) => `${p.x},${p.y}`).join(' ')} fill="none" className="cal-line" strokeWidth={px(2)} />
           )}
+          {tool === 'dimension' && calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(1.5)} />}
           {tool === 'calibrate' && calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(2)} />}
           {tool === 'calibrate' && calPoints.length === 2 && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={calPoints[1].x} y2={calPoints[1].y} className="cal-line" strokeWidth={px(2)} />}
 
@@ -999,6 +1036,8 @@ function hintFor(tool: Tool, drawing: boolean): string {
       return 'Drag along a wall for a counter on that face (click = 6 ft) · carry the drag round a corner onto the next wall for an L · drag in open floor for an island · add a sink, range or tall cabinet in the panel';
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
+    case 'dimension':
+      return 'Click two points to dimension between them — snaps to wall ends, face corners and the grid · Shift = any angle · drag it out afterwards with Select';
     case 'straighten':
       return 'Click four corners of a rectangle in the photo, in any order';
     case 'moveImage':
