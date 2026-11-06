@@ -20,11 +20,11 @@ import { guessRoom } from '../calc/roomGuess.ts';
 import { retarget, snapAngle, snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounters } from '../calc/counters.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
-import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
+import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
-import { faceSpans } from '../calc/faces.ts';
+import { anchorFor, faceSpans } from '../calc/faces.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
@@ -95,6 +95,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const [roomDrag, setRoomDrag] = useState<{ a: Point; b: Point } | null>(null);
   const [counterDraft, setCounterDraft] = useState<Counter[]>([]);
   const [calPoints, setCalPoints] = useState<Point[]>([]);
+  /** The Dimension tool's first point's wall anchor, if it snapped to one. */
+  const dimAnchor = useRef<DimAnchor | undefined>(undefined);
   const [calText, setCalText] = useState('');
   const [realW, setRealW] = useState('');
   const [realH, setRealH] = useState('');
@@ -528,14 +530,18 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       }
       case 'dimension': {
         // First click: where it starts; second: where it ends. It goes in 1' out to the left of the pick direction.
+        // A point snapped to a wall end or face corner is pinned to that wall end and follows it.
         const from = calPoints[0];
-        const p = snapDim(raw, from).p;
+        const s = snapDim(raw, from);
+        const p = s.p;
+        const at = s.snapped === 'endpoint' ? anchorFor(project, p) : undefined;
         if (!from) {
+          dimAnchor.current = at;
           setCalPoints([p]);
           return;
         }
         if (dist(from, p) < 1) return;
-        const dim = { id: uid('dm'), a: from, b: p };
+        const dim: UserDim = { id: uid('dm'), a: from, b: p, ...(dimAnchor.current && { aAt: dimAnchor.current }), ...(at && { bAt: at }) };
         dispatch({ type: 'addDim', dim, offset: 12 });
         setSelection({ kind: 'dim', id: dim.id });
         setCalPoints([]);

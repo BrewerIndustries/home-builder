@@ -1,5 +1,5 @@
 import { pointAlong, pointInPolygon, polygonArea, projectOnWall, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
-import type { DimMode, Point, Project, Room, Wall } from '../model/types.ts';
+import type { DimAnchor, DimMode, Point, Project, Room, Wall } from '../model/types.ts';
 import { wallFaces } from './enclosure.ts';
 import { projectReducer } from '../model/store.ts';
 
@@ -324,33 +324,60 @@ export interface PartitionString {
   stops: number[];
 }
 
+/** A rectangle on the plan the strings through it should keep clear of (room labels): x0..x1, y0..y1. */
+export interface Keepout {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
 /**
- * Strings through the partitions at each height they stand: for every square
- * interior wall, a line across its run picks up every other
- * partition crossing there. A string that only repeats part of another is
- * dropped. The one through the most walls comes first (drawn outside the
- * plan); the rest, in order, run through it. Each ends at the exterior walls
- * it meets at that height, or at `ends` when it meets fewer than two.
+ * Strings through the partitions at each height they stand: for every interior
+ * wall crossing a line within 60° of square (angled ones too), a line across
+ * its run picks up every other partition crossing there. A string that only
+ * repeats part of another is dropped. The one through the most walls comes
+ * first (drawn outside the plan); the rest, in order, run through it. Each ends
+ * at the exterior walls it meets at that height, or at `ends` when it meets
+ * fewer than two. Stops are where the walls cross the line: centrelines, or
+ * both faces (an angled wall's faces cross wider apart than its thickness).
+ *
+ * The line goes a third of the way along the stretch its walls share, or the
+ * first of a few other places there that keeps `keepout` boxes (room labels)
+ * out of the band the string's text needs (`band`: below / above the line).
  */
-export function partitionStrings(project: Project, mode: DimMode, ends: { x: [number, number]; y: [number, number] }): PartitionString[] {
+export function partitionStrings(
+  project: Project,
+  mode: DimMode,
+  ends: { x: [number, number]; y: [number, number] },
+  opts: { keepout?: Keepout[]; band?: [number, number] } = {},
+): PartitionString[] {
   const out: PartitionString[] = [];
+  const keepout = opts.keepout ?? [];
+  const [below, above] = opts.band ?? [0, 0];
   for (const axis of ['x', 'y'] as const) {
     const across = axis === 'x' ? 'y' : 'x';
     const [lo, hi] = ends[axis];
-    const square = (w: Wall) => Math.abs(w.a[axis] - w.b[axis]) < TOL && wallLength(w) >= 1;
+    // How square the wall stands to the line: 1 = square, 0 = along it.
+    const steep = (w: Wall) => Math.abs(w.b[across] - w.a[across]) / Math.max(1e-9, wallLength(w));
+    const usable = (w: Wall) => wallLength(w) >= 1 && steep(w) >= 0.5;
     const span = (w: Wall) => [Math.min(w.a[across], w.b[across]), Math.max(w.a[across], w.b[across])] as const;
+    // Where the centreline crosses the line.
+    const pos = (w: Wall, at: number) => w.a[axis] + ((at - w.a[across]) * (w.b[axis] - w.a[axis])) / (w.b[across] - w.a[across]);
+    // Half the wall, measured along the line.
+    const halfAlong = (w: Wall) => faceHalf(project, w) / steep(w);
     // A partition must run past the line (not just end on it); an exterior wall may end on it (an L's corner).
     const crosses = (w: Wall, at: number) => span(w)[0] + TOL < at && at < span(w)[1] - TOL;
     const meets = (w: Wall, at: number) => span(w)[0] - TOL <= at && at <= span(w)[1] + TOL;
-    const inner = project.walls.filter((w) => w.kind !== 'exterior' && square(w) && w.a[axis] > lo + TOL && w.a[axis] < hi - TOL);
-    const outer = project.walls.filter((w) => w.kind === 'exterior' && square(w));
+    const inner = project.walls.filter((w) => w.kind !== 'exterior' && usable(w));
+    const outer = project.walls.filter((w) => w.kind === 'exterior' && usable(w));
+    const blocked = (at: number) =>
+      keepout.some((k) => k[`${axis}1` as 'x1'] > lo && k[`${axis}0` as 'x0'] < hi && k[`${across}1` as 'y1'] > at - above && k[`${across}0` as 'y0'] < at + below);
     const found: { walls: Wall[]; at: number }[] = [];
     for (const w of inner) {
-      let at = (span(w)[0] + span(w)[1]) / 2;
-      let walls = inner.filter((o) => crosses(o, at));
-      // Run it a third of the way along the stretch they all share: clear of the room labels in the middle.
+      let walls = inner.filter((o) => crosses(o, (span(w)[0] + span(w)[1]) / 2));
       const [from, to] = [Math.max(...walls.map((o) => span(o)[0])), Math.min(...walls.map((o) => span(o)[1]))];
-      at = from + (to - from) / 3;
+      const at = [1 / 3, 2 / 3, 1 / 4, 3 / 4, 1 / 6, 5 / 6, 1 / 2].map((t) => from + (to - from) * t).find((v) => !blocked(v)) ?? from + (to - from) / 3;
       walls = inner.filter((o) => crosses(o, at));
       const key = (ws: Wall[]) => ws.map((o) => o.id).sort().join();
       if (!found.some((f) => key(f.walls) === key(walls))) found.push({ walls, at });
@@ -359,16 +386,16 @@ export function partitionStrings(project: Project, mode: DimMode, ends: { x: [nu
     kept.sort((p, q) => q.walls.length - p.walls.length || p.at - q.at);
     for (const { walls, at } of kept) {
       const stops = walls.flatMap((w) => {
-        const h = faceHalf(project, w);
-        return mode === 'centre' ? [w.a[axis]] : [w.a[axis] - h, w.a[axis] + h];
+        const c = pos(w, at);
+        return mode === 'centre' ? [c] : [c - halfAlong(w), c + halfAlong(w)];
       });
-      const ext = outer.filter((w) => meets(w, at)).sort((p, q) => p.a[axis] - q.a[axis]);
+      const ext = outer.filter((w) => meets(w, at)).sort((p, q) => pos(p, at) - pos(q, at));
       const [first, last] = [ext[0], ext.at(-1)];
       const local: [number, number] =
         ext.length >= 2 && first && last
           ? mode === 'centre'
-            ? [first.a[axis], last.a[axis]]
-            : [first.a[axis] - faceHalf(project, first), last.a[axis] + faceHalf(project, last)]
+            ? [pos(first, at), pos(last, at)]
+            : [pos(first, at) - halfAlong(first), pos(last, at) + halfAlong(last)]
           : [lo, hi];
       const inside = stops.filter((v) => v > local[0] + TOL && v < local[1] - TOL);
       if (!inside.length) continue;
@@ -399,4 +426,74 @@ export function centrelineForFace(project: Project, wallId: string, side: 1 | -1
     if (face === null) return null;
   }
   return len;
+}
+
+/** The stops of a running string that get a total: all but the zero, skipping any closer than `gap` to the last one labelled (the end always shows). */
+export function runningLabels(stops: number[], gap: number): number[] {
+  const out: number[] = [];
+  let last = stops[0];
+  stops.slice(1).forEach((s, i, rest) => {
+    const end = i === rest.length - 1;
+    if (end && out.length && s - out.at(-1)! < gap) out.pop();
+    if (end || s - last >= gap) {
+      out.push(s);
+      last = s;
+    }
+  });
+  return out;
+}
+
+/**
+ * Pin a placed dimension's point to the wall end it sits on (or just off, at a
+ * face corner): the nearest end within a wall's thickness. None if no wall end
+ * is that close.
+ */
+export function anchorFor(project: Project, p: Point): DimAnchor | undefined {
+  let best: { at: DimAnchor; d: number } | null = null;
+  for (const w of project.walls) {
+    const len = wallLength(w);
+    if (len < 1) continue;
+    const n = wallNormal(w);
+    for (const end of ['a', 'b'] as const) {
+      const [e, o] = end === 'a' ? [w.a, w.b] : [w.b, w.a];
+      const u = { x: (o.x - e.x) / len, y: (o.y - e.y) / len };
+      const v = { x: p.x - e.x, y: p.y - e.y };
+      const along = dot(v, u);
+      const perp = dot(v, n);
+      const d = Math.hypot(along, perp);
+      if (Math.abs(along) <= w.thickness && Math.abs(perp) <= w.thickness && (!best || d < best.d - 1e-9)) best = { at: { wallId: w.id, end, along, perp }, d };
+    }
+  }
+  return best?.at;
+}
+
+/** Where an anchored point is now; null if its wall is gone. */
+export function anchorPoint(project: Project, at: DimAnchor): Point | null {
+  const w = project.walls.find((x) => x.id === at.wallId);
+  if (!w) return null;
+  const len = wallLength(w);
+  if (len < 1e-9) return null;
+  const [e, o] = at.end === 'a' ? [w.a, w.b] : [w.b, w.a];
+  const n = wallNormal(w);
+  return { x: e.x + ((o.x - e.x) / len) * at.along + n.x * at.perp, y: e.y + ((o.y - e.y) / len) * at.along + n.y * at.perp };
+}
+
+/** Placed dimensions follow the wall ends they were snapped to; a point whose wall is gone stays put and lets go. */
+export function followDims(_prev: Project, next: Project): Project {
+  if (!next.dims?.length || !next.dims.some((d) => d.aAt || d.bAt)) return next;
+  let changed = false;
+  const dims = next.dims.map((d) => {
+    if (!d.aAt && !d.bAt) return d;
+    const move = (p: Point, at: DimAnchor | undefined): [Point, DimAnchor | undefined] => {
+      if (!at) return [p, at];
+      const q = anchorPoint(next, at);
+      return q ? [q, at] : [p, undefined];
+    };
+    const [a, aAt] = move(d.a, d.aAt);
+    const [b, bAt] = move(d.b, d.bAt);
+    if (a.x === d.a.x && a.y === d.a.y && b.x === d.b.x && b.y === d.b.y && aAt === d.aAt && bAt === d.bAt) return d;
+    changed = true;
+    return { ...d, a, b, aAt, bAt };
+  });
+  return changed ? { ...next, dims } : next;
 }

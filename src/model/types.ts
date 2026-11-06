@@ -274,10 +274,22 @@ export interface Underlay {
 /** Dimensions to wall centrelines, room-side faces, or the outside face of the exterior walls. */
 export type DimMode = 'centre' | 'inside' | 'outside';
 
+/** Where a placed dimension's point sits relative to a wall end it was snapped to: it follows that end. */
+export interface DimAnchor {
+  wallId: string;
+  end: 'a' | 'b';
+  /** Along the wall from that end toward the other. */
+  along: number;
+  /** Off the centreline along wallNormal. */
+  perp: number;
+}
+
 export interface UserDim {
   id: string;
   a: Point;
   b: Point;
+  aAt?: DimAnchor;
+  bAt?: DimAnchor;
 }
 
 export interface Project {
@@ -295,6 +307,8 @@ export interface Project {
   dimMode?: DimMode;
   /** Which wall faces inside / outside dimensions measure to; finished when unset. */
   dimFaces?: 'finished' | 'framing';
+  /** How the plan's strings read: each piece between ticks (chained, the default) or running totals from the first tick. */
+  dimStyle?: 'chain' | 'running';
   /** Dimension strings dragged out from where they're drawn: id → extra inches outward. */
   dimOffsets?: Record<string, number>;
   /** Dimension strings switched off (same ids as dimOffsets): skipped on screen and in print. */

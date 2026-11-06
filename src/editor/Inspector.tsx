@@ -401,6 +401,15 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             <span>{formatFtIn(dist(placed.a, placed.b))}</span>
           </Field>
         )}
+        {placed && (
+          <Field label="Ends" hint="An end snapped to a wall end or face corner moves with that wall; others stay where they were put">
+            <span>
+              {[placed.aAt, placed.bAt]
+                .map((at) => (at && project.walls.some((w) => w.id === at.wallId) ? `follows W${project.walls.findIndex((w) => w.id === at.wallId) + 1}` : 'fixed'))
+                .join(' · ')}
+            </span>
+          </Field>
+        )}
         <p className="muted small">Drag it in or out; double-click it to put it back. {placed ? 'Delete removes it.' : 'Hiding it takes it off the plan and the print sheet (Delete hides it too).'}</p>
         {(placed ? offset !== 12 : offset !== 0) && <button onClick={() => dispatch({ type: 'setDimOffset', id, offset: placed ? 12 : 0 })}>Put it back</button>}{' '}
         {placed ? (
@@ -757,6 +766,12 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <select value={project.dimFaces ?? 'finished'} onChange={(e) => dispatch({ type: 'setDimFaces', faces: e.target.value as 'finished' | 'framing' })}>
           <option value="finished">Finished faces</option>
           <option value="framing">Framing (stud) faces</option>
+        </select>
+      </Field>
+      <Field label="Dimension strings" hint="Chained: each piece between ticks. Running: one zero tick, then the total so far at every tick (opening chains and placed dimensions stay as they are)">
+        <select value={project.dimStyle ?? 'chain'} onChange={(e) => dispatch({ type: 'setDimStyle', style: e.target.value as 'chain' | 'running' })}>
+          <option value="chain">Chained</option>
+          <option value="running">Running (ordinate)</option>
         </select>
       </Field>
 

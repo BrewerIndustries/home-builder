@@ -4,7 +4,7 @@ import { isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
-import { openingChains, partitionStrings, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
+import { openingChains, partitionStrings, runningLabels, type Keepout, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, UserDim, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -29,34 +29,17 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
   const wallsById = new Map(project.walls.map((w) => [w.id, w]));
   const hidden = new Set(project.hiddenDims);
   const selDim = selection?.kind === 'dim' ? selection.id : null;
+  const labels = project.rooms.map((r) => ({ room: r, lines: roomLabelLines(project, r, px, wallDims, outlets) }));
   return (
     <g className="plan-drawing">
-      {project.rooms.map((r) => {
-        // An L-shaped room's corner average can sit in the notch; find its open middle instead.
-        const centroid = r.points.length === 4 ? polygonCentroid(r.points) : roomCenter(project, r);
-        // Lift the label clear of a ceiling fixture sitting on the room's centre.
-        const busy = outlets && project.fixtures.some((f) => Math.abs(f.at.x - centroid.x) < 10 && Math.abs(f.at.y - centroid.y) < 10);
-        const c = busy ? { x: centroid.x, y: centroid.y - 8 - px(18) } : centroid;
+      {labels.map(({ room: r, lines }) => {
         const sel = selection?.kind === 'room' && selection.id === r.id;
-        // Clear sizes: a rectangle's under its label; an L / T / U's main piece there and each other piece in itself.
-        const [size, ...legs] = wallDims ? roomClearSizes(project, r) : [];
         return (
           <g key={r.id}>
             <polygon points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill={sel ? 'var(--room-sel)' : 'var(--room)'} stroke="none" />
-            <text x={c.x} y={c.y - px(4)} className="room-label" fontSize={px(13)} textAnchor="middle">
-              {r.name}
-            </text>
-            <text x={c.x} y={c.y + px(12)} className="room-area" fontSize={px(11)} textAnchor="middle">
-              {formatSqFt(exclusiveArea(project, r))}
-            </text>
-            {size && (
-              <text x={c.x} y={c.y + px(25)} className="room-area" fontSize={px(10)} textAnchor="middle">
-                {formatFtIn(size.width)} × {formatFtIn(size.depth)}
-              </text>
-            )}
-            {legs.map((leg, i) => (
-              <text key={i} x={leg.at.x} y={leg.at.y} className="room-area" fontSize={px(10)} textAnchor="middle" dominantBaseline="middle">
-                {formatFtIn(leg.width)} × {formatFtIn(leg.depth)}
+            {lines.map((l, i) => (
+              <text key={i} x={l.x} y={l.y} className={l.cls} fontSize={l.size} textAnchor="middle" dominantBaseline={l.middle ? 'middle' : undefined}>
+                {l.text}
               </text>
             ))}
           </g>
@@ -115,7 +98,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         openingChains(project, project.dimMode ?? 'centre')
           .filter((c) => !hidden.has(`chain:${c.wall.id}`))
           .map((c) => <OpeningChain key={c.wall.id} {...c} extra={project.dimOffsets?.[`chain:${c.wall.id}`] ?? 0} selected={selDim === `chain:${c.wall.id}`} px={px} />)}
-      {overallDims && <OverallDimensions project={project} selected={selDim} px={px} />}
+      {overallDims && <OverallDimensions project={project} selected={selDim} keepout={labels.flatMap((l) => l.lines.map(labelBox))} px={px} />}
       {(project.dims ?? [])
         .filter((d) => !hidden.has(d.id))
         .map((d) => (
@@ -130,11 +113,46 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
   );
 }
 
+interface LabelLine {
+  x: number;
+  y: number;
+  text: string;
+  cls: string;
+  size: number;
+  /** Centred on y (else y is the baseline). */
+  middle?: boolean;
+}
+
+/** A room's label lines: name, area and clear size at its middle, and each other piece's clear size in that piece. */
+function roomLabelLines(project: Project, r: Project['rooms'][number], px: (n: number) => number, wallDims: boolean, outlets: boolean): LabelLine[] {
+  // An L-shaped room's corner average can sit in the notch; find its open middle instead.
+  const centroid = r.points.length === 4 ? polygonCentroid(r.points) : roomCenter(project, r);
+  // Lift the label clear of a ceiling fixture sitting on the room's centre.
+  const busy = outlets && project.fixtures.some((f) => Math.abs(f.at.x - centroid.x) < 10 && Math.abs(f.at.y - centroid.y) < 10);
+  const c = busy ? { x: centroid.x, y: centroid.y - 8 - px(18) } : centroid;
+  // Clear sizes: a rectangle's under its label; an L / T / U's main piece there and each other piece in itself.
+  const [size, ...legs] = wallDims ? roomClearSizes(project, r) : [];
+  const out: LabelLine[] = [
+    { x: c.x, y: c.y - px(4), text: r.name, cls: 'room-label', size: px(13) },
+    { x: c.x, y: c.y + px(12), text: formatSqFt(exclusiveArea(project, r)), cls: 'room-area', size: px(11) },
+  ];
+  if (size) out.push({ x: c.x, y: c.y + px(25), text: `${formatFtIn(size.width)} × ${formatFtIn(size.depth)}`, cls: 'room-area', size: px(10) });
+  for (const leg of legs) out.push({ x: leg.at.x, y: leg.at.y, text: `${formatFtIn(leg.width)} × ${formatFtIn(leg.depth)}`, cls: 'room-area', size: px(10), middle: true });
+  return out;
+}
+
+/** Roughly where a label line's text sits (average glyph ~0.55 em wide). */
+function labelBox(l: LabelLine): Keepout {
+  const w = l.text.length * l.size * 0.55;
+  const [top, bottom] = l.middle ? [l.y - l.size / 2, l.y + l.size / 2] : [l.y - l.size * 0.8, l.y + l.size * 0.2];
+  return { x0: l.x - w / 2, x1: l.x + w / 2, y0: top, y1: bottom };
+}
+
 /**
  * Exterior dimension strings: a chain through every exterior corner along the top
  * and left, and the overall size outside it. A plain rectangle gets just the overall.
  */
-export function OverallDimensions({ project, selected = null, px }: { project: Project; selected?: string | null; px(n: number): number }) {
+export function OverallDimensions({ project, selected = null, keepout = [], px }: { project: Project; selected?: string | null; keepout?: Keepout[]; px(n: number): number }) {
   const ext = project.walls.filter((w) => w.kind === 'exterior');
   if (!ext.length) return null;
   const pts = (project.dimMode ?? 'centre') === 'centre' ? ext.flatMap((w) => [w.a, w.b]) : outerCorners(project);
@@ -153,7 +171,8 @@ export function OverallDimensions({ project, selected = null, px }: { project: P
   // Strings through the partitions: the fullest each way runs along the bottom / right, clear of the
   // exterior chains, between the overall ends; any others run through the plan where they're taken.
   const strings: { id: string; axis: 'x' | 'y'; stops: number[]; at: number; out: 1 | -1 }[] = [];
-  const parts = partitionStrings(project, project.dimMode ?? 'centre', { x: [minX, maxX], y: [minY, maxY] });
+  // Text hangs past the line (below an across string, right of a down one): keep labels out of that band.
+  const parts = partitionStrings(project, project.dimMode ?? 'centre', { x: [minX, maxX], y: [minY, maxY] }, { keepout, band: [px(20), px(4)] });
   for (const axis of ['x', 'y'] as const) {
     parts
       .filter((s) => s.axis === axis)
@@ -178,7 +197,7 @@ export function OverallDimensions({ project, selected = null, px }: { project: P
   return (
     <g className="dims">
       {all.map((d) => (
-        <DimString key={d.id} {...d} selected={selected === d.id} px={px} />
+        <DimString key={d.id} {...d} selected={selected === d.id} running={project.dimStyle === 'running'} px={px} />
       ))}
     </g>
   );
@@ -259,7 +278,7 @@ function uniq(ns: number[]): number[] {
   return out;
 }
 
-function DimString({ id, axis, stops, at, out, selected, px }: { id: string; axis: 'x' | 'y'; stops: number[]; at: number; out: 1 | -1; selected: boolean; px(n: number): number }) {
+function DimString({ id, axis, stops, at, out, selected, running, px }: { id: string; axis: 'x' | 'y'; stops: number[]; at: number; out: 1 | -1; selected: boolean; running?: boolean; px(n: number): number }) {
   const P = (along: number, across: number): Point => (axis === 'x' ? { x: along, y: across } : { x: across, y: along });
   const a = P(stops[0], at);
   const b = P(stops.at(-1)!, at);
@@ -270,12 +289,23 @@ function DimString({ id, axis, stops, at, out, selected, px }: { id: string; axi
       {/* Wide invisible stroke: grab it to drag the string in or out. */}
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-hit" strokeWidth={px(10)} />
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-line" strokeWidth={px(1)} />
-      {stops.map((s) => {
+      {stops.map((s, i) => {
         const p = P(s, at);
-        // 45° architectural tick.
+        // Running: an open circle at the zero point. Otherwise a 45° architectural tick.
+        if (running && i === 0) return <circle key={s} cx={p.x} cy={p.y} r={px(3)} className="dim-line" fill="none" strokeWidth={px(1.2)} />;
         return <line key={s} x1={p.x - tick} y1={p.y + tick} x2={p.x + tick} y2={p.y - tick} className="dim-line" strokeWidth={px(1.2)} />;
       })}
-      {stops.slice(1).map((s, i) => {
+      {running && runningLabels(stops, px(12)).map((s) => {
+        // The total so far at each tick, written outward from the line so neighbours don't collide.
+        const p = P(s, at + out * px(5));
+        const anchor = (axis === 'x' ? -out : out) > 0 ? 'start' : 'end';
+        return (
+          <text key={s} x={p.x} y={p.y} fontSize={px(10)} textAnchor={anchor} dominantBaseline="middle" className="dim" transform={axis === 'x' ? `rotate(-90 ${p.x} ${p.y})` : undefined}>
+            {formatFtIn(s - stops[0])}
+          </text>
+        );
+      })}
+      {!running && stops.slice(1).map((s, i) => {
         // Text on the outer side of the line (hanging below it when outward is +).
         const mid = P((stops[i] + s) / 2, at + out * px(5));
         const len = s - stops[i];

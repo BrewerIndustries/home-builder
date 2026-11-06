@@ -3,6 +3,7 @@ import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type
 import { joinWalls, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
+import { followDims } from '../calc/faces.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -24,6 +25,7 @@ export type Action =
   | { type: 'setDimOffset'; id: string; offset: number; transient?: boolean }
   | { type: 'setDimHidden'; id: string; hidden: boolean }
   | { type: 'showAllDims' }
+  | { type: 'setDimStyle'; style: 'chain' | 'running' }
   | { type: 'addDim'; dim: UserDim; offset: number }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
@@ -98,7 +100,7 @@ function push(h: History, next: Project): History {
 }
 
 /** Counters and wall-backed fixtures ride along when walls move. */
-const followWalls = (prev: Project, next: Project) => followFurniture(prev, followCounters(prev, next));
+const followWalls = (prev: Project, next: Project) => followDims(prev, followFurniture(prev, followCounters(prev, next)));
 
 export function projectReducer(p: Project, action: Action): Project {
   switch (action.type) {
@@ -119,6 +121,9 @@ export function projectReducer(p: Project, action: Action): Project {
       const hiddenDims = action.hidden ? [...rest, action.id] : rest;
       return { ...p, hiddenDims: hiddenDims.length ? hiddenDims : undefined };
     }
+
+    case 'setDimStyle':
+      return { ...p, dimStyle: action.style === 'chain' ? undefined : action.style };
 
     case 'showAllDims':
       return { ...p, hiddenDims: undefined };
