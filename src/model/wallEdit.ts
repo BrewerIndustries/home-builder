@@ -1,4 +1,4 @@
-import { dist, openingSpan, pointAlong, projectOnWall, samePoint, wallDir, wallLength } from './geometry.ts';
+import { dist, openingSpan, pointAlong, pointInPolygon, projectOnWall, samePoint, wallDir, wallLength } from './geometry.ts';
 import type { Point, Project, Wall } from './types.ts';
 
 // Whole-wall edits: slide a wall sideways with whatever is attached to it, split
@@ -248,4 +248,100 @@ export function snapEndToWalls(
     if (!best || d < best.d) best = { p, label, d };
   }
   return best && { p: best.p, label: best.label };
+}
+
+// ── v4: typed values for item drags, turning a room, angle snap ───────────
+
+/**
+ * Where a dragged item lands when a distance is typed after the drag: the same
+ * direction it was dragged in, `len` from where it started (negative = back the
+ * other way). Null if it didn't move.
+ */
+export function retarget(from: Point, to: Point, len: number): Point | null {
+  const d = dist(from, to);
+  if (d < 1e-6) return null;
+  return { x: round3(from.x + ((to.x - from.x) / d) * len), y: round3(from.y + ((to.y - from.y) / d) * len) };
+}
+
+/** Turn a point anticlockwise (plan y runs down) by `deg` about `pivot`. */
+export function turnPoint(p: Point, pivot: Point, deg: number): Point {
+  const r = (deg * Math.PI) / 180;
+  const [c, s] = [Math.cos(r), Math.sin(r)];
+  const [x, y] = [p.x - pivot.x, p.y - pivot.y];
+  return { x: round3(pivot.x + x * c + y * s), y: round3(pivot.y - x * s + y * c) };
+}
+
+/** Is q inside the outline or on its edge? */
+function inOrOn(q: Point, pts: Point[]): boolean {
+  if (pointInPolygon(q, pts)) return true;
+  return pts.some((a, i) => {
+    const b = pts[(i + 1) % pts.length];
+    const w = { id: '', a, b, kind: 'interior', thickness: 0, height: 0 } as Wall;
+    return onSegment(w, q);
+  });
+}
+
+/**
+ * Turn a room and everything in it about `pivot` (default: its outline's
+ * centre): its walls (those with both ends on or inside its outline), rooms
+ * inside it, counters, fixtures, furniture and ceiling devices. Openings,
+ * outlets and switches ride on their walls. A wall outside the group that meets
+ * a turned corner stretches to follow, as when an end is dragged.
+ */
+export function rotateRoom(p: Project, roomId: string, deg: number, pivot?: Point): Project {
+  const room = p.rooms.find((r) => r.id === roomId);
+  if (!room || !deg) return p;
+  const outline = room.points;
+  const c = pivot ?? { x: outline.reduce((s, q) => s + q.x, 0) / outline.length, y: outline.reduce((s, q) => s + q.y, 0) / outline.length };
+  const inside = (q: Point) => inOrOn(q, outline);
+  const group = new Set(p.walls.filter((w) => inside(w.a) && inside(w.b)).map((w) => w.id));
+  // Every corner that turns: the group's wall ends and the room's own corners.
+  const moving: Point[] = [...outline];
+  for (const w of p.walls) if (group.has(w.id)) moving.push(w.a, w.b);
+  // Ts: other walls' ends and other rooms' corners sitting on a turned wall go with it.
+  const turned = p.walls.filter((w) => group.has(w.id));
+  for (const q of [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points)]) {
+    if (turned.some((w) => onSegment(w, q)) && !moving.some((m) => samePoint(m, q))) moving.push(q);
+  }
+  const turnIf = (q: Point) => (moving.some((m) => samePoint(m, q)) ? turnPoint(q, c, deg) : q);
+  const turnRoom = (r: typeof room) => (r.id === room.id || r.points.every(inside) ? r.points.map((q) => turnPoint(q, c, deg)) : r.points.map(turnIf));
+  return {
+    ...p,
+    walls: p.walls.map((w) => ({ ...w, a: turnIf(w.a), b: turnIf(w.b) })),
+    rooms: p.rooms.map((r) => ({ ...r, points: turnRoom(r) })),
+    counters: p.counters.map((k) => (inside(k.a) && inside(k.b) ? { ...k, a: turnPoint(k.a, c, deg), b: turnPoint(k.b, c, deg) } : k)),
+    fixtures: p.fixtures.map((f) => (inside(f.at) ? { ...f, at: turnPoint(f.at, c, deg) } : f)),
+    // Furniture turns clockwise-positive, the plan anticlockwise: subtract.
+    furniture: p.furniture.map((f) => (inside(f.at) ? { ...f, at: turnPoint(f.at, c, deg), rot: (((f.rot - deg) % 360) + 360) % 360 } : f)),
+  };
+}
+
+/** Angles (anticlockwise from +x, plan y down) of the plan's walls, for snapping a new or swung wall parallel or square to one. */
+export function snapAngle(
+  walls: Wall[],
+  from: Point,
+  p: Point,
+  opts: { exclude?: Point; tol?: number } = {},
+): { p: Point; angle: number; label: string } | null {
+  const tol = opts.tol ?? 3;
+  const len = dist(from, p);
+  if (len < 6) return null;
+  const at = (Math.atan2(-(p.y - from.y), p.x - from.x) * 180) / Math.PI;
+  let best: { angle: number; off: number; label: string } | null = null;
+  for (const w of walls) {
+    if (wallLength(w) < 1) continue;
+    if (opts.exclude && (samePoint(w.a, opts.exclude) || samePoint(w.b, opts.exclude))) continue;
+    const base = (Math.atan2(-(w.b.y - w.a.y), w.b.x - w.a.x) * 180) / Math.PI;
+    for (const [extra, how] of [[0, 'parallel to'], [90, 'square to']] as const) {
+      // The candidate direction nearest the drag, either way along the line.
+      const cand = base + extra;
+      const diff = ((((at - cand) % 180) + 270) % 180) - 90;
+      if (Math.abs(diff) > tol || (best && Math.abs(diff) >= best.off)) continue;
+      best = { angle: at - diff, off: Math.abs(diff), label: `${how} ${w.id}` };
+    }
+  }
+  if (!best) return null;
+  const r = (best.angle * Math.PI) / 180;
+  const angle = Math.round((((best.angle % 360) + 360) % 360) * 10) / 10;
+  return { p: { x: round3(from.x + Math.cos(r) * len), y: round3(from.y - Math.sin(r) * len) }, angle, label: best.label };
 }

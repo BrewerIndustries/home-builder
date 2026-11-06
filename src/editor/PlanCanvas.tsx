@@ -17,7 +17,7 @@ import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
-import { snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
+import { retarget, snapAngle, snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounters } from '../calc/counters.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type Wall, type WallKind } from '../model/types.ts';
@@ -41,11 +41,11 @@ type Drag =
   | { kind: 'vertex'; start: Point; current: Point; anchor: Point; radius: number; swung: boolean }
   /** Whole-wall drag: slides across its own length; `current` = the points travelling with it. */
   | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean; snap: { start: number; targets: WallSnapTarget[] }; square: boolean }
-  | { kind: 'opening'; id: string; grab: number }
+  | { kind: 'opening'; id: string; grab: number; from: number }
   | { kind: 'outlet'; id: string }
   | { kind: 'switch'; id: string }
   | { kind: 'fixture'; id: string; grab: Point }
-  | { kind: 'furniture'; id: string; grab: Point; started: boolean }
+  | { kind: 'furniture'; id: string; grab: Point; started: boolean; from: Point }
   | { kind: 'room'; start: Point; end: Point; raw: Point }
   | { kind: 'newCounter'; start: Point; end: Point }
   | { kind: 'counter'; id: string; start: Point; a: Point; b: Point; along: Point | null; started: boolean }
@@ -79,7 +79,9 @@ interface Props {
 type LastEdit =
   | { kind: 'move'; points: Point[]; normal: Point; moved: number }
   | { kind: 'end'; at: Point; anchor: Point }
-  | { kind: 'swing'; at: Point; anchor: Point; radius: number };
+  | { kind: 'swing'; at: Point; anchor: Point; radius: number }
+  /** An opening (along its wall: x = offset), counter or fixture dragged from → to; a typed distance sets how far, same direction. */
+  | { kind: 'item'; item: 'opening' | 'counter' | 'furniture'; id: string; from: Point; to: Point };
 
 const SNAP_PX = 10;
 const GRID = 6;
@@ -195,7 +197,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const endpoints = wallEndpoints(project.walls);
 
   const snap = useCallback(
-    (raw: Point, opts: { origin?: Point; exclude?: Point; free?: boolean } = {}): { p: Point; snapped: 'endpoint' | 'grid' | null } => {
+    (raw: Point, opts: { origin?: Point; exclude?: Point; free?: boolean } = {}): { p: Point; snapped: 'endpoint' | 'grid' | null; note?: string } => {
       const tol = SNAP_PX / viewRef.current.scale;
       let best: Point | null = null;
       for (const e of endpoints) {
@@ -204,13 +206,18 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       }
       if (best) return { p: { ...best }, snapped: 'endpoint' };
       if (opts.free) return { p: raw, snapped: null };
+      // Shift (free angle) from a wall start: lock parallel or square to another wall when close.
+      if (opts.origin && shift) {
+        const a = snapAngle(project.walls, opts.origin, raw);
+        if (a) return { p: a.p, snapped: null, note: a.label };
+      }
       let p = raw;
       if (opts.origin && !shift) p = orthoFrom(opts.origin, p);
       p = snapToGrid(p, GRID);
       if (opts.origin && !shift) p = orthoFrom(opts.origin, p);
       return { p, snapped: 'grid' };
     },
-    [endpoints, shift],
+    [endpoints, shift, project.walls],
   );
 
   const { framing } = project;
@@ -320,6 +327,31 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     }
     const len = parseFtIn(body);
     if (len === null || len < 0) return;
+    if (last.kind === 'item') {
+      const to = retarget(last.from, last.to, neg ? -len : len);
+      if (!to) return;
+      if (last.item === 'opening') {
+        const o = project.openings.find((x) => x.id === last.id);
+        const w = o && project.walls.find((x) => x.id === o.wallId);
+        if (!o || !w) return;
+        const offset = clampOpeningOffset(w, o.width, to.x);
+        dispatch({ type: 'updateOpening', id: o.id, patch: { offset }, transient: true });
+        lastEdit.current = { ...last, to: { x: offset, y: 0 } };
+        setMoveText(`Moved ${formatFtIn(Math.abs(offset - last.from.x))}${offset !== to.x ? ' (kept inside the wall)' : ''}`);
+        return;
+      }
+      if (last.item === 'counter') {
+        const c = project.counters.find((x) => x.id === last.id);
+        if (!c) return;
+        const shift = { x: to.x - c.a.x, y: to.y - c.a.y };
+        dispatch({ type: 'updateCounter', id: c.id, patch: { a: to, b: { x: c.b.x + shift.x, y: c.b.y + shift.y } }, transient: true });
+      } else {
+        dispatch({ type: 'updateFurniture', id: last.id, patch: { at: to }, transient: true });
+      }
+      lastEdit.current = { ...last, to };
+      setMoveText(`Moved ${formatFtIn(len)}${neg ? ' back' : ''}`);
+      return;
+    }
     if (last.kind === 'move') {
       const want = (neg ? -1 : 1) * (Math.sign(last.moved) || 1) * len;
       const delta = { x: last.normal.x * (want - last.moved), y: last.normal.y * (want - last.moved) };
@@ -385,13 +417,13 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           drag.current = { kind: 'fixture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y } };
         } else if (hit?.kind === 'furniture') {
           const f = project.furniture.find((x) => x.id === hit.id)!;
-          drag.current = { kind: 'furniture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y }, started: false };
+          drag.current = { kind: 'furniture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y }, started: false, from: f.at };
         } else if (hit?.kind === 'opening') {
           const o = project.openings.find((x) => x.id === hit.id)!;
           const w = project.walls.find((x) => x.id === o.wallId)!;
           const along = (raw.x - w.a.x) * wallDir(w).x + (raw.y - w.a.y) * wallDir(w).y;
           dispatch({ type: 'checkpoint' });
-          drag.current = { kind: 'opening', id: o.id, grab: along - o.offset };
+          drag.current = { kind: 'opening', id: o.id, grab: along - o.offset, from: o.offset };
         } else if (hit?.kind === 'counter') {
           const c = project.counters.find((x) => x.id === hit.id)!;
           // Wall counters slide along their wall; islands move freely.
@@ -507,9 +539,10 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       d.swung = e.altKey && d.radius > 0;
       if (d.swung) {
         // Alt: swing round the other end, length kept; 15° steps, Shift for any angle.
-        const sw = swingEnd(d.anchor, d.radius, raw, shift ? 0 : 15);
+        const along = shift ? snapAngle(project.walls, d.anchor, raw, { exclude: d.current }) : null;
+        const sw = swingEnd(d.anchor, d.radius, along ? along.p : raw, shift ? 0 : 15);
         p = sw.p;
-        note = `Turned to ${sw.angle}° · length kept`;
+        note = `Turned to ${sw.angle}°${along ? ` · ${along.label}` : ''} · length kept`;
       } else {
         const sn = snap(raw, { exclude: d.current });
         const onWall = sn.snapped === 'endpoint' || shift ? null : snapEndToWalls(project, raw, { exclude: d.current, anchor: d.anchor, tol: SNAP_PX / viewRef.current.scale });
@@ -631,7 +664,11 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       dispatch({ type: 'updateUnderlay', patch: { x: d.origin.x + raw.x - d.start.x, y: d.origin.y + raw.y - d.start.y }, transient: true });
       return;
     }
-    if (tool === 'wall') setCursor(snap(raw, { origin: chain?.start }));
+    if (tool === 'wall') {
+      const s = snap(raw, { origin: chain?.start });
+      setCursor(s);
+      setMoveText(s.note ? `Angle ${s.note}` : null);
+    }
     else if (tool === 'room') setCursor(snap(raw));
     else setCursor({ p: raw, snapped: null });
   }
@@ -647,6 +684,19 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     } else if (d?.kind === 'vertex' && !samePoint(d.start, d.current)) {
       lastEdit.current = d.swung ? { kind: 'swing', at: d.current, anchor: d.anchor, radius: d.radius } : { kind: 'end', at: d.current, anchor: d.anchor };
       setMoveText(d.swung ? 'Type an angle + ↵ to set it exactly (0° = right, 90° = up)' : `Length ${formatFtIn(dist(d.anchor, d.current))} · type a length + ↵ to set it exactly`);
+    }
+    // Openings, counters and fixtures: a typed distance sets how far they moved.
+    const item: LastEdit | null =
+      d?.kind === 'opening'
+        ? ((o) => (o && o.offset !== d.from ? { kind: 'item', item: 'opening', id: d.id, from: { x: d.from, y: 0 }, to: { x: o.offset, y: 0 } } : null))(project.openings.find((x) => x.id === d.id))
+        : d?.kind === 'counter' && d.started
+          ? ((c) => (c && !samePoint(c.a, d.a) ? { kind: 'item', item: 'counter', id: d.id, from: d.a, to: c.a } : null))(project.counters.find((x) => x.id === d.id))
+          : d?.kind === 'furniture' && d.started
+            ? ((f) => (f && !samePoint(f.at, d.from) ? { kind: 'item', item: 'furniture', id: d.id, from: d.from, to: f.at } : null))(project.furniture.find((x) => x.id === d.id))
+            : null;
+    if (item?.kind === 'item') {
+      lastEdit.current = item;
+      setMoveText(`Moved ${formatFtIn(dist(item.from, item.to))} · type a distance + ↵ to set it exactly`);
     }
     if (d?.kind === 'room' && e) d.end = snap(toWorld(e.clientX, e.clientY)).p;
     setRoomDrag(null);
@@ -851,7 +901,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         <div className="length-entry">
           {entry ? (
             <>
-              {lastEdit.current?.kind === 'move' ? 'Move' : lastEdit.current?.kind === 'swing' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
+              {lastEdit.current?.kind === 'move' || lastEdit.current?.kind === 'item' ? 'Move' : lastEdit.current?.kind === 'swing' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
             </>
           ) : (
             moveText

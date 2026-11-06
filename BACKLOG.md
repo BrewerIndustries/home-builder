@@ -52,7 +52,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Drag a whole wall (move both ends together); split / join walls
 - [x] Wall edits v2: double-click to split at a point; dragged walls snap in line / flush with parallel walls and the grid; live move readout
 - [x] Wall edits v3: type an exact move distance while dragging; snap a dragged wall end to other walls' faces; rotate a wall about an end
-- [ ] Wall edits v4: typed values for opening / counter / fixture drags; rotate a whole wall group (room) about a point; angle snap to other walls' angles (not just 15°)
+- [x] Wall edits v4: typed values for opening / counter / fixture drags; rotate a whole room (walls + contents) about its centre; free-angle snap parallel / square to other walls
+- [ ] Wall edits v5: rotate about a picked point (not just the centre) and drag-to-rotate with a handle; move a whole room; mirror a room; typed values for outlet / switch / light drags
 - [x] Inside / outside dimension modes (centreline / inside faces / outside face)
 - [x] Dimensions v2: type a length as inside / outside in the wall panel; opening chains on exterior walls; room clear sizes; finished vs framing faces
 - [x] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it

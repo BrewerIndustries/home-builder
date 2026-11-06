@@ -1,6 +1,6 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
 import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode } from './types.ts';
-import { joinWalls, splitWall, translatePoints } from './wallEdit.ts';
+import { joinWalls, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
 
@@ -54,6 +54,7 @@ export type Action =
   | { type: 'replaceAutoLighting'; fixtures: Fixture[]; switches: WallSwitch[] }
   | { type: 'addCounter'; counter: Counter }
   | { type: 'addCounters'; counters: Counter[] }
+  | { type: 'rotateRoom'; id: string; deg: number; pivot?: Point }
   | { type: 'addFurniture'; item: Furniture }
   | { type: 'updateFurniture'; id: string; patch: Partial<Omit<Furniture, 'id'>>; transient?: boolean }
   | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
@@ -150,6 +151,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'translatePoints':
       return followWalls(p, reclampOpenings(translatePoints(p, action.from, action.delta)));
+
+    case 'rotateRoom':
+      return followWalls(p, reclampOpenings(rotateRoom(p, action.id, action.deg, action.pivot)));
 
     case 'splitWall':
       return splitWall(p, action.id, action.at, action.newId);

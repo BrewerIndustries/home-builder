@@ -593,6 +593,17 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             Guess name &amp; use
           </button>
         </div>
+        <Field label="Turn the room" hint="Its walls and everything in it turn about its centre; walls attached outside stretch to follow. Anticlockwise is positive">
+          <div className="row wrap">
+            <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: 90 })} title="Turn 90° anticlockwise">⟲ 90°</button>
+            <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: -90 })} title="Turn 90° clockwise">⟳ 90°</button>
+            <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: 15 })} title="Turn 15° anticlockwise">⟲ 15°</button>
+            <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: -15 })} title="Turn 15° clockwise">⟳ 15°</button>
+          </div>
+        </Field>
+        <Field label="Turn by" hint="Type an angle + ↵ (e.g. 30, or 330 for 30° clockwise)">
+          <AngleInput key={r.id + JSON.stringify(r.points)} value={0} onChange={(deg) => dispatch({ type: 'rotateRoom', id: r.id, deg: deg > 180 ? deg - 360 : deg })} />
+        </Field>
         <div className="stat-grid">
           <Stat label="Floor" value={formatSqFt(exclusiveArea(project, r))} />
           {narrow && <Stat label="Narrowest" value={formatFtIn(narrow.width)} />}
