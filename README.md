@@ -190,6 +190,27 @@ The checks cover the following:
   - Pipe runs from the backflow device through the manifold to the heads. PVC is sized to keep water at 5 ft/s or less (a rule of thumb).
   - Zone GPM is checked against the supply, and the parts list goes into the Estimate. Nozzle figures are typical and editable.
 
+- **Phasing and design options.**
+  - Each plan item is Existing, Demolish or New. New is the default, and older projects are all new.
+  - On the plan, existing items are drawn grey, demolition dashed and new solid. The toolbar filter shows the existing plan, the demo plan, the new plan or all of it.
+  - The estimate prices new work only, plus a demolition allowance for each kind of item and a dumpster.
+  - To start a remodel, use Options → "Mark everything existing", then draw the new work.
+  - Options → Design options keeps named alternates in the project and compares their costs side by side, all on one price list.
+- **Versions.**
+  - Options → Versions saves named, dated plan snapshots. Neither the plan image nor the site image is copied into them.
+  - Compare any two versions, or one against the current plan, to get a list of what was added, removed or changed, and a per-line change order you can print.
+  - Restoring a version is one undo step.
+- **Foundation v2.**
+  - New basement type: wall height, poured or block, slab floor, footing drain (R405.1), damp- or waterproofing (R406), foam board, and window wells checked against R310.
+  - Interior walls can be marked bearing to get their own footing, checked against the R403.1.1 minimum. Pier pads take a size and a rebar allowance.
+  - Soil-bearing and storey inputs only remind you to look the width up in Table R403.1.
+  - The foundation shows in 3D, with a Foundation toggle.
+- **Accounts.**
+  - Projects → Share on an account project creates a read-only link (`?share=…`). Anyone with the link can view, print, download or "Save a copy" without signing in. D1 keeps only a hash of the token.
+  - The Projects dialog shows a small thumbnail of each plan.
+  - Account projects are cached on the device and open offline. Edits made offline sync when you're back online: the open project goes through the conflict banner, the others are last-write-wins with a notice.
+  - These need API migration 0002 on dev (`npm run migrate:dev`, then `npm run deploy:dev`).
+
 ## Code layout
 
 ```

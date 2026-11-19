@@ -23,7 +23,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Roof v2: per-wing roofs with valleys for L/T plans, dormers, roof on the print sheet, attic ventilation (R806)
 - [ ] Roof v3: wings wider than the roof they join; dormer overhangs and windows in the estimate; hip / valley jack rafters counted individually; roof drawn in the plan editor
 - [x] Foundation / concrete takeoff: slab or crawlspace footing + stem wall, anchor bolts (R403.1.6), PT sill, vents (R408.1), min-size + frost-depth checks
-- [ ] Foundation v2: interior bearing footings / piers, basement walls, footing sizing from soil + storeys (Table R403.1, needs verified values), foundation in 3D
+- [x] Foundation v2: basement type (walls, slab, footing drain R405.1, damp/waterproofing R406, foam, window wells R310), interior bearing footings (R403.1.1 minimum), pier pad size + rebar allowance, foundation in 3D; soil / storeys inputs only point to Table R403.1
+- [ ] Foundation v3: Table R403.1 footing widths (needs verified values); window wells placed on the plan; sample prices for the basement lines; post / pier lines under bearing footings
 - [x] Floor joist layout + subfloor sheet layout (crawlspace floors: joists over girders, piers, staggered T&G sheets; framing plan on the Framing tab)
 - [ ] Floor v2: joist hangers / cantilevers, openings for stairs, I-joists, floor insulation, framed floors on upper storeys
 - [x] Cut lists optimised to stock lengths, with waste report (Framing tab: plates / jacks / cripples / sills / header plies, FFD onto 8'–16' with 1/8" kerf, boards per stock, waste %, keepable offcuts, per-board diagram, CSV)
@@ -77,8 +78,9 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Dimensions v6: running opening chains (totals square to the wall); placed dimensions pin to door / window jambs and centres and fixture corners / centres and follow them; angle dimensions between walls (wall panel → arc + degrees, follow the walls, gone with either); per-string Chained / Running / As the plan
 - [x] Dimensions v7: angle dimensions picked on the plan with the Dimension tool (click two walls); placed dimensions pinned to counters and rooms; ordinate (baseline) dimensions; a dimension style panel (text size, tick / arrow / dot ends)
 - [ ] Dimensions v8: ordinate dimensions along a sloped axis; text-size and end-style per dimension
-- [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
-- [ ] Plan versions with change-order diffs
+- [x] Existing / demo / new phasing; design options ("plan B") with cost compare (Options dialog; phase filter + buttons on the Plan toolbar)
+- [x] Plan versions with change-order diffs (Options → Versions: named snapshots, added / removed / changed list, per-line change order to print, restore as one undo step)
+- [ ] Phasing v2: phase a multi-item selection at once; demolition lines for demolished rooms; roof / foundation / floor phased beyond new walls and rooms
 - [x] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)
 - [x] Fixtures v2: symbols follow dragged walls; door-swing clearance; a kitchen sink fixture outside counters; bidet, laundry sink, freestanding range / fridge; fixture schedule on the print sheet
 - [x] Fixtures v3: door-to-door swing clashes; tub clearances; WC–bidet 30" centre spacing; follow walls through a split; schedule columns for model / rough-in notes; closet rod + shelf, stairs symbol
@@ -95,5 +97,6 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Create `main` (prod) via the first approved dev → main PR; prod URL shows a placeholder until then
 - [x] Invite-only accounts + multiple projects (device library + account sync), dev API live 2026-11-01
 - [ ] Prod API: migrate prod D1, set SESSION_SECRET, deploy the Worker (before/with the first main promotion)
-- [ ] Accounts follow-ups: share a project read-only by link, project thumbnails, password reset by email, cache account projects for offline
+- [x] Accounts follow-ups: read-only share links (`?share=`), plan thumbnails, account projects cached for offline with sync on reconnect — dev API needs `migrate:dev` (0002) + `deploy:dev`
+- [ ] Password reset by email (needs an email provider: Cloudflare Email like Contact Capture?)
 - [ ] Code-edition picker (2018 / 2021 / 2024) once a rule actually differs between editions
