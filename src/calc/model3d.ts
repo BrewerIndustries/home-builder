@@ -240,8 +240,8 @@ export function buildScene(project: Project): Scene3D {
     const h = FURNITURE[f.kind].h;
     if (!h) continue; // stairs: plan only
     if (f.kind === 'closet-rod') {
-      // A shelf at 5' 6", the rod under it.
-      boxes.push({ kind: 'furniture', c: [f.at.x, 66, f.at.y], size: [f.w, 0.75, f.d], rotY: (-f.rot * Math.PI) / 180 });
+      // A shelf at 5' 6" (a double hang: shelves at 7' and 3' 6", a rod under each).
+      for (const y of f.closet === 'double' ? [84, 42] : [66]) boxes.push({ kind: 'furniture', c: [f.at.x, y, f.at.y], size: [f.w, 0.75, f.d], rotY: (-f.rot * Math.PI) / 180 });
       continue;
     }
     boxes.push({ kind: isFixture(f) ? 'fixture' : 'furniture', c: [f.at.x, h / 2, f.at.y], size: [f.w, h, f.d], rotY: (-f.rot * Math.PI) / 180 });

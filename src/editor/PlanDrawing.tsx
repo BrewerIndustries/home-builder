@@ -356,16 +356,59 @@ export function OpeningGlyph({ wall, o, selected, ghost, px }: { wall: Wall; o: 
   const hinge = hingeAtA ? p1 : p2;
   const free = hingeAtA ? p2 : p1;
   const offEdge = (p: Point) => ({ x: p.x + n.x * t * side, y: p.y + n.y * t * side });
-  const h = offEdge(hinge);
-  const leafEnd = { x: h.x + n.x * o.width * side, y: h.y + n.y * o.width * side };
-  const f = offEdge(free);
-  // Sweep direction depends on which end the hinge is and which side it swings to.
-  const sweep = (hingeAtA ? 1 : 0) ^ (side === 1 ? 0 : 1);
+  const out = (p: Point, k: number) => ({ x: p.x + n.x * k * side, y: p.y + n.y * k * side });
+  const dash = `${px(4)} ${px(3)}`;
+  // One leaf from `from` (on the face), open square to the wall, its arc closing on `to`; sweep flag by which way it turns.
+  const leaf = (from: Point, to: Point, r: number, key: string) => {
+    const h = offEdge(from);
+    const end = out(h, r);
+    const f = offEdge(to);
+    const turn = (end.x - h.x) * (f.y - h.y) - (end.y - h.y) * (f.x - h.x) > 0 ? 1 : 0;
+    return (
+      <g key={key}>
+        <line x1={h.x} y1={h.y} x2={end.x} y2={end.y} stroke={stroke} strokeWidth={px(2)} />
+        <path d={`M ${end.x} ${end.y} A ${r} ${r} 0 0 ${turn} ${f.x} ${f.y}`} fill="none" stroke={stroke} strokeWidth={px(1)} strokeDasharray={dash} />
+      </g>
+    );
+  };
+  const op = o.operation ?? 'swing';
+  let body: ReactNode;
+  if (op === 'double') {
+    body = [leaf(p1, c, half, 'l'), leaf(p2, c, half, 'r')];
+  } else if (op === 'pocket') {
+    // The door slid half open on the centreline, its pocket (dashed) in the wall past the hinge-end jamb.
+    const away = { x: hinge.x - free.x, y: hinge.y - free.y };
+    const len = Math.hypot(away.x, away.y) || 1;
+    const u = { x: away.x / len, y: away.y / len };
+    const pocketEnd = { x: hinge.x + u.x * o.width, y: hinge.y + u.y * o.width };
+    const doorEnd = { x: hinge.x - u.x * half, y: hinge.y - u.y * half };
+    const sideLine = (k: number) => (
+      <line key={k} x1={hinge.x + n.x * t * 0.6 * k} y1={hinge.y + n.y * t * 0.6 * k} x2={pocketEnd.x + n.x * t * 0.6 * k} y2={pocketEnd.y + n.y * t * 0.6 * k} stroke={stroke} strokeWidth={px(0.8)} strokeDasharray={dash} />
+    );
+    body = (
+      <>
+        {sideLine(1)}
+        {sideLine(-1)}
+        <line x1={pocketEnd.x} y1={pocketEnd.y} x2={doorEnd.x} y2={doorEnd.y} stroke={stroke} strokeWidth={px(2)} />
+      </>
+    );
+  } else if (op === 'bifold') {
+    // Panels folded part way: a V from each jamb (one V from the hinge jamb up to 36"), standing out a panel deep.
+    const pairs = o.width > 36 ? [[p1, c] as const, [p2, c] as const] : [[hinge, free] as const];
+    const e = o.width > 36 ? o.width / 4 : o.width / 2;
+    body = pairs.map(([from, to], i) => {
+      const a = offEdge(from);
+      const b = { x: a.x + (to.x - from.x) * 0.7, y: a.y + (to.y - from.y) * 0.7 };
+      const tip = out({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, e * 0.7);
+      return <polyline key={i} points={`${a.x},${a.y} ${tip.x},${tip.y} ${b.x},${b.y}`} fill="none" stroke={stroke} strokeWidth={px(1.5)} />;
+    });
+  } else {
+    body = leaf(hinge, free, o.width, 's');
+  }
   return (
     <g className={cls}>
       <polygon points={gap} fill="var(--canvas)" />
-      <line x1={h.x} y1={h.y} x2={leafEnd.x} y2={leafEnd.y} stroke={stroke} strokeWidth={px(2)} />
-      <path d={`M ${leafEnd.x} ${leafEnd.y} A ${o.width} ${o.width} 0 0 ${sweep} ${f.x} ${f.y}`} fill="none" stroke={stroke} strokeWidth={px(1)} strokeDasharray={`${px(4)} ${px(3)}`} />
+      {body}
     </g>
   );
 }
@@ -561,6 +604,18 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
         </>
       );
       break;
+    case 'tub-shower':
+      // A tub with the shower head over its drain end and a dashed curtain line along the front.
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          {rect(l + 3, t + 3, r - 3, b - 3, undefined, Math.min(8, d / 4))}
+          <circle cx={l + 9} cy={0} r={1.5} strokeWidth={sw} />
+          <circle cx={l + 4} cy={t + 5} r={2.5} strokeWidth={sw} />
+          <line x1={l} y1={b - 1.5} x2={r} y2={b - 1.5} strokeWidth={sw} strokeDasharray={`${px(3)} ${px(2)}`} />
+        </>
+      );
+      break;
     case 'shower':
       body = (
         <>
@@ -716,7 +771,17 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       body = (
         <>
           <rect x={l} y={t} width={w} height={d} strokeWidth={sw} strokeDasharray={`${px(4)} ${px(3)}`} fill="none" />
-          <line x1={l + 1} y1={0} x2={r - 1} y2={0} strokeWidth={px(1.5)} strokeDasharray={`${px(10)} ${px(3)} ${px(2)} ${px(3)}`} />
+          {f.closet !== 'shelf' && <line x1={l + 1} y1={0} x2={r - 1} y2={0} strokeWidth={px(1.5)} strokeDasharray={`${px(10)} ${px(3)} ${px(2)} ${px(3)}`} />}
+          {f.closet === 'double' && (
+            <text x={0} y={d / 4} fontSize={Math.min(6, d / 2.5)} textAnchor="middle" dominantBaseline="central">
+              DH
+            </text>
+          )}
+          {f.closet === 'shelf' && (
+            <text x={0} y={0} fontSize={Math.min(6, d / 2.5)} textAnchor="middle" dominantBaseline="central">
+              SHELF
+            </text>
+          )}
         </>
       );
       break;

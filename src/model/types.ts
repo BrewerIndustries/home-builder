@@ -43,9 +43,13 @@ export interface Opening {
   sill: number;
   /** Door swing side: which side of the wall the leaf opens toward, and hinge end. */
   swing?: { side: 1 | -1; hinge: 'a' | 'b' };
+  /** How a door opens: one hinged leaf (default), a hinged pair, sliding into a wall pocket (on the hinge end's side), or bifold panels. */
+  operation?: DoorOperation;
   /** Window operation — drives the estimated net clear opening for egress checks. */
   style?: WindowStyle;
 }
+
+export type DoorOperation = 'swing' | 'double' | 'pocket' | 'bifold';
 
 export type WindowStyle = 'single-hung' | 'slider' | 'casement' | 'fixed';
 
@@ -131,7 +135,7 @@ export interface Cutout {
  * A wall counter's back edge sits on a wall face; an island stands free.
  */
 export type FurnitureKind =
-  | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'shower' | 'kitchen-sink' | 'laundry-sink'
+  | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'tub-shower' | 'shower' | 'kitchen-sink' | 'laundry-sink'
   | 'washer' | 'dryer' | 'water-heater' | 'range' | 'fridge'
   | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser'
   | 'stairs' | 'closet-rod';
@@ -155,6 +159,8 @@ export interface Furniture {
   /** Fixtures: the product picked, and rough-in or other notes, for the schedule. */
   model?: string;
   note?: string;
+  /** Closet rod + shelf: one rod under a shelf (default), two rods hung one above the other, or a shelf alone. */
+  closet?: 'single' | 'double' | 'shelf';
 }
 
 export interface Counter {
@@ -312,6 +318,8 @@ export interface Project {
   dimFaces?: 'finished' | 'framing';
   /** How the plan's strings read: each piece between ticks (chained, the default) or running totals from the first tick. */
   dimStyle?: 'chain' | 'running';
+  /** Fixture schedule order: by kind (default) or a section per room. */
+  scheduleBy?: 'kind' | 'room';
   /** Dimension strings dragged out from where they're drawn: id → extra inches outward. */
   dimOffsets?: Record<string, number>;
   /** Dimension strings switched off (same ids as dimOffsets): skipped on screen and in print. */

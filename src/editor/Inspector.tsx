@@ -10,7 +10,7 @@ import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
 import { foundationOf } from '../calc/foundation.ts';
 import { dist, wallLength } from '../model/geometry.ts';
-import { isLight, roomAt, switchRoom, switchWays } from '../calc/lighting.ts';
+import { isLight, roomAt, switchRoom, switchWays, VEHICLE_DOOR } from '../calc/lighting.ts';
 import { roomOutletCount } from '../calc/electrical.ts';
 import { outletPosition } from './outletGeometry.ts';
 import type { Action } from '../model/store.ts';
@@ -40,6 +40,7 @@ import {
   type CutoutKind,
   type RoomType,
   type WindowStyle,
+  type DoorOperation,
   type FrontSide,
 } from '../model/types.ts';
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
@@ -231,10 +232,22 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Centre from wall start">
           <LengthInput value={o.offset} onChange={(v) => up({ offset: v })} />
         </Field>
+        {o.kind === 'door' && o.width <= VEHICLE_DOOR && (
+          <Field label="Opens" hint={o.operation === 'pocket' ? 'Slides into the wall: keep a door width of plain wall beside it (no other door, window or box in the pocket)' : 'Hinged leaves and bifold panels are checked against fixtures, their clear space, furniture, counters and other doors'}>
+            <select value={o.operation ?? 'swing'} onChange={(e) => up({ operation: e.target.value === 'swing' ? undefined : (e.target.value as DoorOperation) })}>
+              <option value="swing">Hinged (one leaf)</option>
+              <option value="double">Double (a pair of leaves)</option>
+              <option value="pocket">Pocket (slides into the wall)</option>
+              <option value="bifold">Bifold</option>
+            </select>
+          </Field>
+        )}
         {o.kind === 'door' && (
           <div className="row">
-            <button onClick={() => up({ swing: { side: (o.swing?.side ?? 1) === 1 ? -1 : 1, hinge: o.swing?.hinge ?? 'a' } })}>Flip swing side</button>
-            <button onClick={() => up({ swing: { side: o.swing?.side ?? 1, hinge: (o.swing?.hinge ?? 'a') === 'a' ? 'b' : 'a' } })}>Flip hinge</button>
+            {o.operation !== 'pocket' && <button onClick={() => up({ swing: { side: (o.swing?.side ?? 1) === 1 ? -1 : 1, hinge: o.swing?.hinge ?? 'a' } })}>Flip swing side</button>}
+            {o.operation !== 'double' && (
+              <button onClick={() => up({ swing: { side: o.swing?.side ?? 1, hinge: (o.swing?.hinge ?? 'a') === 'a' ? 'b' : 'a' } })}>{o.operation === 'pocket' ? 'Flip pocket side' : 'Flip hinge'}</button>
+            )}
           </div>
         )}
         <button className="danger" onClick={() => del(o.id)}>
@@ -580,6 +593,15 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </Field>
           </>
         )}
+        {f.kind === 'closet-rod' && (
+          <Field label="Hang" hint="Double hang: two rods, one above the other, each under its own shelf">
+            <select value={f.closet ?? 'single'} onChange={(e) => up({ closet: e.target.value === 'single' ? undefined : (e.target.value as 'double' | 'shelf') })}>
+              <option value="single">Rod under a shelf</option>
+              <option value="double">Double hang</option>
+              <option value="shelf">Shelf only</option>
+            </select>
+          </Field>
+        )}
         {spec.fixture && (
           <>
             <Field label="Model" hint="Shown on the fixture schedule; different models get their own mark">
@@ -776,6 +798,12 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <select value={project.dimFaces ?? 'finished'} onChange={(e) => dispatch({ type: 'setDimFaces', faces: e.target.value as 'finished' | 'framing' })}>
           <option value="finished">Finished faces</option>
           <option value="framing">Framing (stud) faces</option>
+        </select>
+      </Field>
+      <Field label="Fixture schedule" hint="The printed schedule's order: by kind (a row can cover several rooms), or a section per room">
+        <select value={project.scheduleBy ?? 'kind'} onChange={(e) => dispatch({ type: 'setScheduleBy', by: e.target.value as 'kind' | 'room' })}>
+          <option value="kind">By fixture kind</option>
+          <option value="room">By room</option>
         </select>
       </Field>
       <Field label="Dimension strings" hint="Chained: each piece between ticks. Running: one zero tick, then the total so far at every tick (opening chains and placed dimensions stay as they are)">

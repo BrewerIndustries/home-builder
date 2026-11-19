@@ -97,7 +97,7 @@ Fixtures are priced in the estimate (allowances plus a rough-in per plumbing fix
 - **R307.1:**
   - a toilet or bidet needs 15" from its centre to a wall or fixture each side, and 21" clear in front;
   - toilets and bidets in the same room need 30" centre to centre (*Fixture spacing*);
-  - a lavatory or bathtub needs 21" clear in front;
+  - a lavatory, bathtub or tub / shower combo needs 21" clear in front;
   - a shower needs 24" clear in front (its front is taken as the opening).
   - Walls, counters and other fixtures block these clearances; furniture doesn't.
 - **P2708.1:** a shower is at least 900 sq in and 30" each way.
@@ -105,13 +105,18 @@ Fixtures are priced in the estimate (allowances plus a rough-in per plumbing fix
 
 A free-standing kitchen sink base counts as the kitchen's sink (R306.2), and a free-standing sink, range and fridge count toward the work triangle the same as ones set in a counter.
 
-**Door swings:** a hinged door whose quarter-circle swing runs into a fixture, piece of furniture, counter or **another door's swing** gets a *Door swing clear* warning (a layout check, not an IRC rule) with the door to click to. Two doors that clash each get one. Closet rods hang overhead, so doors swing under them.
+**Doors:** a door's panel has *Opens*: **Hinged** (one leaf), **Double** (a pair of half-width leaves), **Pocket** (slides into the wall on the hinge end's side; *Flip pocket side*) or **Bifold**. A bifold has two panels a side over 36" wide (a panel deep is a quarter of the width), otherwise two panels in all from the hinge jamb (half the width deep). The plan draws each one: arcs, the pocket dashed in the wall, or bifold Vs. A door whose sweep runs into any of these gets a *Door swing clear* warning (a layout check, not an IRC rule) with the door to click to:
+- a fixture, a piece of furniture or a counter;
+- **a fixture's R307.1 clear space** (e.g. the 21" in front of a toilet);
+- **another door's swing**. Two doors that clash each get one.
+
+Closet rods hang overhead, so doors swing under them. Pocket doors sweep nothing. Each pocket door gets *Pocket door pocket clear*: its pocket is a door width of wall past the hinge-end jamb, and it warns if the pocket runs past the wall's end or over another door, window, receptacle or switch. The estimate adds a pocket door frame kit per pocket door and bifold hardware per bifold. (Framing still frames a pocket door's rough opening like a hinged one.)
 
 **Wall splits:** a fixture backed onto a wall you split stays on the piece it sits on and follows that piece when it moves.
 
-**Fixture schedule:** the printed plan tags every fixture and appliance (WC-1, LAV-1, S-1, R-1, REF-1, DW-1 …, counter sinks / ranges / fridges / dishwashers included) and adds a second page listing mark, item, size, **model**, quantity, room and **rough-in / notes**. There's one row per kind, size and model. Set a fixture's *Model* and *Rough-in / notes* in its panel; different models get their own mark, and each distinct note is listed once.
+**Fixture schedule:** the printed plan tags every fixture and appliance (WC-1, LAV-1, S-1, R-1, REF-1, DW-1 …, counter sinks / ranges / fridges / dishwashers included) and adds a second page listing mark, item, size, **model**, quantity, room and **rough-in / notes**. There's one row per kind, size and model. Set a fixture's *Model* and *Rough-in / notes* in its panel; different models get their own mark, and each distinct note is listed once. *Fixture schedule* in the Project panel orders it **by kind** (a row can cover several rooms) or **by room**: a section per room in name order, and a row never spans rooms.
 
-Furniture is drawn on the plan and in 3D only. The exception is **Closet rod + shelf** (48" × 12" by default; the dashed shelf overhead with the rod under it, a shelf at 5' 6" in 3D), which is priced per foot of run. Stairs have their own symbol (treads, UP / DN arrow, cut line) from Lighting v3.
+Furniture is drawn on the plan and in 3D only. The exception is **Closet rod + shelf** (48" × 12" by default; the dashed shelf overhead with the rod under it, a shelf at 5' 6" in 3D), which is priced per foot of run. Its *Hang* can be **Double hang** (marked DH; two rods and shelves, at 7' and 3' 6" in 3D, priced twice) or **Shelf only** (marked SHELF, no rod, priced as a shelf). A **Tub / shower combo** (60" × 32", TS on the schedule) counts as the tub or shower for R306.1. It gets the bathtub's 21" clearance, not the shower-size check. Stairs have their own symbol (treads, UP / DN arrow, cut line) from Lighting v3.
 
 ### Lights, switches and alarms
 

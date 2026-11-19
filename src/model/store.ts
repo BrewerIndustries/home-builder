@@ -26,6 +26,7 @@ export type Action =
   | { type: 'setDimHidden'; id: string; hidden: boolean }
   | { type: 'showAllDims' }
   | { type: 'setDimStyle'; style: 'chain' | 'running' }
+  | { type: 'setScheduleBy'; by: 'kind' | 'room' }
   | { type: 'addDim'; dim: UserDim; offset: number }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
@@ -121,6 +122,9 @@ export function projectReducer(p: Project, action: Action): Project {
       const hiddenDims = action.hidden ? [...rest, action.id] : rest;
       return { ...p, hiddenDims: hiddenDims.length ? hiddenDims : undefined };
     }
+
+    case 'setScheduleBy':
+      return { ...p, scheduleBy: action.by === 'kind' ? undefined : action.by };
 
     case 'setDimStyle':
       return { ...p, dimStyle: action.style === 'chain' ? undefined : action.style };
