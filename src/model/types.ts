@@ -27,6 +27,25 @@ export interface Wall {
   thickness: number;
   /** Plate-to-plate height (floor to ceiling framing). */
   height: number;
+  /** Its own layers (see WallLayer); unset = the project default for its kind. */
+  assembly?: WallLayer[];
+}
+
+/** One layer of a wall assembly; `stud` is the framing, sized by the wall's stud (its thickness is ignored). */
+export type WallLayerKind = 'drywall' | 'stud' | 'sheathing' | 'foam' | 'siding' | 'other';
+
+export interface WallLayer {
+  kind: WallLayerKind;
+  /** Inches (common product sizes, not code values). */
+  thickness: number;
+  /** Product name for the estimate, e.g. "OSB" or "Fiber-cement lap". */
+  name?: string;
+}
+
+/** Default layers per wall kind, listed from one face to the other: inside → outside for exterior walls. */
+export interface WallAssemblies {
+  exterior: WallLayer[];
+  interior: WallLayer[];
 }
 
 export type OpeningKind = 'door' | 'window';
@@ -237,6 +256,8 @@ export interface Ceiling {
   /** coffered: beam grid spacing and beam drop below the ceiling. */
   cofferSpacing?: number;
   cofferDepth?: number;
+  /** vaulted / cathedral: index of the outline edge (points[i] → points[i+1]) along the low side; unset = the longest edge. */
+  slopeEdge?: number;
 }
 
 export interface Room {
@@ -415,6 +436,8 @@ export interface Project {
   dimLook?: DimLook;
   electrical?: ElectricalSettings;
   framing: FramingSettings;
+  /** Default wall layers per kind; unset (projects saved before assemblies) = LEGACY_ASSEMBLIES, the old "+1\" finish" rule. */
+  assemblies?: WallAssemblies;
   pricing?: Pricing;
   site?: Site;
   roof?: Roof;

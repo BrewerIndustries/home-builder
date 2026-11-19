@@ -98,23 +98,28 @@ export interface SlopeFrame {
   span: number;
 }
 
-/** Sloped ceilings rise square to the room's longest edge: a rectangle's short way across. */
-export function slopeFrame(pts: Point[]): SlopeFrame | null {
+/**
+ * Sloped ceilings rise square to the room's longest edge (a rectangle's short
+ * way across), or square to `edge` (index of points[edge] → points[edge + 1])
+ * when the room picks its own low side.
+ */
+export function slopeFrame(pts: Point[], edge?: number): SlopeFrame | null {
   if (pts.length < 3) return null;
   let best = -1;
   let len = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const l = dist(pts[i], pts[(i + 1) % pts.length]);
-    if (l > len + 0.5) [best, len] = [i, l];
-  }
+  if (edge !== undefined && edge >= 0 && edge < pts.length && dist(pts[edge], pts[(edge + 1) % pts.length]) > 0.5) best = edge;
+  else
+    for (let i = 0; i < pts.length; i++) {
+      const l = dist(pts[i], pts[(i + 1) % pts.length]);
+      if (l > len + 0.5) [best, len] = [i, l];
+    }
   if (best < 0) return null;
   let dir = inwardNormal(pts, best);
   // Tidy -0 and float noise on square plans.
   dir = { x: Math.round(dir.x * 1e9) / 1e9 || 0, y: Math.round(dir.y * 1e9) / 1e9 || 0 };
   // Into the room as a whole (an odd outline can have its longest edge facing out of a notch).
   const c = polygonCentroid(pts);
-  if (dot(c, dir) < dot(pts[best], dir)) dir = { x: -dir.x || 0, y: -dir.y || 0 };
-  const ds = pts.map((p) => dot(p, dir));
+  if (dot(c, dir) < dot(pts[best], dir)) dir = { x: -dir.x || 0, y: -dir.y || 0 };  const ds = pts.map((p) => dot(p, dir));
   const d0 = Math.min(...ds);
   return { dir, d0, span: Math.max(...ds) - d0 };
 }

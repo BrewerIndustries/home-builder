@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import { ApiError, cloud, type User } from '../model/cloud.ts';
 import { deleteLocal, getLocal, loadCurrent, newProjectId, putLocal, saveCurrent, type Current } from '../model/library.ts';
 import type { Action } from '../model/store.ts';
-import { emptyProject, type Project } from '../model/types.ts';
+import { type Project } from '../model/types.ts';
+import { newProject } from '../model/assembly.ts';
 
 // Which project is open, where it is saved (this device or the signed-in
 // account), and the autosave loop that keeps it there.
@@ -159,7 +160,7 @@ export function useWorkspace(project: Project, dispatch: Dispatch<Action>, notif
     async (source: Current['source']) => {
       await flush();
       const id = newProjectId();
-      const data = emptyProject();
+      const data = newProject();
       if (source === 'cloud') {
         const saved = await cloud.put(id, data, undefined);
         show({ source, id, base: saved.updated_at }, data);
@@ -179,7 +180,7 @@ export function useWorkspace(project: Project, dispatch: Dispatch<Action>, notif
       if (c.source === source && c.id === id) {
         dirty.current = false;
         const nid = newProjectId();
-        const data = emptyProject();
+        const data = newProject();
         await putLocal(nid, data);
         show({ source: 'local', id: nid }, data);
       }
@@ -223,7 +224,7 @@ export function useWorkspace(project: Project, dispatch: Dispatch<Action>, notif
     if (currentRef.current.source === 'cloud') {
       // Don't leave account projects on a shared screen.
       const nid = newProjectId();
-      const data = emptyProject();
+      const data = newProject();
       await putLocal(nid, data);
       show({ source: 'local', id: nid }, data);
     }

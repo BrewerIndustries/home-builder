@@ -15,12 +15,13 @@ import { counterLines, islandReceptacles } from './counters.ts';
 import { furnitureLines } from './furniture.ts';
 import { blockingLines } from './barn.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
+import { assemblyLines, drywallWallArea } from './assemblyTakeoff.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing';
+  category: 'Lumber' | 'Sheathing' | 'Siding' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing';
   item: string;
   qty: number;
   unit: string;
@@ -28,7 +29,6 @@ export interface MaterialLine {
   basis: string;
 }
 
-const SHEET_SQFT = 32; // 4×8
 const PLATE_STOCK = 16 * 12; // plates bought as 16' boards
 const HEADER_STOCK = 12 * 12; // header stock as 12' boards
 const WRAP_ROLL_SQFT = 9 * 100;
@@ -66,7 +66,6 @@ export function wallAreas(project: Project): WallAreas {
   const openingArea = new Map<string, number>();
   for (const o of project.openings) openingArea.set(o.wallId, (openingArea.get(o.wallId) ?? 0) + o.width * o.height);
   let exteriorNet = 0;
-  let drywallWalls = 0;
   const exteriorByStud: WallAreas['exteriorByStud'] = {};
   for (const w of project.walls) {
     const net = Math.max(0, wallLength(w) * w.height - (openingArea.get(w.id) ?? 0)) / 144;
@@ -74,11 +73,10 @@ export function wallAreas(project: Project): WallAreas {
       exteriorNet += net;
       const size = studFor(w, project.framing);
       exteriorByStud[size] = (exteriorByStud[size] ?? 0) + net;
-      drywallWalls += net;
-    } else {
-      drywallWalls += net * 2;
     }
   }
+  // One face per drywall layer in each wall's assembly (assemblyTakeoff.ts).
+  const drywallWalls = drywallWallArea(project);
   const floor = totalFloorArea(project) / 144;
   // A nested room's ceiling replaces that part of its parent's.
   let ceilings = 0;
@@ -161,14 +159,10 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   }
 
   const areas = wallAreas(project);
+  // Sheathing, foam, siding and drywall come from each wall's layers (assemblyTakeoff.ts).
+  const layerLines = assemblyLines(project, areas.ceilings);
+  lines.push(...layerLines.filter((l) => l.category !== 'Drywall'));
   if (areas.exteriorNet > 0) {
-    lines.push({
-      category: 'Sheathing',
-      item: '7/16" OSB wall sheathing, 4×8',
-      qty: Math.ceil((areas.exteriorNet * waste) / SHEET_SQFT),
-      unit: 'sheets',
-      basis: `${Math.round(areas.exteriorNet)} sq ft exterior wall, net of openings ${wastePct}`,
-    });
     lines.push({
       category: 'Insulation & wrap',
       item: '9×100 house wrap',
@@ -187,16 +181,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
     }
   }
 
-  const drywall = areas.drywallWalls + areas.ceilings;
-  if (drywall > 0) {
-    lines.push({
-      category: 'Drywall',
-      item: '1/2" drywall, 4×8',
-      qty: Math.ceil((drywall * waste) / SHEET_SQFT),
-      unit: 'sheets',
-      basis: `${Math.round(areas.drywallWalls)} sq ft walls + ${Math.round(areas.ceilings)} sq ft ceilings (incl. vaults, trays, coffers) ${wastePct}`,
-    });
-  }
+  lines.push(...layerLines.filter((l) => l.category === 'Drywall'));
 
   if (areas.ceilingBeams > 0) {
     lines.push({

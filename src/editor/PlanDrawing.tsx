@@ -12,6 +12,7 @@ import { CabinetGlyphs } from './CabinetGlyphs.tsx';
 import { outletPosition } from './outletGeometry.ts';
 import { DimEnd, lookOf, stopDirs, type Look } from './dimLook.tsx';
 import { OrdinateDimension } from './OrdinateDimension.tsx';
+import { NarrowestLine } from './NarrowestLine.tsx';
 
 // The plan as a picture: rooms, walls, openings, outlets and dimensions, in plan
 // inches. Shared by the interactive canvas and the to-scale print sheet. `px`
@@ -46,6 +47,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
                 {l.text}
               </text>
             ))}
+            <NarrowestLine project={project} room={r} selected={sel} px={px} />
           </g>
         );
       })}

@@ -21,7 +21,8 @@ import { bearing, retarget, roomCentre, snapAngle, snapPivot, turnBetween, turnH
 import { cabinetLayout, counterDir, newCounters, upperLayout } from '../calc/counters.ts';
 import { grabJoint, moveJoint, type CabinetJoint } from '../calc/cabinets.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
-import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
+import { defaultWallThickness } from '../model/assembly.ts';
+import { uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
@@ -259,7 +260,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   };
 
   const { framing } = project;
-  const newWallThickness = finishedThickness(wallKind === 'exterior' ? framing.exteriorStud : framing.interiorStud);
+  const newWallThickness = defaultWallThickness(project, wallKind);
   const makeWall = useCallback(
     (a: Point, b: Point): Wall => ({ id: uid('w'), a, b, kind: wallKind, thickness: newWallThickness, height: framing.wallHeight }),
     [wallKind, newWallThickness, framing.wallHeight],
