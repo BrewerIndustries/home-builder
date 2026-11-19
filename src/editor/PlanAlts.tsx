@@ -6,19 +6,35 @@ import { phaseCounts, phaseOf, planElementIds, setPhase } from '../model/phase.t
 import type { Action } from '../model/store.ts';
 import type { Project } from '../model/types.ts';
 import { Modal } from '../ui/Modal.tsx';
+import { VersionsPanel } from './VersionsPanel.tsx';
 import './phasing.css';
 
 // Design options ("Option A" / "Plan B"): switch between alternates of the plan,
 // copy the current one, and compare their estimates side by side. Also the
-// whole-plan remodel phase shortcuts.
+// whole-plan remodel phase shortcuts, and (second tab) plan versions.
 
 export function PlanAltsDialog({ project, dispatch, onClose }: { project: Project; dispatch: Dispatch<Action>; onClose(): void }) {
   const replace = (next: Project) => dispatch({ type: 'replaceProject', project: next });
+  const [tab, setTab] = useState<'options' | 'versions'>('options');
   return (
-    <Modal title="Design options" onClose={onClose}>
+    <Modal title="Options & versions" onClose={onClose}>
       <div className="plan-alt">
-        <OptionsPanel project={project} replace={replace} />
-        <PhasesPanel project={project} replace={replace} />
+        <div className="plan-alt-tabs" role="tablist">
+          <button className={tab === 'options' ? 'active' : ''} onClick={() => setTab('options')}>
+            Design options
+          </button>
+          <button className={tab === 'versions' ? 'active' : ''} onClick={() => setTab('versions')}>
+            Versions{project.versions?.length ? ` (${project.versions.length})` : ''}
+          </button>
+        </div>
+        {tab === 'options' ? (
+          <>
+            <OptionsPanel project={project} replace={replace} />
+            <PhasesPanel project={project} replace={replace} />
+          </>
+        ) : (
+          <VersionsPanel project={project} replace={replace} />
+        )}
       </div>
     </Modal>
   );

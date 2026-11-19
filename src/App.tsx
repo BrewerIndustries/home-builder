@@ -231,7 +231,7 @@ export function App() {
           <button onClick={() => window.print()} disabled={!project.walls.length} title="Print or save as PDF — the Plan tab prints a to-scale sheet">
             Print / PDF
           </button>
-          <button onClick={() => setDialog('options')} title="Design options (Option A / Plan B) with a cost compare, and remodel phases">
+          <button onClick={() => setDialog('options')} title="Design options (Option A / Plan B) with a cost compare, remodel phases, and saved plan versions with change orders">
             Options
           </button>
           <details className="menu">

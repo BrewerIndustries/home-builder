@@ -6,6 +6,7 @@
 
 import type { Irrigation } from './irrigation.ts';
 import type { DesignOptions } from './options.ts';
+import type { PlanVersion } from './versions.ts';
 
 export interface Point {
   x: number;
@@ -474,6 +475,8 @@ export interface Project {
   phases?: Record<string, 'existing' | 'demo'>;
   /** Design alternates ("Option A", "Plan B"); the active one's plan is this project itself (see options.ts). */
   options?: DesignOptions;
+  /** Named, dated snapshots of the plan (see versions.ts). */
+  versions?: PlanVersion[];
 }
 
 export type RoofType = 'gable' | 'hip' | 'shed' | 'none';
