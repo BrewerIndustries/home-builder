@@ -6,6 +6,7 @@ import { followFurniture } from '../calc/furniture.ts';
 import { followDims } from '../calc/faces.ts';
 import { applyGroupOp, pasteClip, type Clip, type GroupOp, type SelItem } from './selection.ts';
 import { assemblyThickness } from './assembly.ts';
+import { inheritPhase } from './phase.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -18,6 +19,8 @@ export interface History {
 
 export type Action =
   | { type: 'load'; project: Project }
+  /** The whole project swapped for another as one undo step (design options, phases, restoring a version). */
+  | { type: 'replaceProject'; project: Project; transient?: boolean }
   | { type: 'checkpoint' }
   | { type: 'undo' }
   | { type: 'redo' }
@@ -104,6 +107,11 @@ export function historyReducer(h: History, action: Action): History {
       return push(h, h.present);
     case 'load':
       return initHistory(syncThickness(migrate(action.project)));
+    case 'replaceProject': {
+      if (action.project === h.present) return h;
+      const next = syncThickness(migrate(action.project));
+      return action.transient ? { ...h, present: next } : push(h, next);
+    }
   }
   const reduced = projectReducer(h.present, action);
   const next = followWalls(reduced, syncThickness(reduced));
@@ -233,7 +241,7 @@ export function projectReducer(p: Project, action: Action): Project {
       return reclampOpenings(pasteClip(p, action.clip));
 
     case 'splitWall':
-      return splitWall(p, action.id, action.at, action.newId);
+      return inheritPhase(splitWall(p, action.id, action.at, action.newId), action.id, action.newId);
 
     case 'joinWalls':
       return reclampOpenings(joinWalls(p, action.id, action.otherId));

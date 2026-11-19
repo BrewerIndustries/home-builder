@@ -5,6 +5,7 @@
 // y grows down (screen convention), origin is arbitrary.
 
 import type { Irrigation } from './irrigation.ts';
+import type { DesignOptions } from './options.ts';
 
 export interface Point {
   x: number;
@@ -469,6 +470,10 @@ export interface Project {
   roof?: Roof;
   foundation?: Foundation;
   underlay?: Underlay;
+  /** Remodel phase per element id (see phase.ts); missing = new work. */
+  phases?: Record<string, 'existing' | 'demo'>;
+  /** Design alternates ("Option A", "Plan B"); the active one's plan is this project itself (see options.ts). */
+  options?: DesignOptions;
 }
 
 export type RoofType = 'gable' | 'hip' | 'shed' | 'none';

@@ -13,6 +13,7 @@ import { outletPosition } from './outletGeometry.ts';
 import { DimEnd, lookOf, stopDirs, type Look } from './dimLook.tsx';
 import { OrdinateDimension } from './OrdinateDimension.tsx';
 import { NarrowestLine } from './NarrowestLine.tsx';
+import { phaseClass } from '../model/phase.ts';
 
 // The plan as a picture: rooms, walls, openings, outlets and dimensions, in plan
 // inches. Shared by the interactive canvas and the to-scale print sheet. `px`
@@ -40,7 +41,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {labels.map(({ room: r, lines }) => {
         const sel = selection?.kind === 'room' && selection.id === r.id;
         return (
-          <g key={r.id}>
+          <g key={r.id} className={phaseClass(project, r.id)}>
             <polygon points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill={sel ? 'var(--room-sel)' : 'var(--room)'} stroke="none" />
             {lines.map((l, i) => (
               <text key={i} x={l.x} y={l.y} className={l.cls} fontSize={l.size} textAnchor="middle" dominantBaseline={l.middle ? 'middle' : undefined}>
@@ -53,10 +54,14 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       })}
 
       {project.furniture.map((f) => (
-        <FurnitureGlyph key={f.id} f={f} selected={selection?.kind === 'furniture' && selection.id === f.id} px={px} />
+        <g key={f.id} className={phaseClass(project, f.id)}>
+          <FurnitureGlyph f={f} selected={selection?.kind === 'furniture' && selection.id === f.id} px={px} />
+        </g>
       ))}
       {project.counters.map((c) => (
-        <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} seatAt={seats(project, c)} />
+        <g key={c.id} className={phaseClass(project, c.id)}>
+          <CounterGlyph c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} seatAt={seats(project, c)} />
+        </g>
       ))}
       {project.counters.map((c) => {
         // Cabinet joints along the cabinet face (a short tick), labelled on the selected run.
@@ -84,7 +89,9 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         );
       })}
       {project.counters.map((c) => (
-        <CabinetGlyphs key={`${c.id}v6`} project={project} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
+        <g key={`${c.id}v6`} className={phaseClass(project, c.id)}>
+          <CabinetGlyphs project={project} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
+        </g>
       ))}
       {cornerUppers(project).map((u) => (
         <polygon
@@ -114,6 +121,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         return (
           <line
             key={w.id}
+            className={phaseClass(project, w.id)}
             x1={w.a.x}
             y1={w.a.y}
             x2={w.b.x}
@@ -127,12 +135,20 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
 
       {project.openings.map((o) => {
         const w = wallsById.get(o.wallId);
-        return w ? <OpeningGlyph key={o.id} wall={w} o={o} selected={selection?.kind === 'opening' && selection.id === o.id} px={px} /> : null;
+        return w ? (
+          <g key={o.id} className={phaseClass(project, o.id)}>
+            <OpeningGlyph wall={w} o={o} selected={selection?.kind === 'opening' && selection.id === o.id} px={px} />
+          </g>
+        ) : null;
       })}
       {outlets &&
         project.outlets.map((o) => {
           const w = wallsById.get(o.wallId);
-          return w ? <OutletGlyph key={o.id} wall={w} o={o} selected={selection?.kind === 'outlet' && selection.id === o.id} px={px} /> : null;
+          return w ? (
+            <g key={o.id} className={phaseClass(project, o.id)}>
+              <OutletGlyph wall={w} o={o} selected={selection?.kind === 'outlet' && selection.id === o.id} px={px} />
+            </g>
+          ) : null;
         })}
       {outlets && <Lighting project={project} selection={selection} px={px} />}
 
@@ -607,13 +623,15 @@ function Lighting({ project, selection, px }: { project: Project; selection: Hit
           );
         })}
       {project.fixtures.map((f) => (
-        <FixtureGlyph key={f.id} f={f} selected={selection?.kind === 'fixture' && selection.id === f.id} px={px} />
+        <g key={f.id} className={phaseClass(project, f.id)}>
+          <FixtureGlyph f={f} selected={selection?.kind === 'fixture' && selection.id === f.id} px={px} />
+        </g>
       ))}
       {switches.map(({ s, at }) => {
         const sel = selection?.kind === 'switch' && selection.id === s.id;
         const n = ways.get(s.id) ?? 1;
         return (
-          <g key={s.id} className={s.auto ? 'switch auto' : 'switch'}>
+          <g key={s.id} className={`${s.auto ? 'switch auto' : 'switch'} ${phaseClass(project, s.id) ?? ''}`}>
             <circle cx={at.x} cy={at.y} r={4} fill="var(--canvas)" stroke={sel ? 'var(--accent)' : 'var(--outlet)'} strokeWidth={px(1.2)} />
             <text x={at.x} y={at.y} fontSize={n === 1 ? 5.5 : 4.5} textAnchor="middle" dominantBaseline="central" fill={sel ? 'var(--accent)' : 'var(--outlet)'}>
               {n === 1 ? 'S' : `S${n}`}

@@ -21,7 +21,7 @@ import { assemblyLines, drywallWallArea } from './assemblyTakeoff.ts';
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Siding' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing';
+  category: 'Lumber' | 'Sheathing' | 'Siding' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing' | 'Demolition';
   item: string;
   qty: number;
   unit: string;

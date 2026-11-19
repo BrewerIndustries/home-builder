@@ -1,0 +1,96 @@
+/* Remodel phases on the plan (and the print sheet): existing grey, demolition dashed, new solid. */
+:root {
+  --phase-existing: #9aa1ad;
+  --phase-demo: #c2410c;
+}
+.plan-drawing line.phase-existing {
+  stroke: var(--phase-existing);
+}
+.plan-drawing line.phase-demo {
+  stroke: var(--phase-demo);
+  stroke-opacity: 0.55;
+  stroke-dasharray: 8 5;
+  stroke-linecap: butt;
+}
+.plan-drawing g.phase-existing {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.plan-drawing g.phase-demo {
+  opacity: 0.8;
+}
+.plan-drawing g.phase-demo * {
+  stroke-dasharray: 4 3;
+}
+.plan-drawing g.phase-demo polygon {
+  fill-opacity: 0.4;
+}
+
+.phase-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.phase-bar .phase-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.phase-bar .seg button.ph-existing.active {
+  background: var(--phase-existing);
+  color: #fff;
+}
+.phase-bar .seg button.ph-demo.active {
+  background: var(--phase-demo);
+  color: #fff;
+}
+
+/* Design options + versions dialog */
+.plan-alt-tabs {
+  display: flex;
+  gap: 6px;
+}
+.plan-alt-tabs button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.plan-alt table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.plan-alt th,
+.plan-alt td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.plan-alt td.num,
+.plan-alt th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+.plan-alt tr.total td {
+  font-weight: 600;
+}
+.plan-alt .up {
+  color: var(--danger);
+}
+.plan-alt .down {
+  color: #16a34a;
+}
+.plan-alt .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.plan-alt ul.changes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.plan-alt .table-scroll {
+  overflow-x: auto;
+}
