@@ -77,6 +77,12 @@ export const SHOWERS: ReadonlySet<FurnitureKind> = new Set(['shower', 'corner-sh
 /** A neo-angle shower's front corner is cut on the diagonal, this far back along each side (the angled door panel). */
 export const NEO_CUT = 14;
 /** Floor area inside a shower (square inches): the stall, less a neo-angle's cut corner. */
+/** Fixtures whose layout has a handed side (the door corner), so they can be mirrored. */
+export const MIRRORABLE: ReadonlySet<FurnitureKind> = new Set(['corner-shower', 'neo-shower']);
+/** Lavatory basins: one, or two on a double vanity. */
+export const basinCount = (f: Furniture) => (f.kind === 'lavatory' ? (f.basins ?? 1) : 0);
+/** A double vanity's basin halves, local x from–to; a single vanity is one span. */
+export const basinSpans = (f: Furniture): [number, number][] => (basinCount(f) === 2 ? [[-f.w / 2, 0], [0, f.w / 2]] : [[-f.w / 2, f.w / 2]]);
 export const showerArea = (f: Furniture) => f.w * f.d - (f.kind === 'neo-shower' ? (Math.min(NEO_CUT, f.w, f.d) ** 2) / 2 : 0);
 
 /** Fixed fixtures and appliances (not furniture, which moves): checked, and solid to clearances. */
@@ -219,11 +225,12 @@ export function clearZones(f: Furniture): [string, Point[]][] {
     case 'corner-shower':
       return [['24" clear in front of the opening', localRect(f, -hw, hd, hw, hd + 24)]];
     case 'neo-shower': {
-      // The door is the diagonal across the front-left corner; 24" out square to it.
+      // The door is the diagonal across the front-left corner (front-right when mirrored); 24" out square to it.
       const c = Math.min(NEO_CUT, f.w, f.d);
-      const [a, b] = [furniturePoint(f, -hw, hd - c), furniturePoint(f, -hw + c, hd)];
-      const mid = furniturePoint(f, -hw + c / 2, hd - c / 2);
-      const o = furniturePoint(f, -hw + c / 2 - 1, hd - c / 2 + 1);
+      const s = f.mirror ? -1 : 1;
+      const [a, b] = [furniturePoint(f, s * -hw, hd - c), furniturePoint(f, s * (-hw + c), hd)];
+      const mid = furniturePoint(f, s * (-hw + c / 2), hd - c / 2);
+      const o = furniturePoint(f, s * (-hw + c / 2 - 1), hd - c / 2 + 1);
       const len = Math.hypot(o.x - mid.x, o.y - mid.y) || 1;
       const u = { x: ((o.x - mid.x) / len) * 24, y: ((o.y - mid.y) / len) * 24 };
       return [['24" clear in front of the opening', [a, b, { x: b.x + u.x, y: b.y + u.y }, { x: a.x + u.x, y: a.y + u.y }]]];
@@ -250,14 +257,15 @@ function segDist(p: Point, a: Point, b: Point): number {
   return dist(p, { x: a.x + dx * t, y: a.y + dy * t });
 }
 
-/** How far the closest receptacle is from the vanity's outline (Infinity if none). */
-export function basinReach(project: Project, lav: Furniture): number {
-  const outline = furnitureCorners(lav);
+/** How far the closest receptacle is from the vanity's outline (Infinity if none); `span` limits it to one basin's half. */
+export function basinReach(project: Project, lav: Furniture, span: [number, number] = [-lav.w / 2, lav.w / 2]): number {
+  const outline = localRect(lav, span[0], -lav.d / 2, span[1], lav.d / 2);
+  const part = { ...lav, at: furniturePoint(lav, (span[0] + span[1]) / 2, 0), w: span[1] - span[0] };
   let best = Infinity;
   for (const o of project.outlets) {
     const p = outletPoint(project, o);
     if (!p) continue;
-    const d = onFurniture(lav, p) ? 0 : Math.min(...outline.map((a, i) => segDist(p, a, outline[(i + 1) % 4])));
+    const d = onFurniture(part, p) ? 0 : Math.min(...outline.map((a, i) => segDist(p, a, outline[(i + 1) % 4])));
     best = Math.min(best, d);
   }
   return best;
@@ -367,7 +375,10 @@ export function furnitureLines(project: Project): MaterialLine[] {
   const lines: MaterialLine[] = [];
   const add = (item: string, qty: number, basis: string) => qty && lines.push({ category: 'Plumbing', item, qty, unit: 'ea', basis });
   add('Toilet (allowance)', count('toilet'), 'toilets on the plan, incl. wax ring and supply');
-  add('Vanity + lavatory faucet (allowance)', count('lavatory'), 'lavatories on the plan');
+  const lavs = project.furniture.filter((f) => f.kind === 'lavatory');
+  const doubles = lavs.filter((f) => basinCount(f) === 2).length;
+  add('Vanity + lavatory faucet (allowance)', lavs.length - doubles, 'single vanities on the plan');
+  add('Double vanity + 2 faucets (allowance)', doubles, 'double vanities on the plan (two basins each)');
   add('Bathtub + valve (allowance)', count('tub'), 'tubs on the plan');
   add('Tub / shower combo + valve + surround (allowance)', count('tub-shower'), 'tub / shower combos on the plan');
   add('Shower pan + valve + door (allowance)', count('shower') + count('corner-shower'), 'showers on the plan (stall and corner entry)');
@@ -396,7 +407,8 @@ export function furnitureLines(project: Project): MaterialLine[] {
   const guardFt = Math.ceil(rails.reduce((t, r) => t + r.guard, 0) / 12);
   if (railFt) lines.push({ category: 'Lumber', item: 'Stair handrail + brackets (allowance)', qty: railFt, unit: 'lf', basis: 'sloped length of each handrail side, rounded up to whole feet (R311.7.8)' });
   if (guardFt) lines.push({ category: 'Lumber', item: 'Stair guard / balustrade (allowance)', qty: guardFt, unit: 'lf', basis: 'open sides more than 30" up — sloped along a stair going up, the run round the opening going down (R312.1)' });
-  const rough = project.furniture.filter((f) => WET.has(f.kind)).length;
+  // A double vanity is two lavatories to rough in.
+  const rough = project.furniture.filter((f) => WET.has(f.kind)).reduce((t, f) => t + Math.max(1, basinCount(f)), 0);
   add('Plumbing rough-in per fixture (allowance)', rough, 'supply, drain and vent per fixture; size runs with a plumber (IRC Chapters 29–31)');
   return lines;
 }

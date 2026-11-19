@@ -93,6 +93,7 @@ const SAMPLE: [RegExp, number][] = [
   [/^Vanity \+ lavatory faucet/, 450],
   [/^Bathtub \+ valve/, 700],
   [/^Shower pan \+ valve/, 900],
+  [/^Double vanity \+ 2 faucets/, 1400],
   [/^Neo-angle shower base/, 1400],
   [/^Linen cabinet/, 450],
   [/^Barn door track \+ hardware/, 250],

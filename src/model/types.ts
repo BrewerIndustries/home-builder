@@ -164,6 +164,10 @@ export interface Furniture {
   /** Stairs: which sides have a handrail, as you walk up from the foot (right when unset), and its height above the nosings (36" when unset). */
   handrails?: 'none' | 'left' | 'right' | 'both';
   handrailHeight?: number;
+  /** Lavatory: a double vanity (two basins, each its own lavatory). */
+  basins?: 2;
+  /** Corner and neo-angle showers: door on the front-right instead of the front-left. */
+  mirror?: boolean;
   /** Stairs: guards along any side not against a wall (on unless false). */
   guards?: boolean;
   /** Fixtures: the product picked, and rough-in or other notes, for the schedule. */

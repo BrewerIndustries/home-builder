@@ -12,7 +12,7 @@ import { foundationChecks } from './foundation.ts';
 import { lightingChecks, roomAt } from './lighting.ts';
 import { outdoorChecks } from './outdoor.ts';
 import { kitchenChecks } from './kitchen.ts';
-import { basinReach, furnitureChecks, roomLavatories } from './furniture.ts';
+import { basinReach, basinSpans, furnitureChecks, roomLavatories } from './furniture.ts';
 import { stairChecks } from './stairs.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
@@ -239,8 +239,12 @@ export function ircChecks(project: Project): CodeCheck[] {
         if (lavs.length) {
           // Basins drawn: measure each one.
           for (const lav of lavs) {
-            const reach = basinReach(project, lav);
-            add({ rule: 'Bathroom receptacle within 36" of the basin', section: 'E3901.6', status: reach <= 36.5 ? 'pass' : 'fail', message: `${label}: ${Number.isFinite(reach) ? `nearest receptacle ${formatFtIn(reach)} from the vanity` : 'no receptacle'} (max 36")`, targetId: lav.id });
+            const spans = basinSpans(lav);
+            spans.forEach((span, i) => {
+              const reach = basinReach(project, lav, span);
+              const which = spans.length > 1 ? ` (${i ? 'right' : 'left'} basin)` : '';
+              add({ rule: 'Bathroom receptacle within 36" of the basin', section: 'E3901.6', status: reach <= 36.5 ? 'pass' : 'fail', message: `${label}${which}: ${Number.isFinite(reach) ? `nearest receptacle ${formatFtIn(reach)} from the vanity` : 'no receptacle'} (max 36")`, targetId: lav.id });
+            });
           }
           const gfci = roomOutletCount(project, room, 'gfci') === roomOutletCount(project, room);
           add({ rule: 'Bathroom receptacles GFCI protected', section: 'E3902', status: gfci ? 'pass' : 'fail', message: `${label}: ${gfci ? 'all GFCI' : 'mark every bathroom receptacle GFCI'}`, targetId: room.id });

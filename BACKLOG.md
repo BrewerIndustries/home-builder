@@ -75,7 +75,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Fixtures v3: door-to-door swing clashes; tub clearances; WC–bidet 30" centre spacing; follow walls through a split; schedule columns for model / rough-in notes; closet rod + shelf, stairs symbol
 - [x] Fixtures v4: door swing vs. fixture clearance zones (not just bodies); double / pocket / bifold door swings; schedule sort by room; closet rod double-hang and shelf-only options; tub-shower combo
 - [x] Fixtures v5: pocket door framed over door + pocket (one header, no studs in the pocket, kit RO note); bypass doors; barn doors on a face track (slide-clear check on their face); corner-entry and neo-angle showers (P2708.1 on real area, 24" off the diagonal); linen cabinet / shelving unit; hardware + allowances priced
-- [ ] Fixtures v6: mirror a fixture (a neo-angle's cut on the other side; a corner shower's door); curbless / walk-in showers; double vanity (two basins, each checked as a lavatory); a barn door's blocking in the framing elevation; 3D door leaves by operation
+- [x] Fixtures v6: mirror a corner / neo-angle shower (door and clear zone on the other corner); double vanity (two basins, E3901.6 per basin half, priced as one cabinet + 2 faucets, two rough-ins)
+- [ ] Fixtures v7: curbless / walk-in showers; a barn door's blocking in the framing elevation; 3D door leaves by operation; basin positions editable on a double vanity
 - [ ] AI plan recognition: suggest walls / doors / windows from the underlay image (after PDF + perspective)
 
 ## Housekeeping

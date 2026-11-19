@@ -699,8 +699,12 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       body = (
         <>
           {rect(l, t, r, b)}
-          <ellipse cx={0} cy={1} rx={Math.min(w * 0.32, 9)} ry={d * 0.3} strokeWidth={sw} />
-          <circle cx={0} cy={t + 2.5} r={1} strokeWidth={sw} />
+          {(f.basins === 2 ? [-w / 4, w / 4] : [0]).map((cx) => (
+            <g key={cx}>
+              <ellipse cx={cx} cy={1} rx={Math.min(w * (f.basins === 2 ? 0.16 : 0.32), 9)} ry={d * 0.3} strokeWidth={sw} />
+              <circle cx={cx} cy={t + 2.5} r={1} strokeWidth={sw} />
+            </g>
+          ))}
         </>
       );
       break;
@@ -738,6 +742,7 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
           <path d={`M ${l + 1.5} ${b - 1.5 - Math.min(14, d / 2)} A ${Math.min(14, d / 2)} ${Math.min(14, d / 2)} 0 0 0 ${l + 1.5 + Math.min(14, w / 2)} ${b - 1.5}`} fill="none" strokeWidth={sw} strokeDasharray={`${px(3)} ${px(2)}`} />
         </>
       );
+      if (f.mirror) body = <g transform="scale(-1,1)">{body}</g>;
       break;
     case 'neo-shower': {
       // The front-left corner cut on the diagonal: the angled door panel.
@@ -750,6 +755,7 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
           <line x1={r} y1={t} x2={l + c / 2} y2={b - c / 2} strokeWidth={sw} />
         </>
       );
+      if (f.mirror) body = <g transform="scale(-1,1)">{body}</g>;
       break;
     }
     case 'linen':

@@ -663,6 +663,15 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Depth" hint={f.kind === 'stairs' ? 'The run, from the foot (on this floor) to the far end, landing included' : 'Front to back'}>
           <LengthInput value={f.d} min={6} onChange={(v) => up({ d: v })} />
         </Field>
+        {f.kind === 'lavatory' && (
+          <label className="link-row">
+            <input type="checkbox" checked={f.basins === 2} onChange={(e) => up(e.target.checked ? { basins: 2, w: Math.max(f.w, 60) } : { basins: undefined })} /> Double vanity — two basins, each
+            checked for its own receptacle (E3901.6)
+          </label>
+        )}
+        {(f.kind === 'corner-shower' || f.kind === 'neo-shower') && (
+          <button onClick={() => up({ mirror: f.mirror ? undefined : true })}>Mirror — door on the {f.mirror ? 'left' : 'right'}</button>
+        )}
         {f.kind === 'stairs' && (
           <>
             <Field label="Risers" hint="Six or more: a light switch at each floor level (E3903.3)">
