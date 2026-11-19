@@ -364,6 +364,8 @@ export function transformGroup(p: Project, g: Group, m: RoomMap): Project {
     let out = f;
     if (HANDED.has(f.kind)) out = { ...out, mirror: !f.mirror };
     if (f.kind === 'stairs' && f.handrails !== 'both' && f.handrails !== 'none') out = { ...out, handrails: SWAP_RAILS[f.handrails ?? 'right'] };
+    // An L or U stair turns the other way in the mirror.
+    if (f.kind === 'stairs' && (f.shape === 'L' || f.shape === 'U')) out = { ...out, turn: f.turn === 'left' ? undefined : 'left' };
     return out;
   };
   return {

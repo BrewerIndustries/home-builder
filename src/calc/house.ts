@@ -1,4 +1,4 @@
-import { dist, pointInPolygon, projectOnWall, wallDir, wallLength } from '../model/geometry.ts';
+import { pointInPolygon, wallLength } from '../model/geometry.ts';
 import { activeStoreyId, isLowestStorey, isMultiStorey, isTopStorey, setStoreyData, storeyElevation, storeyList, storeyView, storeyViews } from '../model/storeys.ts';
 import { uid, type Furniture, type Point, type Project, type Storey, type Wall, type WallSwitch } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
@@ -10,7 +10,7 @@ import { detectsSmoke, lightsRoom, SWITCH_HEIGHT } from './lighting.ts';
 import { materialsList, wallAreas, type MaterialLine } from './materials.ts';
 import { buildScene, type Scene3D, type V3 } from './model3d.ts';
 import { roofOf } from './roof.ts';
-import { FLOOR_GUARD, floorOpeningPolygon, isStairs, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
+import { FLOOR_GUARD, floorOpeningPolygons, isStairs, openingGuardLength, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
 
 // The whole house across its storeys (Storeys v1). Each storey is a Project view
 // (model/storeys.ts) and the per-plan calcs run on each one; the parts the house
@@ -36,7 +36,8 @@ export interface FloorOpening {
   /** The stair it's over, and the storey that stair is drawn on. */
   stair: Furniture;
   from: string;
-  poly: Point[];
+  /** One polygon per flight or landing it spans. */
+  polys: Point[][];
 }
 
 /** Openings in a storey's floor: under stairs coming up from the storey below, and over its own stairs going down. */
@@ -46,51 +47,28 @@ export function floorOpenings(p: Project, id: string = activeStoreyId(p)): Floor
   const i = list.findIndex((s) => s.id === id);
   if (i < 0) return out;
   const own = storeyView(p, id);
-  for (const f of own.furniture.filter((x) => isStairs(x) && x.down)) out.push({ stair: f, from: id, poly: floorOpeningPolygon(f) });
+  for (const f of own.furniture.filter((x) => isStairs(x) && x.down)) out.push({ stair: f, from: id, polys: floorOpeningPolygons(f) });
   const below = list[i - 1];
   if (below) {
     const v = storeyView(p, below.id);
-    for (const f of v.furniture.filter((x) => isStairs(x) && !x.down)) out.push({ stair: f, from: below.id, poly: floorOpeningPolygon(f) });
+    for (const f of v.furniture.filter((x) => isStairs(x) && !x.down)) out.push({ stair: f, from: below.id, polys: floorOpeningPolygons(f) });
   }
   return out;
 }
 
-/** Is there a wall along the segment p → q (parallel, its face within 2", over most of it)? */
-function walledEdge(walls: Wall[], p: Point, q: Point): boolean {
-  const len = dist(p, q) || 1;
-  const u = { x: (q.x - p.x) / len, y: (q.y - p.y) / len };
-  return walls.some((w) => {
-    const d = wallDir(w);
-    if (Math.abs(u.x * d.y - u.y * d.x) > 0.02) return false;
-    const [a, b] = [projectOnWall(w, p), projectOnWall(w, q)];
-    if (Math.abs(a.perp) - w.thickness / 2 > 2 || Math.abs(b.perp) - w.thickness / 2 > 2) return false;
-    const [lo, hi] = [Math.max(0, Math.min(a.along, b.along)), Math.min(wallLength(w), Math.max(a.along, b.along))];
-    return hi - lo >= len * 0.75;
-  });
-}
-
-/**
- * Guard round a floor opening over a stair coming up from below (R312.1.1, 36"
- * round an opening): its open sides, leaving out the end you step off at the top.
- */
+/** Guard round a floor opening over a stair coming up from below (R312.1.1, 36" round an opening): its open edges, less the end you step off at the top. */
 export function openingGuard(upper: Project, o: FloorOpening): number {
-  const pts = o.poly;
-  // The polygon's first edge is the top end (see floorOpeningPolygon): you walk off there.
-  let lf = 0;
-  for (let k = 1; k < pts.length; k++) {
-    const [a, b] = [pts[k], pts[(k + 1) % pts.length]];
-    if (!walledEdge(upper.walls, a, b)) lf += dist(a, b);
-  }
-  return lf;
+  return openingGuardLength(o.stair, upper.walls);
 }
 
 /** Does a wall on this storey run through the opening? */
-function wallsAcross(v: Project, poly: Point[]): Wall[] {
+function wallsAcross(v: Project, polys: Point[][]): Wall[] {
   return v.walls.filter((w) => {
     const n = Math.max(2, Math.ceil(wallLength(w) / 6));
     for (let k = 1; k < n; k++) {
       const t = k / n;
-      if (pointInPolygon({ x: w.a.x + (w.b.x - w.a.x) * t, y: w.a.y + (w.b.y - w.a.y) * t }, poly)) return true;
+      const p = { x: w.a.x + (w.b.x - w.a.x) * t, y: w.a.y + (w.b.y - w.a.y) * t };
+      if (polys.some((poly) => pointInPolygon(p, poly))) return true;
     }
     return false;
   });
@@ -112,7 +90,7 @@ export function houseChecks(p: Project): HouseCheck[] {
     out.push(tag({ rule: 'Smoke alarm on each storey', section: 'R314.3', status: smoke ? 'pass' : 'fail', message: smoke ? `${smoke} on this floor` : 'no smoke alarm on this floor' }));
     // Floor openings under stairs coming up from below.
     for (const o of floorOpenings(p, storey.id).filter((x) => x.from !== storey.id)) {
-      const across = wallsAcross(v, o.poly);
+      const across = wallsAcross(v, o.polys);
       if (across.length) {
         out.push(tag({ rule: 'Floor opening over the stair kept clear', section: 'R311.7.2', status: 'warn', message: `a wall on this floor runs through the opening over the stair from the floor below — move it or the stair`, targetId: across[0].id }));
       }
@@ -181,7 +159,7 @@ export function houseScene(p: Project): Scene3D {
     const s = buildScene(v);
     const e = storeyElevation(p, storey.id);
     const up = (q: V3): V3 => [q[0], q[1] + e, q[2]];
-    const holes = floorOpenings(p, storey.id).map((o) => o.poly);
+    const holes = floorOpenings(p, storey.id).flatMap((o) => o.polys);
     scene.boxes.push(...s.boxes.map((b) => ({ ...b, c: up(b.c) })));
     scene.flats.push(...s.flats.map((f) => ({ ...f, y: f.y + e, holes: f.kind === 'floor' ? [...f.holes, ...holes] : f.holes })));
     scene.faces.push(...s.faces.map((f) => ({ ...f, pts: f.pts.map(up) })));

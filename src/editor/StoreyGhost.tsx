@@ -27,9 +27,9 @@ export function StoreyGhost({ project, px, openingsOnly = false }: { project: Pr
             ))}
         </g>
       )}
-      {openings.map((o, i) => {
-        const pts = o.poly.map((p) => `${p.x},${p.y}`).join(' ');
-        const [a, b, c, d] = o.poly;
+      {openings.flatMap((o) => o.polys).map((poly, i) => {
+        const pts = poly.map((p) => `${p.x},${p.y}`).join(' ');
+        const [a, b, c, d] = poly;
         const mid = { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 };
         return (
           <g key={i}>

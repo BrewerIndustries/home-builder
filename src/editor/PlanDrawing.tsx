@@ -13,6 +13,7 @@ import { outletPosition } from './outletGeometry.ts';
 import { DimEnd, lookOf, stopDirs, type Look } from './dimLook.tsx';
 import { OrdinateDimension } from './OrdinateDimension.tsx';
 import { NarrowestLine } from './NarrowestLine.tsx';
+import { AtticHatchGlyph, TurningStairGlyph } from './StairGlyph.tsx';
 
 // The plan as a picture: rooms, walls, openings, outlets and dimensions, in plan
 // inches. Shared by the interactive canvas and the to-scale print sheet. `px`
@@ -940,7 +941,14 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
         </>
       );
       break;
+    case 'attic-access':
+      body = <AtticHatchGlyph f={f} px={px} />;
+      break;
     case 'stairs': {
+      if (f.shape === 'L' || f.shape === 'U') {
+        body = <TurningStairGlyph f={f} px={px} />;
+        break;
+      }
       // Treads across the flight, an arrow from the foot (front, +y) up the run, cut line past halfway.
       // A landing (so many risers from the foot) is one deeper step, the stair's width deep (36" at least).
       const risers = f.risers ?? 13;

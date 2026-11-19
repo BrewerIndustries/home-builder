@@ -15,7 +15,8 @@ import { outdoorChecks } from './outdoor.ts';
 import { circuitChecks } from './circuits.ts';
 import { kitchenChecks } from './kitchen.ts';
 import { basinReach, basinSpans, furnitureChecks, roomLavatories } from './furniture.ts';
-import { stairChecks } from './stairs.ts';
+import { handrailNotes, stairChecks } from './stairs.ts';
+import { accessChecks } from './access.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -427,6 +428,8 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const c of kitchenChecks(project)) add(c);
   for (const c of furnitureChecks(project)) add(c);
   for (const c of stairChecks(project)) add(c);
+  for (const c of handrailNotes(project)) add(c);
+  for (const c of accessChecks(project)) add(c);
 
   return checks;
 }
@@ -437,9 +440,9 @@ export const NOT_CHECKED = [
   'Conductor sizing, voltage drop and box fill; range demand (NEC Table 220.55 — nameplate is used); branch circuits and the service size of a house with several storeys (worked out storey by storey); on a one-storey plan the stairway switch at the other floor level is only counted (add that storey and Auto lights places it); equipment other than a water heater, furnace or air handler (E3903.3, E3903.4)',
   'Smoke alarm distance from cooking appliances and exact ceiling position (R314.3, NFPA 72); CO alarms inside bedrooms with a fuel-burning appliance (R315.3)',
   'Sloping grade around the house (one floor-above-grade figure is used) and deck surfaces below the floor (deck receptacle heights are from the floor)',
-  'Nosings, winders, spiral and L/U-turning stairs (R311.7.5.3, R311.7.10); handrail continuity, grip size and returns (R311.7.8.2–.8.4); guard openings (R312.1.3); headroom is checked against the floor opening over the flight, not against beams or soffits under it',
+  'Nosings, winders and spiral stairs (R311.7.5.3, R311.7.10); handrail grip size and clearance (R311.7.8) — continuity and returns are listed as a note, not drawn; guard openings (R312.1.3); headroom is checked against the floor opening over the flight, not against beams or soffits under it',
   'Hallway width (R311.6)',
-  'Plumbing sizing, venting and fixture units (Chapters 29–31); under-floor appliance access (M1305.1.4) — the attic access is only listed, not placed',
+  'Plumbing sizing, venting and fixture units (Chapters 29–31); under-floor appliance access (M1305.1.4) is a note without sizes; the attic passageway length is as typed, not traced',
   'Fire separation, garage–dwelling (R302)',
   'Energy efficiency (Chapter 11)',
   'Footing size for soil bearing and storeys (Table R403.1), foundation reinforcement and floor framing (Chapter 5)',

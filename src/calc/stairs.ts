@@ -3,6 +3,7 @@ import type { Fixture, Furniture, Point, Project, Wall } from '../model/types.ts
 import { formatFtIn } from '../model/units.ts';
 import { adjacentStorey, isMultiStorey, storeyHeight } from '../model/storeys.ts';
 import type { CodeCheck } from './irc.ts';
+import { endEdge, flightSides, flightsOf, isTurning, landingOf, openEdge, pathLength, pathRects, rectPolygon, stairSegments, toPlan, turnLanding, walledEdge } from './stairShape.ts';
 
 // Stairs on a one-storey plan: a flight going up (or down) from this floor.
 //   E3903.3  stairways get a wall-switched lighting outlet; where the flight has
@@ -39,13 +40,14 @@ function local(f: Furniture, x: number, y: number): Point {
 
 /** Middle of the stair's far end, where it arrives at the other floor, and the direction of travel off it. */
 export function stairEnd(f: Furniture): { at: Point; dir: Point } {
-  const at = local(f, 0, -f.d / 2);
-  const beyond = local(f, 0, -f.d / 2 - 1);
+  const last = stairSegments(f).at(-1)!;
+  const at = toPlan(f, last.to);
+  const beyond = toPlan(f, { x: last.to.x + last.dir.x, y: last.to.y + last.dir.y });
   return { at, dir: { x: beyond.x - at.x, y: beyond.y - at.y } };
 }
 
 /** Middle of the stair's front edge: where you step on from this floor. */
-export const stairFoot = (f: Furniture) => local(f, 0, f.d / 2);
+export const stairFoot = (f: Furniture) => (isTurning(f) ? toPlan(f, stairSegments(f)[0].from) : local(f, 0, f.d / 2));
 
 /** Is a plan point over the stair, or within `slop` of it? */
 function near(f: Furniture, p: Point, slop: number): boolean {
@@ -100,21 +102,36 @@ export function stairTarget(project: Project, f: Furniture) {
 }
 
 /** Length of the floor opening over the flight, back from the top: as set, else the whole stair. */
-export const openingLength = (f: Furniture) => Math.max(0, Math.min(f.d, f.floorOpening ?? f.d));
+export const openingLength = (f: Furniture) => Math.max(0, Math.min(pathLength(f), f.floorOpening ?? pathLength(f)));
 
 /**
  * The floor opening on the plan: the stretch of the stair within `openingLength`
  * of its top. Going up it is in the floor above (the far end of the run is the
  * top); going down it is in this floor (the foot is the top).
  */
-export function floorOpeningPolygon(f: Furniture): Point[] {
+export function floorOpeningPolygons(f: Furniture): Point[][] {
+  return openingRects(f).map((r) => rectPolygon(f, r));
+}
+
+/** The opening as stair-frame rectangles (one per flight / landing it covers). */
+export function openingRects(f: Furniture) {
   const o = openingLength(f);
-  const [y0, y1] = f.down ? [f.d / 2 - o, f.d / 2] : [-f.d / 2, -f.d / 2 + o];
-  return [local(f, -f.w / 2, y0), local(f, f.w / 2, y0), local(f, f.w / 2, y1), local(f, -f.w / 2, y1)];
+  const S = pathLength(f);
+  return f.down ? pathRects(f, 0, o) : pathRects(f, S - o, S);
+}
+
+/**
+ * Open edge round the floor opening, on the floor it's in (`walls`): its
+ * outline less the end you step on or off at the top, and less walls.
+ */
+export function openingGuardLength(f: Furniture, walls: Wall[]): number {
+  const segs = stairSegments(f);
+  const top = f.down ? endEdge(segs[0], 'from') : endEdge(segs[segs.length - 1], 'to');
+  return openEdge(f, openingRects(f), walls, [top]);
 }
 
 /** The landing's riser count from the foot, if it's a real one (between the first and last riser). */
-export const landingAt = (f: Furniture) => (f.landing && f.landing > 0 && f.landing < risersOf(f) ? Math.round(f.landing) : undefined);
+export const landingAt = (f: Furniture) => (isTurning(f) ? turnLanding(f) : f.landing && f.landing > 0 && f.landing < risersOf(f) ? Math.round(f.landing) : undefined);
 
 export interface StairGeometry {
   risers: number;
@@ -125,11 +142,14 @@ export interface StairGeometry {
   landingDepth: number;
   /** Rise of each flight between floor levels or the landing. */
   flights: number[];
-  /** How long the floor opening over the flight has to be for 6' 8" headroom (0 if the whole run already clears). */
+  /** How long the floor opening over the flight has to be for 6' 8" headroom (0 if the whole run already clears), along the walk line. */
   opening: number;
+  /** L / U stairs: each flight's risers, treads, tread depth, run and rise. */
+  flightRuns?: { risers: number; treads: number; tread: number; run: number; rise: number }[];
 }
 
 export function stairGeometry(project: Project, f: Furniture): StairGeometry {
+  if (isTurning(f)) return turningGeometry(project, f);
   const risers = risersOf(f);
   const rise = floorToFloor(project, f);
   const riser = rise / risers;
@@ -155,8 +175,46 @@ export function stairGeometry(project: Project, f: Furniture): StairGeometry {
   return { risers, rise, riser, tread, treads, landingDepth, flights, opening };
 }
 
+/** An L or U stair: each flight from its own run; the landing is one (long) step on the walk line. */
+function turningGeometry(project: Project, f: Furniture): StairGeometry {
+  const risers = risersOf(f);
+  const rise = floorToFloor(project, f);
+  const riser = rise / risers;
+  const runs = flightsOf(f).map((s) => ({ risers: s.risers, treads: Math.max(0, s.risers - 1), tread: s.risers > 1 ? s.len / (s.risers - 1) : s.len, run: s.len, rise: s.risers * riser }));
+  const landing = landingOf(f)!;
+  const depths = [...Array(runs[0].treads).fill(runs[0].tread), landing.len, ...Array(runs[1].treads).fill(runs[1].tread)] as number[];
+  if (f.down) depths.reverse();
+  const S = pathLength(f);
+  const H = project.framing.wallHeight;
+  let x = 0;
+  let opening = 0;
+  for (let k = 1; k <= depths.length; k++) {
+    if (k * riser > H - MIN_HEADROOM) {
+      opening = S - x;
+      break;
+    }
+    x += depths[k - 1];
+  }
+  const { x0, x1, y0, y1 } = landing.rect;
+  return {
+    risers,
+    rise,
+    riser,
+    tread: Math.min(...runs.map((r) => r.tread)),
+    treads: runs.reduce((t, r) => t + r.treads, 0),
+    landingDepth: f.shape === 'U' ? y1 - y0 : Math.min(x1 - x0, y1 - y0),
+    flights: runs.map((r) => r.rise),
+    opening,
+    flightRuns: runs,
+  };
+}
+
 /** Middle of the landing on the plan. */
 export function landingPoint(project: Project, f: Furniture): Point | null {
+  if (isTurning(f)) {
+    const r = landingOf(f)!.rect;
+    return toPlan(f, { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 });
+  }
   const L = landingAt(f);
   if (!L) return null;
   const g = stairGeometry(project, f);
@@ -213,6 +271,7 @@ export const railSides = (f: Furniture): readonly ('left' | 'right')[] => RAIL_S
  * (going down from this floor, the guard is round the floor opening, 36" high).
  */
 export function stairRailing(project: Project, f: Furniture): { handrail: number; guard: number; open: ('left' | 'right')[]; guardFrom: number } {
+  if (isTurning(f)) return turningRailing(project, f);
   const g = stairGeometry(project, f);
   const slope = (run: number, rise: number) => Math.hypot(run, rise);
   const handrail = g.risers >= HANDRAIL_RISERS ? railSides(f).length * slope(f.d, g.rise) : 0;
@@ -229,9 +288,11 @@ export function stairChecks(project: Project): CodeCheck[] {
   const out: CodeCheck[] = [];
   for (const f of project.furniture.filter(isStairs)) {
     const g = stairGeometry(project, f);
-    const label = `Stairs (${g.risers} risers ${f.down ? 'down' : 'up'})`;
+    const label = `Stairs (${g.risers} risers ${f.down ? 'down' : 'up'}${isTurning(f) ? `, ${f.shape}-shaped` : ''})`;
     const add = (rule: string, section: string, ok: boolean, message: string, status?: CodeCheck['status']) =>
       out.push({ rule, section, status: status ?? (ok ? 'pass' : 'fail'), message: `${label}: ${message}`, targetId: f.id });
+    if (isTurning(f)) turningChecks(project, f, g, add);
+    else {
     add('Stair width (36" clear)', 'R311.7.1', f.w >= MIN_STAIR_WIDTH - 0.01, `${formatFtIn(f.w)} wide${f.w >= MIN_STAIR_WIDTH - 0.01 ? '' : ' — wants 3\' 0" clear'}`);
     add('Riser height (7-3/4" max)', 'R311.7.5.1', g.riser <= MAX_RISER + 0.01, `${formatFtIn(g.rise)} floor to floor ÷ ${g.risers} = ${formatFtIn(g.riser)} risers${g.riser <= MAX_RISER + 0.01 ? '' : ` — needs ${Math.ceil(g.rise / MAX_RISER)} or more`}`);
     add(
@@ -272,6 +333,7 @@ export function stairChecks(project: Project): CodeCheck[] {
           : `open on the ${where}: a guard from riser ${rail.guardFrom} up, ${STAIR_GUARD}" high along the stair (R312.1.2)${f.guards === false ? ' — none shown' : ''}`,
       );
     }
+    }
     const target = stairTarget(project, f);
     if (target || f.floorOpening !== undefined) {
       // A real floor (or a set opening): the opening has to reach back far enough for 6' 8" at every nosing under the floor.
@@ -295,6 +357,117 @@ export function stairChecks(project: Project): CodeCheck[] {
         : 'clears 6\' 8" under a full ceiling',
       'info',
     );
+  }
+  return out;
+}
+
+type Add = (rule: string, section: string, ok: boolean, message: string, status?: CodeCheck['status']) => void;
+
+/** Each flight's sides, walking up it: is each against a wall? */
+function turningSides(project: Project, f: Furniture) {
+  return flightsOf(f).map((s) => {
+    const { left, right } = flightSides(s);
+    const walled = ([a, b]: [Point, Point]) => walledEdge(project.walls, toPlan(f, a), toPlan(f, b));
+    return { left: walled(left), right: walled(right) };
+  });
+}
+
+/**
+ * Railing on an L / U stair, flight by flight: a handrail on the chosen sides
+ * of each flight of four or more risers; a guard on each open side from the
+ * first riser more than 30" up, and round the landing's open edges once it's
+ * more than 30" up. Going down, the guard runs round the opening in this floor.
+ */
+function turningRailing(project: Project, f: Furniture): { handrail: number; guard: number; open: ('left' | 'right')[]; guardFrom: number } {
+  const g = stairGeometry(project, f);
+  const runs = g.flightRuns!;
+  const sides = turningSides(project, f);
+  const open = (['left', 'right'] as const).filter((k) => sides.some((s) => !s[k]));
+  const guardFrom = Math.floor(GUARD_DROP / g.riser) + 1;
+  let handrail = 0;
+  let guard = 0;
+  let below = 0;
+  runs.forEach((r, i) => {
+    if (r.risers >= HANDRAIL_RISERS) handrail += railSides(f).length * Math.hypot(r.run, r.rise);
+    const m = Math.max(1, guardFrom - below);
+    if (!f.down && m <= r.risers) {
+      const openHere = (['left', 'right'] as const).filter((k) => !sides[i][k]).length;
+      guard += openHere * Math.hypot(Math.max(0, r.run - (m - 1) * r.tread), r.rise - (m - 1) * g.riser);
+    }
+    below += r.risers;
+  });
+  if (f.guards === false || g.rise <= GUARD_DROP) guard = 0;
+  else if (f.down) guard = openingGuardLength({ ...f, floorOpening: undefined }, project.walls);
+  else if (runs[0].rise > GUARD_DROP) {
+    // The landing's open edges: not where the flights meet it, not along a wall.
+    const flights = flightsOf(f).map((s) => s.rect);
+    guard += openEdge(f, [landingOf(f)!.rect], project.walls, [], flights);
+  }
+  return { handrail, guard, open, guardFrom };
+}
+
+/** R311.7 for an L or U stair: each flight's width, treads, rise and handrail, and the landing where it turns. */
+function turningChecks(project: Project, f: Furniture, g: StairGeometry, add: Add) {
+  const runs = g.flightRuns!;
+  const b = flightsOf(f)[0];
+  const width = b.dir.x === 0 ? b.rect.x1 - b.rect.x0 : b.rect.y1 - b.rect.y0;
+  const wide = width >= MIN_STAIR_WIDTH - 0.01;
+  add('Stair width (36" clear)', 'R311.7.1', wide, `flights ${formatFtIn(width)} wide${wide ? '' : " — wants 3' 0\" clear"}`);
+  add('Riser height (7-3/4" max)', 'R311.7.5.1', g.riser <= MAX_RISER + 0.01, `${formatFtIn(g.rise)} floor to floor ÷ ${g.risers} = ${formatFtIn(g.riser)} risers${g.riser <= MAX_RISER + 0.01 ? '' : ` — needs ${Math.ceil(g.rise / MAX_RISER)} or more`}`);
+  const shallow = runs.findIndex((r) => r.treads > 0 && r.tread < MIN_TREAD - 0.01);
+  add(
+    'Tread depth (10" min)',
+    'R311.7.5.2',
+    shallow < 0,
+    runs.map((r, i) => `flight ${i + 1}: ${r.treads} treads in ${formatFtIn(r.run)} = ${formatFtIn(r.tread)}${r.treads > 0 && r.tread < MIN_TREAD - 0.01 ? ` — needs ${formatFtIn(r.treads * MIN_TREAD)} of run` : ''}`).join('; '),
+  );
+  const tall = runs.some((r) => r.rise > MAX_FLIGHT_RISE + 0.01);
+  add('Flight rise (151" max between landings)', 'R311.7.3', !tall, `flights of ${runs.map((r) => formatFtIn(r.rise)).join(' and ')}${tall ? ' — too tall: move the landing or add one' : ''}`);
+  const land = landingOf(f)!.rect;
+  const [lw, ld] = f.shape === 'U' ? [land.x1 - land.x0, g.landingDepth] : [width, g.landingDepth];
+  const deep = ld >= Math.max(MIN_LANDING, width) - 0.01;
+  add('Landing size', 'R311.7.6', deep, `${f.shape === 'U' ? 'U-turn' : 'quarter-turn'} landing ${formatFtIn(lw)} wide × ${formatFtIn(ld)} deep (at least as deep as the stair is wide, and 3' 0")`);
+  const sides = railSides(f);
+  runs.forEach((r, i) => {
+    if (r.risers < HANDRAIL_RISERS) return;
+    add('Handrail (one side at least, 4+ risers)', 'R311.7.8', sides.length > 0, `flight ${i + 1}: ${sides.length ? `handrail on the ${sides.join(' and ')}` : 'no handrail — a flight of four or more risers needs one on a side'}`);
+  });
+  if (sides.length && runs.some((r) => r.risers >= HANDRAIL_RISERS)) {
+    const h = f.handrailHeight ?? 36;
+    add('Handrail height (34"–38")', 'R311.7.8.1', h >= HANDRAIL_MIN - 0.01 && h <= HANDRAIL_MAX + 0.01, `${formatFtIn(h)} above the nosings`);
+  }
+  const rail = stairRailing(project, f);
+  if (g.rise > GUARD_DROP && (rail.open.length || f.shape === 'U')) {
+    add(
+      'Guards on open sides (more than 30" up)',
+      'R312.1.1',
+      f.guards !== false,
+      f.down
+        ? `a ${FLOOR_GUARD}" guard round the floor opening on this floor (R312.1.2)${f.guards === false ? ' — none shown' : ''}`
+        : `open ${rail.open.length ? `on the ${rail.open.join(' and ')} of a flight` : 'at the well'}: a guard from riser ${rail.guardFrom} up, ${STAIR_GUARD}" high along the stair and round the landing's open edges (R312.1.2)${f.guards === false ? ' — none shown' : ''}`,
+    );
+  }
+}
+
+/**
+ * R311.7.8.2 in plain words, for every stair that needs a handrail: run it
+ * unbroken from above the lowest riser to above the top one, and finish both
+ * ends into a wall return, a newel post or a safety terminal. On an L or U it
+ * may break at a newel post at the turn.
+ */
+export function handrailNotes(project: Project): CodeCheck[] {
+  const out: CodeCheck[] = [];
+  for (const f of project.furniture.filter(isStairs)) {
+    const g = stairGeometry(project, f);
+    const runs = g.flightRuns ?? [{ risers: g.risers }];
+    if (!railSides(f).length || !runs.some((r) => r.risers >= HANDRAIL_RISERS)) continue;
+    out.push({
+      rule: 'Handrail continuity and ends',
+      section: 'R311.7.8.2',
+      status: 'info',
+      message: `Stairs (${g.risers} risers ${f.down ? 'down' : 'up'}): keep each handrail continuous from over the lowest riser to over the highest${isTurning(f) ? ' (a newel post may break it at the turn)' : ''}, and finish its ends by returning them to the wall or into a newel post or safety terminal`,
+      targetId: f.id,
+    });
   }
   return out;
 }
