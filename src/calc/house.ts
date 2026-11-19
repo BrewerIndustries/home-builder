@@ -1,0 +1,234 @@
+import { dist, pointInPolygon, projectOnWall, wallDir, wallLength } from '../model/geometry.ts';
+import { activeStoreyId, isLowestStorey, isMultiStorey, isTopStorey, setStoreyData, storeyElevation, storeyList, storeyView, storeyViews } from '../model/storeys.ts';
+import { uid, type Furniture, type Point, type Project, type Storey, type Wall, type WallSwitch } from '../model/types.ts';
+import { formatFtIn } from '../model/units.ts';
+import { attach } from './electrical.ts';
+import { floorLines } from './floor.ts';
+import { foundationOf } from './foundation.ts';
+import { ircChecks, type CodeCheck } from './irc.ts';
+import { detectsSmoke, lightsRoom, SWITCH_HEIGHT } from './lighting.ts';
+import { materialsList, wallAreas, type MaterialLine } from './materials.ts';
+import { buildScene, type Scene3D, type V3 } from './model3d.ts';
+import { roofOf } from './roof.ts';
+import { FLOOR_GUARD, floorOpeningPolygon, isStairs, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
+
+// The whole house across its storeys (Storeys v1). Each storey is a Project view
+// (model/storeys.ts) and the per-plan calcs run on each one; the parts the house
+// has only once go on the right storey: the foundation (and the site) under the
+// lowest, the roof (and its attic) on the top one. Storeys above the lowest sit
+// on a framed floor. One-storey projects go straight through to the plain calcs.
+
+/** A storey's view with the once-per-house parts kept only where they belong. */
+export function roleView(p: Project, id: string = activeStoreyId(p)): Project {
+  if (!isMultiStorey(p)) return p;
+  const v = storeyView(p, id);
+  const top = isTopStorey(p, id);
+  const lowest = isLowestStorey(p, id);
+  return {
+    ...v,
+    roof: top ? v.roof : { ...roofOf(v), type: 'none' },
+    foundation: lowest ? v.foundation : { ...foundationOf(v), type: 'none' },
+    site: lowest ? v.site : undefined,
+  };
+}
+
+export interface FloorOpening {
+  /** The stair it's over, and the storey that stair is drawn on. */
+  stair: Furniture;
+  from: string;
+  poly: Point[];
+}
+
+/** Openings in a storey's floor: under stairs coming up from the storey below, and over its own stairs going down. */
+export function floorOpenings(p: Project, id: string = activeStoreyId(p)): FloorOpening[] {
+  const out: FloorOpening[] = [];
+  const list = storeyList(p);
+  const i = list.findIndex((s) => s.id === id);
+  if (i < 0) return out;
+  const own = storeyView(p, id);
+  for (const f of own.furniture.filter((x) => isStairs(x) && x.down)) out.push({ stair: f, from: id, poly: floorOpeningPolygon(f) });
+  const below = list[i - 1];
+  if (below) {
+    const v = storeyView(p, below.id);
+    for (const f of v.furniture.filter((x) => isStairs(x) && !x.down)) out.push({ stair: f, from: below.id, poly: floorOpeningPolygon(f) });
+  }
+  return out;
+}
+
+/** Is there a wall along the segment p → q (parallel, its face within 2", over most of it)? */
+function walledEdge(walls: Wall[], p: Point, q: Point): boolean {
+  const len = dist(p, q) || 1;
+  const u = { x: (q.x - p.x) / len, y: (q.y - p.y) / len };
+  return walls.some((w) => {
+    const d = wallDir(w);
+    if (Math.abs(u.x * d.y - u.y * d.x) > 0.02) return false;
+    const [a, b] = [projectOnWall(w, p), projectOnWall(w, q)];
+    if (Math.abs(a.perp) - w.thickness / 2 > 2 || Math.abs(b.perp) - w.thickness / 2 > 2) return false;
+    const [lo, hi] = [Math.max(0, Math.min(a.along, b.along)), Math.min(wallLength(w), Math.max(a.along, b.along))];
+    return hi - lo >= len * 0.75;
+  });
+}
+
+/**
+ * Guard round a floor opening over a stair coming up from below (R312.1.1, 36"
+ * round an opening): its open sides, leaving out the end you step off at the top.
+ */
+export function openingGuard(upper: Project, o: FloorOpening): number {
+  const pts = o.poly;
+  // The polygon's first edge is the top end (see floorOpeningPolygon): you walk off there.
+  let lf = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [a, b] = [pts[k], pts[(k + 1) % pts.length]];
+    if (!walledEdge(upper.walls, a, b)) lf += dist(a, b);
+  }
+  return lf;
+}
+
+/** Does a wall on this storey run through the opening? */
+function wallsAcross(v: Project, poly: Point[]): Wall[] {
+  return v.walls.filter((w) => {
+    const n = Math.max(2, Math.ceil(wallLength(w) / 6));
+    for (let k = 1; k < n; k++) {
+      const t = k / n;
+      if (pointInPolygon({ x: w.a.x + (w.b.x - w.a.x) * t, y: w.a.y + (w.b.y - w.a.y) * t }, poly)) return true;
+    }
+    return false;
+  });
+}
+
+export type HouseCheck = CodeCheck & { storey?: string };
+
+/** Every IRC check, storey by storey (each message says which), plus the checks between storeys. */
+export function houseChecks(p: Project): HouseCheck[] {
+  if (!isMultiStorey(p)) return ircChecks(p);
+  const out: HouseCheck[] = [];
+  for (const { storey } of storeyViews(p)) {
+    const v = roleView(p, storey.id);
+    const tag = (c: CodeCheck): HouseCheck => ({ ...c, message: `${storey.name}: ${c.message}`, storey: storey.id });
+    // The storey's own smoke alarm is checked below for every storey, rooms drawn or not.
+    for (const c of ircChecks(v)) if (c.rule !== 'Smoke alarm on each storey') out.push(tag(c));
+    if (!v.walls.length) continue;
+    const smoke = v.fixtures.filter((f) => detectsSmoke(f.kind)).length;
+    out.push(tag({ rule: 'Smoke alarm on each storey', section: 'R314.3', status: smoke ? 'pass' : 'fail', message: smoke ? `${smoke} on this floor` : 'no smoke alarm on this floor' }));
+    // Floor openings under stairs coming up from below.
+    for (const o of floorOpenings(p, storey.id).filter((x) => x.from !== storey.id)) {
+      const across = wallsAcross(v, o.poly);
+      if (across.length) {
+        out.push(tag({ rule: 'Floor opening over the stair kept clear', section: 'R311.7.2', status: 'warn', message: `a wall on this floor runs through the opening over the stair from the floor below — move it or the stair`, targetId: across[0].id }));
+      }
+      const guard = openingGuard(v, o);
+      if (guard > 0) {
+        out.push(tag({ rule: 'Guard round the floor opening', section: 'R312.1.1', status: 'info', message: `${formatFtIn(guard)} of open edge round the stair opening: a ${FLOOR_GUARD}" guard (R312.1.2) — counted in the estimate` }));
+      }
+    }
+  }
+  return out;
+}
+
+/** Add up material lines with the same item, keeping each storey's basis. */
+export function mergeLines(parts: { name: string; lines: MaterialLine[] }[]): MaterialLine[] {
+  const out: MaterialLine[] = [];
+  const byKey = new Map<string, { line: MaterialLine; bases: string[] }>();
+  for (const { name, lines } of parts) {
+    for (const l of lines) {
+      const key = `${l.category}|${l.item}|${l.unit}`;
+      const cur = byKey.get(key);
+      if (cur) {
+        cur.line.qty += l.qty;
+        cur.bases.push(`${name}: ${l.basis}`);
+      } else {
+        const line = { ...l };
+        byKey.set(key, { line, bases: [`${name}: ${l.basis}`] });
+        out.push(line);
+      }
+    }
+  }
+  for (const { line, bases } of byKey.values()) line.basis = bases.length > 1 ? bases.join('; ') : bases[0].slice(bases[0].indexOf(': ') + 2);
+  return out;
+}
+
+/** The estimate's lines for the whole house: each storey's, the framed floors over the lower storeys, and the opening guards. */
+export function houseMaterials(p: Project): MaterialLine[] {
+  if (!isMultiStorey(p)) return materialsList(p);
+  const parts: { name: string; lines: MaterialLine[] }[] = [];
+  for (const { storey } of storeyViews(p)) {
+    const v = roleView(p, storey.id);
+    const lines = materialsList(v);
+    if (!isLowestStorey(p, storey.id) && v.walls.length) {
+      // A framed floor under this storey, bearing on the walls below (no girders or piers).
+      lines.push(...floorLines({ ...v, foundation: { ...foundationOf(v), type: 'crawl', girders: 0 } }, p.framing.waste));
+    }
+    const guard = floorOpenings(p, storey.id).filter((o) => o.from !== storey.id).reduce((t, o) => t + openingGuard(v, o), 0);
+    if (guard > 0) lines.push({ category: 'Lumber', item: 'Stair guard / balustrade (allowance)', qty: Math.ceil(guard / 12), unit: 'lf', basis: 'open edges round the stair opening in the floor (R312.1)' });
+    parts.push({ name: storey.name, lines });
+  }
+  return mergeLines(parts);
+}
+
+/** Floor area of every storey, sq ft. */
+export function houseFloorArea(p: Project): number {
+  if (!isMultiStorey(p)) return wallAreas(p).floor;
+  return storeyViews(p).reduce((t, { view }) => t + wallAreas(view).floor, 0);
+}
+
+/** The 3D scene with every storey stacked at its height, the roof on the top one and stair openings cut in the floors. */
+export function houseScene(p: Project): Scene3D {
+  if (!isMultiStorey(p)) return buildScene(p);
+  const scene: Scene3D = { boxes: [], flats: [], faces: [], bounds: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] } };
+  for (const { storey } of storeyViews(p)) {
+    const v = roleView(p, storey.id);
+    if (!v.walls.length) continue;
+    const s = buildScene(v);
+    const e = storeyElevation(p, storey.id);
+    const up = (q: V3): V3 => [q[0], q[1] + e, q[2]];
+    const holes = floorOpenings(p, storey.id).map((o) => o.poly);
+    scene.boxes.push(...s.boxes.map((b) => ({ ...b, c: up(b.c) })));
+    scene.flats.push(...s.flats.map((f) => ({ ...f, y: f.y + e, holes: f.kind === 'floor' ? [...f.holes, ...holes] : f.holes })));
+    scene.faces.push(...s.faces.map((f) => ({ ...f, pts: f.pts.map(up) })));
+    for (let k = 0; k < 3; k++) {
+      scene.bounds.min[k] = Math.min(scene.bounds.min[k], up(s.bounds.min)[k]);
+      scene.bounds.max[k] = Math.max(scene.bounds.max[k], up(s.bounds.max)[k]);
+    }
+  }
+  if (!Number.isFinite(scene.bounds.min[0])) scene.bounds = { min: [0, 0, 0], max: [0, 0, 0] };
+  return scene;
+}
+
+/** Switches placed on another storey for a stair's light (E3903.3); Auto lights replaces them. */
+const STAIR_SWITCH_PREFIX = 'swst_';
+export const isStairSwitch = (s: WallSwitch) => s.id.startsWith(STAIR_SWITCH_PREFIX);
+
+/**
+ * E3903.3 with real storeys: a stair of six or more risers gets the switch at
+ * its other end placed on the storey it arrives at, by the wall nearest where
+ * you step off, controlling the stair's light. Earlier ones placed this way are
+ * replaced; a switch already on that storey controlling the light is kept.
+ */
+export function placeStairSwitches(p: Project): Project {
+  if (!isMultiStorey(p)) return p;
+  let q = p;
+  // Clear the old ones everywhere.
+  for (const s of storeyList(q)) {
+    const v = storeyView(q, s.id);
+    if (v.switches.some(isStairSwitch)) q = setStoreyData(q, s.id, { switches: v.switches.filter((x) => !isStairSwitch(x)) });
+  }
+  for (const s of storeyList(q)) {
+    const v = storeyView(q, s.id);
+    for (const st of v.furniture.filter(needsTwoSwitches)) {
+      const target: Storey | null = stairTarget(v, st);
+      if (!target) continue;
+      const lights = stairLights(v, st, lightsRoom).map((f) => f.id);
+      if (!lights.length) continue;
+      const tv = storeyView(q, target.id);
+      if (tv.switches.some((x) => x.controls.some((c) => lights.includes(c)))) continue;
+      const end = stairEnd(st);
+      const off = { x: end.at.x + end.dir.x * 12, y: end.at.y + end.dir.y * 12 };
+      const spot = nearestSwitchWall(tv, off);
+      const a = spot && attach(tv, spot.p, off);
+      if (!a) continue;
+      const sw: WallSwitch = { id: uid('swst'), ...a, height: SWITCH_HEIGHT, controls: lights, auto: true };
+      q = setStoreyData(q, target.id, { switches: [...tv.switches, sw] });
+    }
+  }
+  return q;
+}

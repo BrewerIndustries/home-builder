@@ -1,7 +1,7 @@
 import { projectOnWall, pointAlong, wallDir, wallLength } from '../model/geometry.ts';
 import type { Fixture, Furniture, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
-import { HEADER_DEPTH } from './framing.ts';
+import { adjacentStorey, isMultiStorey, storeyHeight } from '../model/storeys.ts';
 import type { CodeCheck } from './irc.ts';
 
 // Stairs on a one-storey plan: a flight going up (or down) from this floor.
@@ -35,6 +35,13 @@ export const needsTwoSwitches = (f: Furniture) => isStairs(f) && risersOf(f) >= 
 function local(f: Furniture, x: number, y: number): Point {
   const r = (f.rot * Math.PI) / 180;
   return { x: f.at.x + x * Math.cos(r) - y * Math.sin(r), y: f.at.y + x * Math.sin(r) + y * Math.cos(r) };
+}
+
+/** Middle of the stair's far end, where it arrives at the other floor, and the direction of travel off it. */
+export function stairEnd(f: Furniture): { at: Point; dir: Point } {
+  const at = local(f, 0, -f.d / 2);
+  const beyond = local(f, 0, -f.d / 2 - 1);
+  return { at, dir: { x: beyond.x - at.x, y: beyond.y - at.y } };
 }
 
 /** Middle of the stair's front edge: where you step on from this floor. */
@@ -76,12 +83,34 @@ export const MIN_HEADROOM = 80;
 export const MIN_STAIR_WIDTH = 36;
 export const MAX_FLIGHT_RISE = 151;
 export const MIN_LANDING = 36;
-/** Subfloor on the floor framing, for the estimated floor-to-floor height. */
-const SUBFLOOR = 0.75;
-
-/** Floor to floor: as typed, else the wall height plus a floor (the foundation's joists + subfloor). */
+/**
+ * Floor to floor: as typed, else the storey's height — this one's going up, the
+ * one below going down — which is the wall height plus a floor (the foundation's
+ * joists + subfloor) unless the storey sets it.
+ */
 export function floorToFloor(project: Project, f: Furniture): number {
-  return f.rise ?? project.framing.wallHeight + HEADER_DEPTH[project.foundation?.joistSize ?? '2x10'] + SUBFLOOR;
+  if (f.rise !== undefined) return f.rise;
+  const below = f.down && isMultiStorey(project) ? adjacentStorey(project, -1) : null;
+  return storeyHeight(project, below ?? undefined);
+}
+
+/** The storey a stair arrives at (above going up, below going down), when the project has it. */
+export function stairTarget(project: Project, f: Furniture) {
+  return isMultiStorey(project) ? adjacentStorey(project, f.down ? -1 : 1) : null;
+}
+
+/** Length of the floor opening over the flight, back from the top: as set, else the whole stair. */
+export const openingLength = (f: Furniture) => Math.max(0, Math.min(f.d, f.floorOpening ?? f.d));
+
+/**
+ * The floor opening on the plan: the stretch of the stair within `openingLength`
+ * of its top. Going up it is in the floor above (the far end of the run is the
+ * top); going down it is in this floor (the foot is the top).
+ */
+export function floorOpeningPolygon(f: Furniture): Point[] {
+  const o = openingLength(f);
+  const [y0, y1] = f.down ? [f.d / 2 - o, f.d / 2] : [-f.d / 2, -f.d / 2 + o];
+  return [local(f, -f.w / 2, y0), local(f, f.w / 2, y0), local(f, f.w / 2, y1), local(f, -f.w / 2, y1)];
 }
 
 /** The landing's riser count from the foot, if it's a real one (between the first and last riser). */
@@ -243,7 +272,21 @@ export function stairChecks(project: Project): CodeCheck[] {
           : `open on the ${where}: a guard from riser ${rail.guardFrom} up, ${STAIR_GUARD}" high along the stair (R312.1.2)${f.guards === false ? ' — none shown' : ''}`,
       );
     }
-    add(
+    const target = stairTarget(project, f);
+    if (target || f.floorOpening !== undefined) {
+      // A real floor (or a set opening): the opening has to reach back far enough for 6' 8" at every nosing under the floor.
+      const have = openingLength(f);
+      const where = f.down ? 'in this floor' : target ? `in the ${target.name.toLowerCase()}` : 'in the floor above';
+      const ok = g.opening <= have + 0.01;
+      add(
+        'Headroom (6\' 8")',
+        'R311.7.2',
+        ok,
+        g.opening > 0
+          ? `the floor opening ${where} runs ${formatFtIn(have)} back from the top; 6' 8" headroom under a ${formatFtIn(project.framing.wallHeight)} ceiling needs ${formatFtIn(g.opening)}${ok ? '' : ' — lengthen the opening'}`
+          : `clears 6' 8" under a full ceiling (opening ${formatFtIn(have)})`,
+      );
+    } else add(
       'Headroom (6\' 8")',
       'R311.7.2',
       true,

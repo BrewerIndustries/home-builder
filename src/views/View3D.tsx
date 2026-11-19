@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { buildScene, type Box, type Scene3D } from '../calc/model3d.ts';
+import { type Box, type Scene3D } from '../calc/model3d.ts';
+import { houseScene } from '../calc/house.ts';
 import { buildSiteScene } from '../calc/site3d.ts';
 import type { Project } from '../model/types.ts';
 
@@ -50,7 +51,7 @@ export default function View3D({ project }: { project: Project }) {
   const [cutaway, setCutaway] = useState(false);
   const [showRoof, setShowRoof] = useState(true);
   const [showSite, setShowSite] = useState(true);
-  const scene3d = useMemo(() => buildScene(project), [project]);
+  const scene3d = useMemo(() => houseScene(project), [project]);
   const site3d = useMemo(() => buildSiteScene(project), [project]);
   const fitted = useRef(false);
 

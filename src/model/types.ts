@@ -228,6 +228,8 @@ export interface Furniture {
   note?: string;
   /** Closet rod + shelf: one rod under a shelf (default), two rods hung one above the other, or a shelf alone. */
   closet?: 'single' | 'double' | 'shelf';
+  /** Stairs: length of the floor opening over the flight, measured along the walk line back from the top (the whole stair when unset). */
+  floorOpening?: number;
 }
 
 export interface Counter {
@@ -516,6 +518,33 @@ export interface Project {
   roof?: Roof;
   foundation?: Foundation;
   underlay?: Underlay;
+  /** Storeys v1: every storey, the active one's plan data living in the top-level arrays above (see model/storeys.ts). Unset = one storey. */
+  storeys?: Storey[];
+  activeStorey?: string;
+}
+
+/** The plan data each storey has of its own. */
+export interface StoreyData {
+  walls: Wall[];
+  openings: Opening[];
+  rooms: Room[];
+  outlets: Outlet[];
+  fixtures: Fixture[];
+  switches: WallSwitch[];
+  counters: Counter[];
+  furniture: Furniture[];
+  dims?: UserDim[];
+  ordDims?: OrdinateDim[];
+  angleDims?: AngleDim[];
+}
+
+/** One storey. `level` 0 is the ground floor, 1 the next up, -1 a basement. The active storey's data is not kept here. */
+export interface Storey extends Partial<StoreyData> {
+  id: string;
+  name: string;
+  level: number;
+  /** Floor-to-floor height; unset = the wall height plus a floor (joists + subfloor). */
+  height?: number;
 }
 
 export type RoofType = 'gable' | 'hip' | 'shed' | 'none';

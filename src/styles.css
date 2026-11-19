@@ -1439,3 +1439,16 @@ table.schedule th {
 
 /* Roof v2: dormer rows in the project panel */
 .dormer-fields { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px; }
+
+/* Storeys v1: the floor switcher over the plan, and one printed sheet per storey */
+.storey-bar { position: absolute; top: 8px; left: 8px; z-index: 5; display: flex; gap: 6px; align-items: flex-start; }
+.storey-bar .seg button { padding: 4px 10px; }
+.storey-bar .seg button:not(.active) { background: var(--panel); }
+.storey-bar .menu summary { background: var(--panel); padding: 4px 8px; font-size: 12px; }
+.storey-bar .menu-body { left: 0; right: auto; gap: 6px; min-width: 220px; }
+.storey-menu label { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; }
+.storey-title { margin-top: 24px; }
+@media print {
+  .storey-print + .storey-print { break-before: page; }
+  .storey-report + .storey-report { break-before: page; }
+}

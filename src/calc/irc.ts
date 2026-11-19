@@ -434,10 +434,10 @@ export function ircChecks(project: Project): CodeCheck[] {
 /** Things this checker does not look at — shown so nobody mistakes silence for compliance. */
 export const NOT_CHECKED = [
   'Wall bracing (R602.10)',
-  'Conductor sizing, voltage drop and box fill; range demand (NEC Table 220.55 — nameplate is used); stairway switches on the other floor itself (only counted here — the plan is one storey); equipment other than a water heater, furnace or air handler (E3903.3, E3903.4)',
+  'Conductor sizing, voltage drop and box fill; range demand (NEC Table 220.55 — nameplate is used); branch circuits and the service size of a house with several storeys (worked out storey by storey); on a one-storey plan the stairway switch at the other floor level is only counted (add that storey and Auto lights places it); equipment other than a water heater, furnace or air handler (E3903.3, E3903.4)',
   'Smoke alarm distance from cooking appliances and exact ceiling position (R314.3, NFPA 72); CO alarms inside bedrooms with a fuel-burning appliance (R315.3)',
   'Sloping grade around the house (one floor-above-grade figure is used) and deck surfaces below the floor (deck receptacle heights are from the floor)',
-  'Nosings, winders, spiral and L/U-turning stairs (R311.7.5.3, R311.7.10); handrail continuity, grip size and returns (R311.7.8.2–.8.4); guard openings (R312.1.3); headroom is only worked out, not checked against the floor above (one storey)',
+  'Nosings, winders, spiral and L/U-turning stairs (R311.7.5.3, R311.7.10); handrail continuity, grip size and returns (R311.7.8.2–.8.4); guard openings (R312.1.3); headroom is checked against the floor opening over the flight, not against beams or soffits under it',
   'Hallway width (R311.6)',
   'Plumbing sizing, venting and fixture units (Chapters 29–31); under-floor appliance access (M1305.1.4) — the attic access is only listed, not placed',
   'Fire separation, garage–dwelling (R302)',

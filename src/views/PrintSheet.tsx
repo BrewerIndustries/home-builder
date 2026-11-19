@@ -4,6 +4,7 @@ import type { DimMode, Project } from '../model/types.ts';
 import { DIM_ROOM, pickScale } from '../calc/sheet.ts';
 import { fixtureSchedule } from '../calc/furniture.ts';
 import { RoofPlanSheet } from './RoofPlanSheet.tsx';
+import { StoreyGhost } from '../editor/StoreyGhost.tsx';
 
 // A to-scale floor plan sheet for printing / Save as PDF: US Letter landscape,
 // largest standard architectural scale that fits, title block and scale bar.
@@ -44,6 +45,7 @@ export function PrintSheet({ project }: { project: Project }) {
           viewBox={`${minX - lead} ${minY - lead} ${vbW} ${vbH}`}
           className="print-plan"
         >
+          <StoreyGhost project={project} px={px} openingsOnly />
           <PlanDrawing project={project} px={px} outlets marks={marks} />
           <g transform={`translate(${minX} ${minY + h + trail - px(22)})`}>
             {Array.from({ length: barFt / 5 }, (_, i) => (

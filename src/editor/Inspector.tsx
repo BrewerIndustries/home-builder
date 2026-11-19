@@ -52,6 +52,7 @@ import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { FixtureOptions } from './FixtureOptions.tsx';
 import { RoofExtras } from './RoofExtras.tsx';
 import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
+import { StairOpeningField } from './StairStoreyFields.tsx';
 import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { CabinetPanel } from './CabinetPanel.tsx';
@@ -731,6 +732,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                       </label>
                     );
                   })()}
+                  <StairOpeningField project={project} f={f} up={up} />
                 </>
               );
             })()}
