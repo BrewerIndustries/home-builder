@@ -30,6 +30,11 @@ export interface DesignOptions {
 export function extractPlan(p: Project): PlanData {
   const out: Record<string, unknown> = { ...p };
   for (const k of PROJECT_KEYS) delete out[k];
+  // The site's plat / aerial image is shared too (it can be megabytes).
+  if (p.site?.underlay) {
+    const { underlay: _u, ...site } = p.site;
+    out.site = site;
+  }
   return out as PlanData;
 }
 
@@ -37,7 +42,9 @@ export function extractPlan(p: Project): PlanData {
 export function applyPlan(p: Project, plan: PlanData): Project {
   const keep: Record<string, unknown> = {};
   for (const k of PROJECT_KEYS) if (p[k as keyof Project] !== undefined) keep[k] = p[k as keyof Project];
-  return syncThickness(migrate({ ...(plan as Project), ...keep } as Project));
+  const next = { ...(plan as Project), ...keep } as Project;
+  if (p.site?.underlay && next.site) next.site = { ...next.site, underlay: p.site.underlay };
+  return syncThickness(migrate(next));
 }
 
 const newId = () => uid('opt').replace(/[^A-Za-z0-9_-]/g, '');

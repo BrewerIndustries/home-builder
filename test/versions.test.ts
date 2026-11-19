@@ -104,3 +104,13 @@ test('versionProject: current and saved', () => {
   assert.equal(versionProject(p, p.versions![0].id)!.walls.length, 5);
   assert.equal(versionProject(p, 'nope'), null);
 });
+
+test('versions and options leave the site plat image out and keep it on restore', async () => {
+  const { extractPlan, applyPlan } = await import('../src/model/options.ts');
+  const { emptyProject } = await import('../src/model/types.ts');
+  const p = emptyProject();
+  const withImg = { ...p, site: { ...p.site, underlay: { src: 'data:image/png;base64,AAAA' } } } as any;
+  const plan = extractPlan(withImg) as any;
+  assert.equal(plan.site.underlay, undefined);
+  assert.equal((applyPlan(withImg, plan) as any).site.underlay.src, 'data:image/png;base64,AAAA');
+});
