@@ -15,6 +15,7 @@ import { roomOutletCount } from '../calc/electrical.ts';
 import { outletPosition } from './outletGeometry.ts';
 import { ProjectLayersPanel, WallLayersPanel } from './AssemblyEditor.tsx';
 import { SlopeEdgeSelect } from './SlopeEdgeSelect.tsx';
+import { ApplianceFields, CircuitField, CounterAppliances, hasApplianceFields, ProjectElectricalFields } from './ElectricalFields.tsx';
 import type { Action } from '../model/store.ts';
 import {
   LUMBER_SIZES,
@@ -319,6 +320,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Height to centre">
           <LengthInput value={o.height} onChange={(v) => up({ height: v })} />
         </Field>
+        <CircuitField project={project} dispatch={dispatch} deviceId={o.id} />
         <button onClick={() => up({ side: o.side === 1 ? -1 : 1 })}>Move to other face of wall</button>
         <p className="muted small">Drag it along the wall to move it. Editing an auto-placed receptacle keeps it when you re-run auto-layout.</p>
         <button className="danger" onClick={() => del(o.id)}>
@@ -438,6 +440,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
           {isLight(f.kind) && (by ? `Switched from ${by} place${by > 1 ? 's' : ''}.` : 'No switch yet — select a switch and tick this light.')}
         </p>
+        <CircuitField project={project} dispatch={dispatch} deviceId={f.id} />
         <p className="muted small">Drag it to move. Edited auto items are kept when you re-run Auto lights.</p>
         <button className="danger" onClick={() => del(f.id)}>
           Delete {f.kind === 'fan' ? 'fan' : isLight(f.kind) ? 'light' : 'alarm'}
@@ -612,6 +615,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </>
         )}
         <CabinetPanel project={project} c={c} up={up} />
+        <CounterAppliances project={project} dispatch={dispatch} counter={c} />
         <div className="stat-grid">
           <Stat label="Countertop" value={`${Math.round((len * c.depth) / 144)} sq ft`} />
           <Stat label="Counter spaces" value={spaces} />
@@ -748,6 +752,12 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             <Field label="Rough-in / notes" hint="Shown on the fixture schedule — e.g. the rough-in from the finished wall the chosen product needs">
               <input value={f.note ?? ''} placeholder={'e.g. 12" rough-in'} onChange={(e) => up({ note: e.target.value || undefined })} />
             </Field>
+          </>
+        )}
+        {hasApplianceFields(f.kind) && (
+          <>
+            <ApplianceFields project={project} dispatch={dispatch} id={f.id} kind={f.kind} />
+            {f.kind !== 'kitchen-sink' && <CircuitField project={project} dispatch={dispatch} deviceId={f.id} />}
           </>
         )}
         <div className="row wrap">
@@ -1002,6 +1012,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </select>
       </Field>
 
+      <ProjectElectricalFields project={project} dispatch={dispatch} />
       {roofOf(project).type !== 'none' && (
         <Field label="Attic used for" hint="Storage, or equipment that needs servicing (furnace, air handler) — then it needs a light switched at the access (E3903.4)">
           <SpaceUseSelect value={project.electrical?.attic} set={(attic) => dispatch({ type: 'setElectrical', patch: { attic } })} />
