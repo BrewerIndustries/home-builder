@@ -6,6 +6,7 @@ import { exclusiveArea, totalFloorArea } from './regions.ts';
 import { roomCeiling } from './model3d.ts';
 import { roofCalc, roofLines, stockFeet } from './roof.ts';
 import { siteLines } from './site.ts';
+import { irrigationLines } from './irrigation.ts';
 import { foundationLines } from './foundation.ts';
 import { floorLines } from './floor.ts';
 import { lightingLines } from './lighting.ts';
@@ -254,6 +255,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   lines.unshift(...foundationLines(project, project.framing.waste), ...floorLines(project, project.framing.waste));
   lines.push(...roofLines(project, project.framing.waste));
   lines.push(...siteLines(project, project.framing.waste));
+  lines.push(...irrigationLines(project));
 
   return lines;
 }

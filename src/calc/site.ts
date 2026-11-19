@@ -3,6 +3,7 @@ import { dist, pointInPolygon, polygonArea } from '../model/geometry.ts';
 import { EMPTY_SITE, type Point, type Project, type SurfaceMaterial } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import type { CodeCheck } from './irc.ts';
+import { irrigationChecks } from './irrigation.ts';
 import type { MaterialLine } from './materials.ts';
 import { childRooms } from './regions.ts';
 
@@ -228,6 +229,7 @@ export function siteChecks(project: Project): CodeCheck[] {
       }
     }
   }
+  checks.push(...irrigationChecks(project));
   return checks;
 }
 
