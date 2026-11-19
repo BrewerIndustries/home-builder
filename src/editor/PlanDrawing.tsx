@@ -8,6 +8,7 @@ import { angleBetween, openingChains, partitionStrings, runningLabels, stringSty
 import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, UserDim, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
+import { CabinetGlyphs } from './CabinetGlyphs.tsx';
 import { outletPosition } from './outletGeometry.ts';
 
 // The plan as a picture: rooms, walls, openings, outlets and dimensions, in plan
@@ -77,6 +78,9 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
           </g>
         );
       })}
+      {project.counters.map((c) => (
+        <CabinetGlyphs key={`${c.id}v6`} project={project} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} />
+      ))}
       {cornerUppers(project).map((u) => (
         <polygon
           key={`${u.a.id}${u.b.id}cu`}

@@ -1,7 +1,7 @@
 import { dist } from '../model/geometry.ts';
 import type { Point, Project } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
-import { counterFront, counterHeight, CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, kneeSpaceFor, peninsulaJoin, roomCounters, SEAT_WIDTH, seatingDepth, seats } from './counters.ts';
+import { counterFront, seatingHeight, CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, kneeSpaceFor, peninsulaJoin, roomCounters, SEAT_WIDTH, seatingDepth, seats } from './counters.ts';
 import { furnitureCorners, isFixture } from './furniture.ts';
 import type { Counter, Cutout } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
@@ -147,7 +147,7 @@ export function kitchenChecks(project: Project): CodeCheck[] {
         const n = seats(project, isl).length;
         const want = kneeSpaceFor(isl);
         const ok = knee >= want - 0.5 && n > 0;
-        const height = counterHeight(isl) > 36 ? 'bar height (42")' : 'counter height (36")';
+        const height = seatingHeight(isl) > 36 ? (isl.twoLevel && !isl.bar ? 'the 42" bar side' : 'bar height (42")') : 'counter height (36")';
         out.push({
           rule: `Seating knee space (${want}" deep, ${SEAT_WIDTH}" per seat)`,
           section: SECTION,

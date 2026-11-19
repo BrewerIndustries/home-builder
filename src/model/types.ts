@@ -194,6 +194,24 @@ export interface Counter {
   bar?: boolean;
   /** The corner cabinet where this counter meets another (an L or a peninsula's end); see cornerCabinets. */
   corner?: CornerCabinet;
+  /** Wall cabinets 30" tall unless set (bottoms stay at 54"). */
+  upperHeight?: 36 | 42;
+  /** Islands / peninsulas: a two-level top, 36" work side at the back, 42" bar ledge over the seating. */
+  twoLevel?: boolean;
+  /** Set: the run is laid out and priced cabinet by cabinet (see calc/cabinets.ts); unset (old projects): by the linear foot. */
+  cabinets?: CabinetPlan;
+}
+
+export type BaseCabinetType = 'standard' | 'drawer' | 'trash' | 'sink';
+
+/** Per-run cabinet choices. Stretches are the gaps between fixed units (corner, sink, appliances, tall), start to end. */
+export interface CabinetPlan {
+  /** Base-cabinet widths per stretch, set by dragging joints; null / missing = stock fill. */
+  base?: (number[] | null)[];
+  /** Wall-cabinet widths per wall-cabinet span, likewise. */
+  upper?: (number[] | null)[];
+  /** Base-cabinet types, keyed "stretch.index"; standard when unset. */
+  types?: Record<string, BaseCabinetType>;
 }
 
 export type CornerCabinet = 'lazy-susan' | 'blind';
