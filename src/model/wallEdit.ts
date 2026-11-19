@@ -281,39 +281,104 @@ function inOrOn(q: Point, pts: Point[]): boolean {
   });
 }
 
+/** A room's outline centre (the mean of its corners): the default pivot and mirror line. */
+export function roomCentre(points: Point[]): Point {
+  return { x: points.reduce((s, q) => s + q.x, 0) / points.length, y: points.reduce((s, q) => s + q.y, 0) / points.length };
+}
+
+/** How a room transform moves a point, turns a symbol (clockwise degrees), and whether it mirrors (flips sides). */
+interface RoomMap {
+  point: (q: Point) => Point;
+  rot: (deg: number) => number;
+  flip: boolean;
+}
+
+const norm360 = (d: number) => Math.round(((((d % 360) + 360) % 360) % 360) * 1000) / 1000;
+
 /**
- * Turn a room and everything in it about `pivot` (default: its outline's
- * centre): its walls (those with both ends on or inside its outline), rooms
- * inside it, counters, fixtures, furniture and ceiling devices. Openings,
- * outlets and switches ride on their walls. A wall outside the group that meets
- * a turned corner stretches to follow, as when an end is dragged.
+ * Apply a rigid move to a room and everything in it: its walls (those with both
+ * ends on or inside its outline), rooms inside it, counters, fixtures,
+ * furniture and ceiling devices. Openings, outlets and switches ride on their
+ * walls (a mirror flips which face they're on and which way doors swing). A
+ * wall outside the group that meets a moved corner stretches to follow, as when
+ * an end is dragged.
+ */
+function transformRoom(p: Project, roomId: string, m: RoomMap): Project {
+  const room = p.rooms.find((r) => r.id === roomId);
+  if (!room) return p;
+  const outline = room.points;
+  const inside = (q: Point) => inOrOn(q, outline);
+  const group = new Set(p.walls.filter((w) => inside(w.a) && inside(w.b)).map((w) => w.id));
+  // Every corner that moves: the group's wall ends and the room's own corners.
+  const moving: Point[] = [...outline];
+  for (const w of p.walls) if (group.has(w.id)) moving.push(w.a, w.b);
+  // Ts: other walls' ends and other rooms' corners sitting on a moved wall go with it, unless the
+  // moved wall still runs through them (a mirror, or a slide along the wall): then they stay joined where they are.
+  const moved = p.walls.filter((w) => group.has(w.id));
+  const after = moved.map((w) => ({ ...w, a: m.point(w.a), b: m.point(w.b) }));
+  const tees: Point[] = [];
+  for (const q of [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points)]) {
+    if (moved.some((w) => onSegment(w, q)) && !moving.some((mv) => samePoint(mv, q)) && !tees.some((t) => samePoint(t, q))) tees.push(q);
+  }
+  const moveIf = (q: Point) => {
+    if (moving.some((mv) => samePoint(mv, q))) return m.point(q);
+    if (tees.some((t) => samePoint(t, q))) return after.some((w) => onSegment(w, q)) ? q : m.point(q);
+    return q;
+  };
+  const moveOutline = (r: typeof room) => {
+    // Rooms wholly inside move with it (a mirror reverses their winding: put it back); a neighbour just stretches.
+    if (r.id === room.id || r.points.every(inside)) {
+      const pts = r.points.map(m.point);
+      return { ...r, points: m.flip ? [...pts].reverse() : pts, ...(r.pivot ? { pivot: m.point(r.pivot) } : {}) };
+    }
+    return { ...r, points: r.points.map(moveIf) };
+  };
+  const flipSide = <T extends { side: 1 | -1 }>(x: T): T => ({ ...x, side: x.side === 1 ? -1 : 1 });
+  return {
+    ...p,
+    walls: p.walls.map((w) => ({ ...w, a: moveIf(w.a), b: moveIf(w.b) })),
+    rooms: p.rooms.map(moveOutline),
+    openings: m.flip ? p.openings.map((o) => (group.has(o.wallId) && o.swing ? { ...o, swing: { ...o.swing, side: o.swing.side === 1 ? -1 : 1 } } : o)) : p.openings,
+    outlets: m.flip ? p.outlets.map((o) => (group.has(o.wallId) ? flipSide(o) : o)) : p.outlets,
+    switches: m.flip ? p.switches.map((o) => (group.has(o.wallId) ? flipSide(o) : o)) : p.switches,
+    counters: p.counters.map((k) => (inside(k.a) && inside(k.b) ? { ...k, a: m.point(k.a), b: m.point(k.b), side: m.flip ? (k.side === 1 ? -1 : 1) : k.side } : k)),
+    fixtures: p.fixtures.map((f) => (inside(f.at) ? { ...f, at: m.point(f.at) } : f)),
+    furniture: p.furniture.map((f) => (inside(f.at) ? { ...f, at: m.point(f.at), rot: norm360(m.rot(f.rot)) } : f)),
+  };
+}
+
+/**
+ * Turn a room and everything in it about `pivot` (default: the room's own
+ * pivot, else its outline's centre); anticlockwise is positive. See transformRoom.
  */
 export function rotateRoom(p: Project, roomId: string, deg: number, pivot?: Point): Project {
   const room = p.rooms.find((r) => r.id === roomId);
   if (!room || !deg) return p;
-  const outline = room.points;
-  const c = pivot ?? { x: outline.reduce((s, q) => s + q.x, 0) / outline.length, y: outline.reduce((s, q) => s + q.y, 0) / outline.length };
-  const inside = (q: Point) => inOrOn(q, outline);
-  const group = new Set(p.walls.filter((w) => inside(w.a) && inside(w.b)).map((w) => w.id));
-  // Every corner that turns: the group's wall ends and the room's own corners.
-  const moving: Point[] = [...outline];
-  for (const w of p.walls) if (group.has(w.id)) moving.push(w.a, w.b);
-  // Ts: other walls' ends and other rooms' corners sitting on a turned wall go with it.
-  const turned = p.walls.filter((w) => group.has(w.id));
-  for (const q of [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points)]) {
-    if (turned.some((w) => onSegment(w, q)) && !moving.some((m) => samePoint(m, q))) moving.push(q);
-  }
-  const turnIf = (q: Point) => (moving.some((m) => samePoint(m, q)) ? turnPoint(q, c, deg) : q);
-  const turnRoom = (r: typeof room) => (r.id === room.id || r.points.every(inside) ? r.points.map((q) => turnPoint(q, c, deg)) : r.points.map(turnIf));
-  return {
-    ...p,
-    walls: p.walls.map((w) => ({ ...w, a: turnIf(w.a), b: turnIf(w.b) })),
-    rooms: p.rooms.map((r) => ({ ...r, points: turnRoom(r) })),
-    counters: p.counters.map((k) => (inside(k.a) && inside(k.b) ? { ...k, a: turnPoint(k.a, c, deg), b: turnPoint(k.b, c, deg) } : k)),
-    fixtures: p.fixtures.map((f) => (inside(f.at) ? { ...f, at: turnPoint(f.at, c, deg) } : f)),
-    // Furniture turns clockwise-positive, the plan anticlockwise: subtract.
-    furniture: p.furniture.map((f) => (inside(f.at) ? { ...f, at: turnPoint(f.at, c, deg), rot: (((f.rot - deg) % 360) + 360) % 360 } : f)),
-  };
+  const c = pivot ?? room.pivot ?? roomCentre(room.points);
+  // Furniture turns clockwise-positive, the plan anticlockwise: subtract.
+  return transformRoom(p, roomId, { point: (q) => turnPoint(q, c, deg), rot: (r) => r - deg, flip: false });
+}
+
+/** Slide a room and everything in it by `delta`; walls attached outside stretch to follow. */
+export function moveRoom(p: Project, roomId: string, delta: Point): Project {
+  if (!delta.x && !delta.y) return p;
+  return transformRoom(p, roomId, { point: (q) => ({ x: round3(q.x + delta.x), y: round3(q.y + delta.y) }), rot: (r) => r, flip: false });
+}
+
+/**
+ * Mirror a room and everything in it across a line through its centre:
+ * 'x' flips left ↔ right (about a vertical line), 'y' flips top ↔ bottom.
+ */
+export function mirrorRoom(p: Project, roomId: string, axis: 'x' | 'y'): Project {
+  const room = p.rooms.find((r) => r.id === roomId);
+  if (!room) return p;
+  const c = roomCentre(room.points);
+  return transformRoom(p, roomId, {
+    point: (q) => (axis === 'x' ? { x: round3(2 * c.x - q.x), y: q.y } : { x: q.x, y: round3(2 * c.y - q.y) }),
+    // A symbol's front (0, 1) turned clockwise by r is (−sin r, cos r): mirrored left-right that's −r, top-bottom 180 − r.
+    rot: (r) => (axis === 'x' ? -r : 180 - r),
+    flip: true,
+  });
 }
 
 /** Angles (anticlockwise from +x, plan y down) of the plan's walls, for snapping a new or swung wall parallel or square to one. */
@@ -344,4 +409,31 @@ export function snapAngle(
   const r = (best.angle * Math.PI) / 180;
   const angle = Math.round((((best.angle % 360) + 360) % 360) * 10) / 10;
   return { p: { x: round3(from.x + Math.cos(r) * len), y: round3(from.y - Math.sin(r) * len) }, angle, label: best.label };
+}
+
+/** The angle (degrees anticlockwise from +x, plan y down) of `p` seen from `c`. */
+export function bearing(c: Point, p: Point): number {
+  return (Math.atan2(-(p.y - c.y), p.x - c.x) * 180) / Math.PI;
+}
+
+/** A turn from one bearing to another, folded into −180…180 and snapped to `step` degrees. */
+export function turnBetween(from: number, to: number, step: number): number {
+  const d = ((((to - from) % 360) + 540) % 360) - 180;
+  return step > 0 ? Math.round(d / step) * step : d;
+}
+
+/** Where a room's pivot lands: on a corner of the room, a wall end, or the centre when within `tol`, else to the inch. */
+export function snapPivot(p: Project, roomId: string, q: Point, tol: number): Point {
+  const room = p.rooms.find((r) => r.id === roomId);
+  if (!room) return q;
+  const cands = [roomCentre(room.points), ...room.points, ...p.walls.flatMap((w) => [w.a, w.b])];
+  let best: Point | null = null;
+  for (const c of cands) if (dist(c, q) <= tol && (!best || dist(c, q) < dist(best, q))) best = c;
+  return best ? { x: round3(best.x), y: round3(best.y) } : { x: Math.round(q.x), y: Math.round(q.y) };
+}
+
+/** The turn handle of a selected room: above the middle of its top edge, `gap` clear of it. */
+export function turnHandle(points: Point[], gap: number): Point {
+  const xs = points.map((q) => q.x);
+  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...points.map((q) => q.y)) - gap };
 }

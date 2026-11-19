@@ -17,7 +17,7 @@ import { rectangleWalls, type Action } from '../model/store.ts';
 import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts';
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
-import { retarget, snapAngle, snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
+import { bearing, retarget, roomCentre, snapAngle, snapPivot, turnBetween, turnHandle, snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
 import { counterDir, newCounters } from '../calc/counters.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
@@ -43,9 +43,12 @@ type Drag =
   /** Whole-wall drag: slides across its own length; `current` = the points travelling with it. */
   | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean; snap: { start: number; targets: WallSnapTarget[] }; square: boolean }
   | { kind: 'opening'; id: string; grab: number; from: number }
-  | { kind: 'outlet'; id: string }
-  | { kind: 'switch'; id: string }
-  | { kind: 'fixture'; id: string; grab: Point }
+  | { kind: 'outlet'; id: string; from: number }
+  | { kind: 'switch'; id: string; from: number }
+  | { kind: 'fixture'; id: string; grab: Point; from: Point }
+  | { kind: 'roomMove'; id: string; start: Point; applied: Point; started: boolean }
+  | { kind: 'roomTurn'; id: string; pivot: Point; start: number; applied: number; started: boolean }
+  | { kind: 'roomPivot'; id: string; started: boolean }
   | { kind: 'furniture'; id: string; grab: Point; started: boolean; from: Point }
   | { kind: 'room'; start: Point; end: Point; raw: Point }
   | { kind: 'newCounter'; start: Point; end: Point }
@@ -81,8 +84,10 @@ type LastEdit =
   | { kind: 'move'; points: Point[]; normal: Point; moved: number }
   | { kind: 'end'; at: Point; anchor: Point }
   | { kind: 'swing'; at: Point; anchor: Point; radius: number }
-  /** An opening (along its wall: x = offset), counter or fixture dragged from → to; a typed distance sets how far, same direction. */
-  | { kind: 'item'; item: 'opening' | 'counter' | 'furniture'; id: string; from: Point; to: Point };
+  /** An opening, outlet or switch (along its wall: x = offset), counter, fixture, light or whole room dragged from → to; a typed distance sets how far, same direction. */
+  | { kind: 'item'; item: 'opening' | 'outlet' | 'switch' | 'counter' | 'furniture' | 'fixture' | 'room'; id: string; from: Point; to: Point }
+  /** A room turned about its pivot by its handle; a typed angle sets the turn exactly. */
+  | { kind: 'turn'; id: string; pivot: Point; applied: number };
 
 const SNAP_PX = 10;
 const GRID = 6;
@@ -331,6 +336,14 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   function applyEntry(last: LastEdit, text: string) {
     const neg = text.trim().startsWith('-');
     const body = text.replace(/^\s*-/, '');
+    if (last.kind === 'turn') {
+      const deg = Number(body.replace('°', '').trim()) * (neg ? -1 : 1);
+      if (!Number.isFinite(deg)) return;
+      dispatch({ type: 'rotateRoom', id: last.id, deg: deg - last.applied, pivot: last.pivot, transient: true });
+      lastEdit.current = { ...last, applied: deg };
+      setMoveText(`Turned ${Math.abs(deg)}° ${deg >= 0 ? 'anticlockwise' : 'clockwise'}`);
+      return;
+    }
     if (last.kind === 'swing') {
       const deg = Number(body.replace('°', '').trim()) * (neg ? -1 : 1);
       if (!Number.isFinite(deg)) return;
@@ -345,6 +358,22 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     if (last.kind === 'item') {
       const to = retarget(last.from, last.to, neg ? -len : len);
       if (!to) return;
+      if (last.item === 'outlet' || last.item === 'switch') {
+        const o = (last.item === 'outlet' ? project.outlets : project.switches).find((x) => x.id === last.id);
+        const w = o && project.walls.find((x) => x.id === o.wallId);
+        if (!o || !w) return;
+        const offset = Math.round(Math.max(2, Math.min(wallLength(w) - 2, to.x)) * 8) / 8;
+        dispatch(last.item === 'outlet' ? { type: 'updateOutlet', id: o.id, patch: { offset, auto: false }, transient: true } : { type: 'updateSwitch', id: o.id, patch: { offset, auto: false }, transient: true });
+        lastEdit.current = { ...last, to: { x: offset, y: 0 } };
+        setMoveText(`Moved ${formatFtIn(Math.abs(offset - last.from.x))}${Math.abs(offset - to.x) > 1e-6 ? ' (kept on the wall)' : ''}`);
+        return;
+      }
+      if (last.item === 'room') {
+        dispatch({ type: 'moveRoom', id: last.id, delta: { x: to.x - last.to.x, y: to.y - last.to.y }, transient: true });
+        lastEdit.current = { ...last, to };
+        setMoveText(`Room moved ${formatFtIn(len)}${neg ? ' back' : ''}`);
+        return;
+      }
       if (last.item === 'opening') {
         const o = project.openings.find((x) => x.id === last.id);
         const w = o && project.walls.find((x) => x.id === o.wallId);
@@ -360,6 +389,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         if (!c) return;
         const shift = { x: to.x - c.a.x, y: to.y - c.a.y };
         dispatch({ type: 'updateCounter', id: c.id, patch: { a: to, b: { x: c.b.x + shift.x, y: c.b.y + shift.y } }, transient: true });
+      } else if (last.item === 'fixture') {
+        dispatch({ type: 'updateFixture', id: last.id, patch: { at: to, auto: false }, transient: true });
       } else {
         dispatch({ type: 'updateFurniture', id: last.id, patch: { at: to }, transient: true });
       }
@@ -384,6 +415,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   }
 
   const selectedWall = selection?.kind === 'wall' ? project.walls.find((w) => w.id === selection.id) : undefined;
+  const selectedRoom = selection?.kind === 'room' ? project.rooms.find((r) => r.id === selection.id) : undefined;
+  /** A selected room's pivot (it turns about this) and turn handle, in world inches. */
+  const roomGrips = (r: NonNullable<typeof selectedRoom>, scale: number) => ({ pivot: r.pivot ?? roomCentre(r.points), turn: turnHandle(r.points, 30 / scale) });
 
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
     if (e.button === 2) return;
@@ -422,15 +456,31 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             }
           }
         }
+        // A selected room's grips: the turn handle above it, then its pivot.
+        if (selectedRoom) {
+          const g = roomGrips(selectedRoom, view.scale);
+          if (dist(g.turn, raw) <= 10 / view.scale) {
+            drag.current = { kind: 'roomTurn', id: selectedRoom.id, pivot: g.pivot, start: bearing(g.pivot, raw), applied: 0, started: false };
+            return;
+          }
+          if (dist(g.pivot, raw) <= 8 / view.scale) {
+            drag.current = { kind: 'roomPivot', id: selectedRoom.id, started: false };
+            return;
+          }
+        }
         const hit = hitTest(project, raw, slop);
         setSelection(hit);
         if (hit?.kind === 'outlet' || hit?.kind === 'switch') {
           dispatch({ type: 'checkpoint' });
-          drag.current = { kind: hit.kind, id: hit.id };
+          const from = (hit.kind === 'outlet' ? project.outlets : project.switches).find((x) => x.id === hit.id)!.offset;
+          drag.current = { kind: hit.kind, id: hit.id, from };
         } else if (hit?.kind === 'fixture') {
           const f = project.fixtures.find((x) => x.id === hit.id)!;
           dispatch({ type: 'checkpoint' });
-          drag.current = { kind: 'fixture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y } };
+          drag.current = { kind: 'fixture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y }, from: f.at };
+        } else if (hit?.kind === 'room' && selectedRoom && hit.id === selectedRoom.id) {
+          // Dragging a room that's already selected moves it, walls and contents together.
+          drag.current = { kind: 'roomMove', id: hit.id, start: raw, applied: { x: 0, y: 0 }, started: false };
         } else if (hit?.kind === 'furniture') {
           const f = project.furniture.find((x) => x.id === hit.id)!;
           drag.current = { kind: 'furniture', id: f.id, grab: { x: raw.x - f.at.x, y: raw.y - f.at.y }, started: false, from: f.at };
@@ -649,6 +699,37 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       dispatch({ type: 'updateCounter', id: d.id, patch: { a: { x: d.a.x + dx, y: d.a.y + dy }, b: { x: d.b.x + dx, y: d.b.y + dy } }, transient: true });
       return;
     }
+    if (d?.kind === 'roomMove') {
+      // Whole inches; the 6" grid unless Shift.
+      const step = shift ? 1 : GRID;
+      const want = { x: Math.round((raw.x - d.start.x) / step) * step, y: Math.round((raw.y - d.start.y) / step) * step };
+      if (want.x === d.applied.x && want.y === d.applied.y) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'moveRoom', id: d.id, delta: { x: want.x - d.applied.x, y: want.y - d.applied.y }, transient: true });
+      d.applied = want;
+      setMoveText(`Room moved ${formatFtIn(Math.hypot(want.x, want.y))} (${formatFtIn(Math.abs(want.x))} ${want.x < 0 ? 'left' : 'right'}, ${formatFtIn(Math.abs(want.y))} ${want.y < 0 ? 'up' : 'down'})${shift ? '' : ' · Shift: to the inch'}`);
+      return;
+    }
+    if (d?.kind === 'roomTurn') {
+      // 15° steps unless Shift (whole degrees); anticlockwise positive.
+      const want = turnBetween(d.start, bearing(d.pivot, raw), shift ? 1 : 15);
+      if (want === d.applied) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'rotateRoom', id: d.id, deg: want - d.applied, pivot: d.pivot, transient: true });
+      d.applied = want;
+      setMoveText(`Turned ${Math.abs(want)}° ${want >= 0 ? 'anticlockwise' : 'clockwise'}${shift ? '' : ' · Shift: any angle'}`);
+      return;
+    }
+    if (d?.kind === 'roomPivot') {
+      const pivot = snapPivot(project, d.id, raw, SNAP_PX / viewRef.current.scale);
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'updateRoom', id: d.id, patch: { pivot }, transient: true });
+      setMoveText('Pivot: the room turns about this point · it snaps to corners, wall ends and the centre');
+      return;
+    }
     if (d?.kind === 'switch') {
       const o = project.switches.find((x) => x.id === d.id);
       const w = o && project.walls.find((x) => x.id === o.wallId);
@@ -733,7 +814,17 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           ? ((c) => (c && !samePoint(c.a, d.a) ? { kind: 'item', item: 'counter', id: d.id, from: d.a, to: c.a } : null))(project.counters.find((x) => x.id === d.id))
           : d?.kind === 'furniture' && d.started
             ? ((f) => (f && !samePoint(f.at, d.from) ? { kind: 'item', item: 'furniture', id: d.id, from: d.from, to: f.at } : null))(project.furniture.find((x) => x.id === d.id))
-            : null;
+            : d?.kind === 'outlet' || d?.kind === 'switch'
+              ? ((o) => (o && o.offset !== d.from ? { kind: 'item', item: d.kind, id: d.id, from: { x: d.from, y: 0 }, to: { x: o.offset, y: 0 } } : null))((d.kind === 'outlet' ? project.outlets : project.switches).find((x) => x.id === d.id))
+              : d?.kind === 'fixture'
+                ? ((f) => (f && !samePoint(f.at, d.from) ? { kind: 'item', item: 'fixture', id: d.id, from: d.from, to: f.at } : null))(project.fixtures.find((x) => x.id === d.id))
+                : d?.kind === 'roomMove' && d.started && (d.applied.x || d.applied.y)
+                  ? { kind: 'item', item: 'room', id: d.id, from: { x: 0, y: 0 }, to: d.applied }
+                  : null;
+    if (d?.kind === 'roomTurn' && d.started && d.applied) {
+      lastEdit.current = { kind: 'turn', id: d.id, pivot: d.pivot, applied: d.applied };
+      setMoveText(`Turned ${Math.abs(d.applied)}° · type an angle + ↵ to set it exactly (anticlockwise positive)`);
+    }
     if (item?.kind === 'item') {
       lastEdit.current = item;
       setMoveText(`Moved ${formatFtIn(dist(item.from, item.to))} · type a distance + ↵ to set it exactly`);
@@ -917,6 +1008,22 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             [selectedWall.a, selectedWall.b].map((p, i) => (
               <circle key={i} cx={p.x} cy={p.y} r={px(6)} className="handle" strokeWidth={px(2)} />
             ))}
+          {selectedRoom &&
+            tool === 'select' &&
+            (() => {
+              const g = roomGrips(selectedRoom, s);
+              const top = turnHandle(selectedRoom.points, 0);
+              return (
+                <g className="room-grips">
+                  <line x1={top.x} y1={top.y} x2={g.turn.x} y2={g.turn.y} strokeWidth={px(1)} strokeDasharray={`${px(3)} ${px(3)}`} />
+                  <circle cx={g.turn.x} cy={g.turn.y} r={px(7)} className="handle turn-handle" strokeWidth={px(2)} />
+                  <path d={`M ${g.turn.x - px(3)} ${g.turn.y - px(1)} a ${px(3)} ${px(3)} 0 1 1 ${px(3)} ${px(3)}`} fill="none" strokeWidth={px(1.2)} />
+                  <circle cx={g.pivot.x} cy={g.pivot.y} r={px(5)} className="handle pivot" strokeWidth={px(1.5)} />
+                  <line x1={g.pivot.x - px(9)} y1={g.pivot.y} x2={g.pivot.x + px(9)} y2={g.pivot.y} strokeWidth={px(1)} />
+                  <line x1={g.pivot.x} y1={g.pivot.y - px(9)} x2={g.pivot.x} y2={g.pivot.y + px(9)} strokeWidth={px(1)} />
+                </g>
+              );
+            })()}
 
           {chain && cursor && tool === 'wall' && (
             <PreviewSegment a={chain.start} b={cursor.p} thickness={newWallThickness} px={px} />
@@ -944,7 +1051,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         <div className="length-entry">
           {entry ? (
             <>
-              {lastEdit.current?.kind === 'move' || lastEdit.current?.kind === 'item' ? 'Move' : lastEdit.current?.kind === 'swing' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
+              {lastEdit.current?.kind === 'move' || lastEdit.current?.kind === 'item' ? 'Move' : lastEdit.current?.kind === 'swing' || lastEdit.current?.kind === 'turn' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
             </>
           ) : (
             moveText
@@ -1020,7 +1127,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
+      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':

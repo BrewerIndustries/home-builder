@@ -211,6 +211,8 @@ export interface Room {
   /** Closed polygon, in order. */
   points: Point[];
   ceiling?: Ceiling;
+  /** The point the room turns about (its handle on the plan); its outline's centre when unset. */
+  pivot?: Point;
 }
 
 export interface FramingSettings {

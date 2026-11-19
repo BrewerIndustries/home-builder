@@ -1349,3 +1349,10 @@ table.schedule th {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.room-grips line,
+.room-grips path {
+  stroke: var(--accent);
+}
+.room-grips .pivot {
+  fill: none;
+}

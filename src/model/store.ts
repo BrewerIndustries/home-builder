@@ -1,6 +1,6 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
 import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
-import { joinWalls, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
+import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
 import { followDims } from '../calc/faces.ts';
@@ -38,7 +38,7 @@ export type Action =
   | { type: 'joinWalls'; id: string; otherId: string }
   | { type: 'addOpening'; opening: Opening }
   | { type: 'updateOpening'; id: string; patch: Partial<Omit<Opening, 'id'>>; transient?: boolean }
-  | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>> }
+  | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>>; transient?: boolean }
   | { type: 'delete'; ids: string[] }
   | { type: 'setFraming'; patch: Partial<FramingSettings> }
   | { type: 'setRoof'; patch: Partial<Roof> }
@@ -60,7 +60,9 @@ export type Action =
   | { type: 'replaceAutoLighting'; fixtures: Fixture[]; switches: WallSwitch[] }
   | { type: 'addCounter'; counter: Counter }
   | { type: 'addCounters'; counters: Counter[] }
-  | { type: 'rotateRoom'; id: string; deg: number; pivot?: Point }
+  | { type: 'rotateRoom'; id: string; deg: number; pivot?: Point; transient?: boolean }
+  | { type: 'moveRoom'; id: string; delta: Point; transient?: boolean }
+  | { type: 'mirrorRoom'; id: string; axis: 'x' | 'y' }
   | { type: 'addFurniture'; item: Furniture }
   | { type: 'updateFurniture'; id: string; patch: Partial<Omit<Furniture, 'id'>>; transient?: boolean }
   | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
@@ -178,6 +180,12 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'rotateRoom':
       return followWalls(p, reclampOpenings(rotateRoom(p, action.id, action.deg, action.pivot)));
+
+    case 'moveRoom':
+      return followWalls(p, reclampOpenings(moveRoom(p, action.id, action.delta)));
+
+    case 'mirrorRoom':
+      return followWalls(p, reclampOpenings(mirrorRoom(p, action.id, action.axis)));
 
     case 'splitWall':
       return splitWall(p, action.id, action.at, action.newId);

@@ -242,8 +242,11 @@ export function counterHost(project: Project, c: Counter): { wall: Wall; side: 1
 export function followWalls(prev: Project, next: Project): Project {
   if (prev.walls === next.walls || !next.counters.length) return next;
   const after = new Map(next.walls.map((w) => [w.id, w]));
+  const before = new Map(prev.counters.map((c) => [c.id, c]));
   let changed = false;
   const counters = next.counters.map((c) => {
+    // Already placed by the same edit (a room turned, moved or mirrored with its contents): leave it.
+    if (before.has(c.id) && before.get(c.id) !== c) return c;
     const host = counterHost(prev, c);
     const w = host && after.get(host.wall.id);
     if (!host || !w) return c;

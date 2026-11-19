@@ -398,8 +398,11 @@ export function furnitureHost(project: Project, f: Furniture): { wall: Wall; alo
 export function followFurniture(prev: Project, next: Project): Project {
   if (prev.walls === next.walls || !next.furniture.length) return next;
   const after = new Map(next.walls.map((w) => [w.id, w]));
+  const before = new Map(prev.furniture.map((f) => [f.id, f]));
   let changed = false;
   const furniture = next.furniture.map((f) => {
+    // Already placed by the same edit (a room turned, moved or mirrored with its contents): leave it.
+    if (before.has(f.id) && before.get(f.id) !== f) return f;
     const host = furnitureHost(prev, f);
     const w = host && after.get(host.wall.id);
     if (!host || !w) return f;

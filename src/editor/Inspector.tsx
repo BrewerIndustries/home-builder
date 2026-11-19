@@ -1,4 +1,4 @@
-import type { Dispatch, ReactNode } from 'react';
+import { useState, type Dispatch, type ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
 import { narrowest } from '../calc/outline.ts';
 import { BED_SIZES, FURNITURE, FURNITURE_KINDS, furnitureChecks, furnitureRoom, placeFurniture } from '../calc/furniture.ts';
@@ -80,6 +80,8 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 export function Inspector({ project, dispatch, selection, setSelection, setTool }: Props) {
+  // How far the room panel's arrow buttons move a room.
+  const [moveStep, setMoveStep] = useState(12);
   const del = (id: string) => {
     dispatch({ type: 'delete', ids: [id] });
     setSelection(null);
@@ -700,16 +702,39 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             Guess name &amp; use
           </button>
         </div>
-        <Field label="Turn the room" hint="Its walls and everything in it turn about its centre; walls attached outside stretch to follow. Anticlockwise is positive">
+        <Field
+          label="Turn the room"
+          hint={`Its walls and everything in it turn about ${r.pivot ? 'its pivot (the crosshair; drag it to a corner or wall end)' : 'its centre (or drag the crosshair to pick another point)'}; walls attached outside stretch to follow. Anticlockwise is positive. Or drag the round handle above the room`}
+        >
           <div className="row wrap">
             <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: 90 })} title="Turn 90° anticlockwise">⟲ 90°</button>
             <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: -90 })} title="Turn 90° clockwise">⟳ 90°</button>
             <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: 15 })} title="Turn 15° anticlockwise">⟲ 15°</button>
             <button onClick={() => dispatch({ type: 'rotateRoom', id: r.id, deg: -15 })} title="Turn 15° clockwise">⟳ 15°</button>
+            {r.pivot && (
+              <button className="link" onClick={() => dispatch({ type: 'updateRoom', id: r.id, patch: { pivot: undefined } })}>
+                Pivot back to the centre
+              </button>
+            )}
           </div>
         </Field>
         <Field label="Turn by" hint="Type an angle + ↵ (e.g. 30, or 330 for 30° clockwise)">
           <AngleInput key={r.id + JSON.stringify(r.points)} value={0} onChange={(deg) => dispatch({ type: 'rotateRoom', id: r.id, deg: deg > 180 ? deg - 360 : deg })} />
+        </Field>
+        <Field label="Move the room" hint="Walls and contents together; attached walls stretch. Or drag the selected room on the plan (6&quot; grid, Shift to the inch)">
+          <div className="row wrap">
+            <LengthInput value={moveStep} min={1} onChange={setMoveStep} />
+            <button onClick={() => dispatch({ type: 'moveRoom', id: r.id, delta: { x: -moveStep, y: 0 } })} title="Move left">←</button>
+            <button onClick={() => dispatch({ type: 'moveRoom', id: r.id, delta: { x: moveStep, y: 0 } })} title="Move right">→</button>
+            <button onClick={() => dispatch({ type: 'moveRoom', id: r.id, delta: { x: 0, y: -moveStep } })} title="Move up">↑</button>
+            <button onClick={() => dispatch({ type: 'moveRoom', id: r.id, delta: { x: 0, y: moveStep } })} title="Move down">↓</button>
+          </div>
+        </Field>
+        <Field label="Mirror the room" hint="Across a line through its centre; doors swing and devices sit the mirrored way">
+          <div className="row wrap">
+            <button onClick={() => dispatch({ type: 'mirrorRoom', id: r.id, axis: 'x' })}>⇆ Left ↔ right</button>
+            <button onClick={() => dispatch({ type: 'mirrorRoom', id: r.id, axis: 'y' })}>⇅ Top ↔ bottom</button>
+          </div>
         </Field>
         <div className="stat-grid">
           <Stat label="Floor" value={formatSqFt(exclusiveArea(project, r))} />
