@@ -26,6 +26,10 @@ import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
 import { anchorFor, dimSnapPoints, faceSpans } from '../calc/faces.ts';
 import { hitTest, type Hit } from './hitTest.ts';
+import { boxSelect, selItems, toggleItem, type SelItem } from '../model/selection.ts';
+import { GroupOverlay } from './GroupOverlay.tsx';
+import { GroupPanel } from './GroupPanel.tsx';
+import { useGroupEdit } from './useGroupEdit.ts';
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
 
@@ -55,7 +59,11 @@ type Drag =
   | { kind: 'counter'; id: string; start: Point; a: Point; b: Point; along: Point | null; started: boolean }
   | { kind: 'underlay'; start: Point; origin: Point }
   /** A dimension string dragged in or out; `out` is its outward unit direction. */
-  | { kind: 'dim'; id: string; out: Point; start: Point; base: number; started: boolean };
+  | { kind: 'dim'; id: string; out: Point; start: Point; base: number; started: boolean }
+  /** Wall edits v6: a box dragged on empty canvas (Shift adds to the pick), and a picked group dragged or turned. */
+  | { kind: 'box'; start: Point; end: Point; add: boolean; sx: number; sy: number }
+  | { kind: 'groupMove'; sel: SelItem[]; start: Point; applied: Point; started: boolean }
+  | { kind: 'groupTurn'; sel: SelItem[]; pivot: Point; start: number; applied: number; started: boolean };
 
 export interface PlanCanvasHandle {
   fit(): void;
@@ -87,7 +95,10 @@ type LastEdit =
   /** An opening, outlet or switch (along its wall: x = offset), counter, fixture, light or whole room dragged from → to; a typed distance sets how far, same direction. */
   | { kind: 'item'; item: 'opening' | 'outlet' | 'switch' | 'counter' | 'furniture' | 'fixture' | 'room'; id: string; from: Point; to: Point }
   /** A room turned about its pivot by its handle; a typed angle sets the turn exactly. */
-  | { kind: 'turn'; id: string; pivot: Point; applied: number };
+  | { kind: 'turn'; id: string; pivot: Point; applied: number }
+  /** A picked group dragged by `applied`, or turned about its centre: a typed distance / angle sets it exactly. */
+  | { kind: 'groupMove'; sel: SelItem[]; applied: Point }
+  | { kind: 'groupTurn'; sel: SelItem[]; pivot: Point; applied: number };
 
 const SNAP_PX = 10;
 const GRID = 6;
@@ -121,6 +132,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const drag = useRef<Drag | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
+  const [boxDrag, setBoxDrag] = useState<{ a: Point; b: Point } | null>(null);
+  const grp = useGroupEdit({ project, dispatch, selection, setSelection, active: tool === 'select', pointer: cursor?.p ?? null, onMessage });
 
   const toWorld = useCallback((sx: number, sy: number): Point => {
     const r = svgRef.current!.getBoundingClientRect();
@@ -338,6 +351,24 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   function applyEntry(last: LastEdit, text: string) {
     const neg = text.trim().startsWith('-');
     const body = text.replace(/^\s*-/, '');
+    if (last.kind === 'groupTurn') {
+      const deg = Number(body.replace('°', '').trim()) * (neg ? -1 : 1);
+      if (!Number.isFinite(deg)) return;
+      dispatch({ type: 'groupEdit', sel: last.sel, op: { kind: 'turn', deg: deg - last.applied, pivot: last.pivot }, transient: true });
+      lastEdit.current = { ...last, applied: deg };
+      setMoveText(`Turned ${Math.abs(deg)}° ${deg >= 0 ? 'anticlockwise' : 'clockwise'}`);
+      return;
+    }
+    if (last.kind === 'groupMove') {
+      const len = parseFtIn(body);
+      if (len === null || len < 0) return;
+      const to = retarget({ x: 0, y: 0 }, last.applied, neg ? -len : len);
+      if (!to) return;
+      dispatch({ type: 'groupEdit', sel: last.sel, op: { kind: 'move', delta: { x: to.x - last.applied.x, y: to.y - last.applied.y } }, transient: true });
+      lastEdit.current = { ...last, applied: to };
+      setMoveText(`Moved ${formatFtIn(len)}${neg ? ' back' : ''}`);
+      return;
+    }
     if (last.kind === 'turn') {
       const deg = Number(body.replace('°', '').trim()) * (neg ? -1 : 1);
       if (!Number.isFinite(deg)) return;
@@ -447,6 +478,37 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 
     switch (tool) {
       case 'select': {
+        // Picking a mirror line: two clicks, snapped like a wall's ends.
+        if (grp.mirrorPick) {
+          grp.addMirrorPoint(snap(raw, { origin: grp.mirrorPick[0] }).p);
+          return;
+        }
+        // A picked group: its turn handle, Shift-click to add / drop, drag any part of it to move it.
+        if (grp.bounds && dist(groupTurnHandle(grp.bounds, view.scale), raw) <= 10 / view.scale) {
+          const pivot = { x: (grp.bounds.min.x + grp.bounds.max.x) / 2, y: (grp.bounds.min.y + grp.bounds.max.y) / 2 };
+          drag.current = { kind: 'groupTurn', sel: grp.group, pivot, start: bearing(pivot, raw), applied: 0, started: false };
+          return;
+        }
+        if (e.shiftKey) {
+          const hit = hitTest(project, raw, slop);
+          const item = hit && selItems([hit])[0];
+          if (item) {
+            grp.pick(toggleItem(grp.group.length > 1 ? grp.group : selItems(selection ? [selection] : []), item));
+            return;
+          }
+          if (!hit) {
+            drag.current = { kind: 'box', start: raw, end: raw, add: true, sx: e.clientX, sy: e.clientY };
+            return;
+          }
+        }
+        if (grp.group.length > 1) {
+          const hit = hitTest(project, raw, slop);
+          if (grp.isMember(hit)) {
+            drag.current = { kind: 'groupMove', sel: grp.group, start: raw, applied: { x: 0, y: 0 }, started: false };
+            return;
+          }
+          grp.clear();
+        }
         // Endpoint handles of the selected wall first.
         if (selectedWall) {
           for (const end of [selectedWall.a, selectedWall.b]) {
@@ -502,7 +564,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           const square = Math.abs(n.x) < 1e-6 || Math.abs(n.y) < 1e-6;
           drag.current = { kind: 'wall', start: raw, normal: n, moved: 0, current: wallDragPoints(project, w), started: false, snap: wallSnapTargets(project, w), square };
         } else if (!hit) {
-          drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
+          // Empty canvas: drag a box to pick everything in it (Space-drag or scroll to pan).
+          drag.current = { kind: 'box', start: raw, end: raw, add: false, sx: e.clientX, sy: e.clientY };
         }
         return;
       }
@@ -618,6 +681,33 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     const d = drag.current;
     if (d?.kind === 'pan') {
       setView({ ...d.view, ox: d.view.ox + e.clientX - d.sx, oy: d.view.oy + e.clientY - d.sy });
+      return;
+    }
+    if (d?.kind === 'box') {
+      d.end = raw;
+      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= 4) setBoxDrag({ a: d.start, b: raw });
+      return;
+    }
+    if (d?.kind === 'groupMove') {
+      // The 6" grid unless Shift (whole inches).
+      const step = shift ? 1 : GRID;
+      const want = { x: Math.round((raw.x - d.start.x) / step) * step, y: Math.round((raw.y - d.start.y) / step) * step };
+      if (want.x === d.applied.x && want.y === d.applied.y) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'groupEdit', sel: d.sel, op: { kind: 'move', delta: { x: want.x - d.applied.x, y: want.y - d.applied.y } }, transient: true });
+      d.applied = want;
+      setMoveText(`Moved ${formatFtIn(Math.hypot(want.x, want.y))} (${formatFtIn(Math.abs(want.x))} ${want.x < 0 ? 'left' : 'right'}, ${formatFtIn(Math.abs(want.y))} ${want.y < 0 ? 'up' : 'down'})${shift ? '' : ' · Shift: to the inch'}`);
+      return;
+    }
+    if (d?.kind === 'groupTurn') {
+      const want = turnBetween(d.start, bearing(d.pivot, raw), shift ? 1 : 15);
+      if (want === d.applied) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'groupEdit', sel: d.sel, op: { kind: 'turn', deg: want - d.applied, pivot: d.pivot }, transient: true });
+      d.applied = want;
+      setMoveText(`Turned ${Math.abs(want)}° ${want >= 0 ? 'anticlockwise' : 'clockwise'}${shift ? '' : ' · Shift: any angle'}`);
       return;
     }
     if (d?.kind === 'vertex') {
@@ -800,6 +890,25 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     const d = drag.current;
     drag.current = null;
     setMoveText(null);
+    if (d?.kind === 'box') {
+      setBoxDrag(null);
+      const base = d.add ? (grp.group.length > 1 ? grp.group : selItems(selection ? [selection] : [])) : [];
+      // A click on empty canvas (no real drag) just clears the pick.
+      const boxed = e && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) >= 4 ? boxSelect(project, d.start, d.end) : [];
+      grp.pick(boxed.reduce((sel, x) => (sel.some((y) => y.kind === x.kind && y.id === x.id) ? sel : [...sel, x]), base));
+      if (boxed.length > 1) setMoveText(`${boxed.length} picked · drag any of them to move together · ⌘C copies · Shift-click adds or drops one`);
+      return;
+    }
+    if (d?.kind === 'groupMove' && d.started && (d.applied.x || d.applied.y)) {
+      lastEdit.current = { kind: 'groupMove', sel: d.sel, applied: d.applied };
+      setMoveText(`Moved ${formatFtIn(Math.hypot(d.applied.x, d.applied.y))} · type a distance + ↵ to set it exactly`);
+      return;
+    }
+    if (d?.kind === 'groupTurn' && d.started && d.applied) {
+      lastEdit.current = { kind: 'groupTurn', sel: d.sel, pivot: d.pivot, applied: d.applied };
+      setMoveText(`Turned ${Math.abs(d.applied)}° · type an angle + ↵ to set it exactly (anticlockwise positive)`);
+      return;
+    }
     // Remember a real wall move or end drag, so a typed value can set it exactly.
     if (d?.kind === 'wall' && d.started && d.moved) {
       lastEdit.current = { kind: 'move', points: d.current, normal: d.normal, moved: d.moved };
@@ -1027,6 +1136,18 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
               );
             })()}
 
+          {tool === 'select' && (grp.bounds || boxDrag || grp.mirrorPick) && (
+            <GroupOverlay
+              project={project}
+              members={grp.members}
+              bounds={grp.bounds}
+              turn={grp.bounds && groupTurnHandle(grp.bounds, s)}
+              boxDrag={boxDrag}
+              mirrorLine={grp.mirrorPick?.length && cursor ? { a: grp.mirrorPick[0], b: snap(cursor.p, { origin: grp.mirrorPick[0] }).p } : null}
+              px={px}
+            />
+          )}
+
           {chain && cursor && tool === 'wall' && (
             <PreviewSegment a={chain.start} b={cursor.p} thickness={newWallThickness} px={px} />
           )}
@@ -1053,7 +1174,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         <div className="length-entry">
           {entry ? (
             <>
-              {lastEdit.current?.kind === 'move' || lastEdit.current?.kind === 'item' ? 'Move' : lastEdit.current?.kind === 'swing' || lastEdit.current?.kind === 'turn' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
+              {lastEdit.current?.kind === 'move' || lastEdit.current?.kind === 'item' || lastEdit.current?.kind === 'groupMove' ? 'Move' : lastEdit.current?.kind === 'swing' || lastEdit.current?.kind === 'turn' || lastEdit.current?.kind === 'groupTurn' ? 'Angle' : 'Length'}: <strong>{entry}</strong> <span className="muted">↵ to set · Esc to clear</span>
             </>
           ) : (
             moveText
@@ -1121,6 +1242,24 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         </div>
       )}
 
+      {tool === 'select' && (grp.group.length > 1 || grp.mirrorPick || selectedRoom) && (
+        <GroupPanel
+          count={grp.group.length > 1 ? grp.group.length : 1}
+          units={grp.units}
+          picking={grp.mirrorPick ? grp.mirrorPick.length : null}
+          canPaste={grp.canPaste}
+          onTurn={(deg) => grp.op({ kind: 'turn', deg })}
+          onMirror={grp.mirror}
+          onMirrorLine={() => grp.setMirrorPick([])}
+          onAlign={(how) => grp.op({ kind: 'align', how })}
+          onDistribute={(axis) => grp.op({ kind: 'distribute', axis })}
+          onCopy={grp.copy}
+          onPaste={grp.paste}
+          onDelete={grp.remove}
+          onClear={grp.clear}
+        />
+      )}
+
       <div className="hint">{hintFor(tool, !!chain)}</div>
     </div>
   );
@@ -1129,7 +1268,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to pan · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
+      return 'Click to select · drag empty space to box-pick (Shift-click / Shift-drag adds or drops; Space-drag or scroll pans) · drag any picked item to move them together · ⌘C / ⌘V copy and paste a room with its contents · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'room':
@@ -1158,6 +1297,11 @@ function hintFor(tool: Tool, drawing: boolean): string {
     case 'moveImage':
       return 'Drag to line the picture up with your walls';
   }
+}
+
+/** A picked group's turn handle: above the middle of its box, clear of it. */
+function groupTurnHandle(b: { min: Point; max: Point }, scale: number): Point {
+  return turnHandle([b.min, b.max], 36 / scale);
 }
 
 export function newOpening(kind: 'door' | 'window', wall: Wall, along: number): Opening {

@@ -286,8 +286,8 @@ export function roomCentre(points: Point[]): Point {
   return { x: points.reduce((s, q) => s + q.x, 0) / points.length, y: points.reduce((s, q) => s + q.y, 0) / points.length };
 }
 
-/** How a room transform moves a point, turns a symbol (clockwise degrees), and whether it mirrors (flips sides). */
-interface RoomMap {
+/** How a room (or group) transform moves a point, turns a symbol (clockwise degrees), and whether it mirrors (flips sides). */
+export interface RoomMap {
   point: (q: Point) => Point;
   rot: (deg: number) => number;
   flip: boolean;
@@ -295,26 +295,47 @@ interface RoomMap {
 
 const norm360 = (d: number) => Math.round(((((d % 360) + 360) % 360) % 360) * 1000) / 1000;
 
-/**
- * Apply a rigid move to a room and everything in it: its walls (those with both
- * ends on or inside its outline), rooms inside it, counters, fixtures,
- * furniture and ceiling devices. Openings, outlets and switches ride on their
- * walls (a mirror flips which face they're on and which way doors swing). A
- * wall outside the group that meets a moved corner stretches to follow, as when
- * an end is dragged.
- */
-function transformRoom(p: Project, roomId: string, m: RoomMap): Project {
+/** What moves together in a rigid edit: walls, rooms, counters, ceiling devices and furniture / fixtures (by id). */
+export interface Group {
+  walls: ReadonlySet<string>;
+  rooms: ReadonlySet<string>;
+  counters: ReadonlySet<string>;
+  fixtures: ReadonlySet<string>;
+  furniture: ReadonlySet<string>;
+}
+
+/** A room and everything in it: walls with both ends on or inside its outline, rooms inside it, counters, devices and furniture. */
+export function roomGroup(p: Project, roomId: string): Group {
   const room = p.rooms.find((r) => r.id === roomId);
-  if (!room) return p;
-  const outline = room.points;
-  const inside = (q: Point) => inOrOn(q, outline);
-  const group = new Set(p.walls.filter((w) => inside(w.a) && inside(w.b)).map((w) => w.id));
-  // Every corner that moves: the group's wall ends and the room's own corners.
-  const moving: Point[] = [...outline];
-  for (const w of p.walls) if (group.has(w.id)) moving.push(w.a, w.b);
+  if (!room) return { walls: new Set(), rooms: new Set(), counters: new Set(), fixtures: new Set(), furniture: new Set() };
+  const inside = (q: Point) => inOrOn(q, room.points);
+  return {
+    walls: new Set(p.walls.filter((w) => inside(w.a) && inside(w.b)).map((w) => w.id)),
+    rooms: new Set(p.rooms.filter((r) => r.id === room.id || r.points.every(inside)).map((r) => r.id)),
+    counters: new Set(p.counters.filter((k) => inside(k.a) && inside(k.b)).map((k) => k.id)),
+    fixtures: new Set(p.fixtures.filter((f) => inside(f.at)).map((f) => f.id)),
+    furniture: new Set(p.furniture.filter((f) => inside(f.at)).map((f) => f.id)),
+  };
+}
+
+/** Symbols with a handed layout (a corner shower's door corner): a mirror swaps the hand. */
+const HANDED: ReadonlySet<string> = new Set(['corner-shower', 'neo-shower']);
+const SWAP_RAILS = { left: 'right', right: 'left' } as const;
+
+/**
+ * Apply a rigid move to a group: its walls, rooms, counters, ceiling devices
+ * and furniture. Openings, outlets and switches ride on their walls (a mirror
+ * flips which face they're on and which way doors swing; handed symbols and
+ * stair rails swap hands). A wall outside the group that meets a moved corner
+ * stretches to follow, as when an end is dragged.
+ */
+export function transformGroup(p: Project, g: Group, m: RoomMap): Project {
+  const moved = p.walls.filter((w) => g.walls.has(w.id));
+  // Every corner that moves: the group's wall ends and its rooms' corners.
+  const moving: Point[] = p.rooms.filter((r) => g.rooms.has(r.id)).flatMap((r) => r.points);
+  for (const w of moved) moving.push(w.a, w.b);
   // Ts: other walls' ends and other rooms' corners sitting on a moved wall go with it, unless the
   // moved wall still runs through them (a mirror, or a slide along the wall): then they stay joined where they are.
-  const moved = p.walls.filter((w) => group.has(w.id));
   const after = moved.map((w) => ({ ...w, a: m.point(w.a), b: m.point(w.b) }));
   const tees: Point[] = [];
   for (const q of [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points)]) {
@@ -325,26 +346,39 @@ function transformRoom(p: Project, roomId: string, m: RoomMap): Project {
     if (tees.some((t) => samePoint(t, q))) return after.some((w) => onSegment(w, q)) ? q : m.point(q);
     return q;
   };
-  const moveOutline = (r: typeof room) => {
-    // Rooms wholly inside move with it (a mirror reverses their winding: put it back); a neighbour just stretches.
-    if (r.id === room.id || r.points.every(inside)) {
+  const moveOutline = (r: Project['rooms'][number]) => {
+    // Rooms in the group move with it (a mirror reverses their winding: put it back); a neighbour just stretches.
+    if (g.rooms.has(r.id)) {
       const pts = r.points.map(m.point);
       return { ...r, points: m.flip ? [...pts].reverse() : pts, ...(r.pivot ? { pivot: m.point(r.pivot) } : {}) };
     }
     return { ...r, points: r.points.map(moveIf) };
   };
   const flipSide = <T extends { side: 1 | -1 }>(x: T): T => ({ ...x, side: x.side === 1 ? -1 : 1 });
+  const handed = (f: Project['furniture'][number]) => {
+    if (!m.flip) return f;
+    let out = f;
+    if (HANDED.has(f.kind)) out = { ...out, mirror: !f.mirror };
+    if (f.kind === 'stairs' && f.handrails !== 'both' && f.handrails !== 'none') out = { ...out, handrails: SWAP_RAILS[f.handrails ?? 'right'] };
+    return out;
+  };
   return {
     ...p,
     walls: p.walls.map((w) => ({ ...w, a: moveIf(w.a), b: moveIf(w.b) })),
     rooms: p.rooms.map(moveOutline),
-    openings: m.flip ? p.openings.map((o) => (group.has(o.wallId) && o.swing ? { ...o, swing: { ...o.swing, side: o.swing.side === 1 ? -1 : 1 } } : o)) : p.openings,
-    outlets: m.flip ? p.outlets.map((o) => (group.has(o.wallId) ? flipSide(o) : o)) : p.outlets,
-    switches: m.flip ? p.switches.map((o) => (group.has(o.wallId) ? flipSide(o) : o)) : p.switches,
-    counters: p.counters.map((k) => (inside(k.a) && inside(k.b) ? { ...k, a: m.point(k.a), b: m.point(k.b), side: m.flip ? (k.side === 1 ? -1 : 1) : k.side } : k)),
-    fixtures: p.fixtures.map((f) => (inside(f.at) ? { ...f, at: m.point(f.at) } : f)),
-    furniture: p.furniture.map((f) => (inside(f.at) ? { ...f, at: m.point(f.at), rot: norm360(m.rot(f.rot)) } : f)),
+    openings: m.flip ? p.openings.map((o) => (g.walls.has(o.wallId) && o.swing ? { ...o, swing: { ...o.swing, side: o.swing.side === 1 ? -1 : 1 } } : o)) : p.openings,
+    outlets: m.flip ? p.outlets.map((o) => (g.walls.has(o.wallId) ? flipSide(o) : o)) : p.outlets,
+    switches: m.flip ? p.switches.map((o) => (g.walls.has(o.wallId) ? flipSide(o) : o)) : p.switches,
+    counters: p.counters.map((k) => (g.counters.has(k.id) ? { ...k, a: m.point(k.a), b: m.point(k.b), side: m.flip ? (k.side === 1 ? -1 : 1) : k.side } : k)),
+    fixtures: p.fixtures.map((f) => (g.fixtures.has(f.id) ? { ...f, at: m.point(f.at) } : f)),
+    furniture: p.furniture.map((f) => (g.furniture.has(f.id) ? handed({ ...f, at: m.point(f.at), rot: norm360(m.rot(f.rot)) }) : f)),
   };
+}
+
+/** A room and everything in it, moved rigidly (see roomGroup and transformGroup). */
+function transformRoom(p: Project, roomId: string, m: RoomMap): Project {
+  if (!p.rooms.some((r) => r.id === roomId)) return p;
+  return transformGroup(p, roomGroup(p, roomId), m);
 }
 
 /**
