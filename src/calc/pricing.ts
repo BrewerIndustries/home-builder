@@ -74,6 +74,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Refrigerator \(allowance\)/, 1500],
   [/^Corner base cabinet, lazy susan/, 450],
   [/^Corner base cabinet, blind corner/, 320],
+  [/^Corner wall cabinet/, 380],
+  [/^Cabinet filler strips/, 30],
   [/^Tall pantry cabinet/, 900],
   [/^Wall oven cabinet/, 750],
   [/^Wall oven \(allowance\)/, 1800],

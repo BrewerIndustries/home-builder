@@ -1,7 +1,8 @@
 import { dist } from '../model/geometry.ts';
 import type { Point, Project } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
-import { CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, KNEE_SPACE, roomCounters, SEAT_WIDTH, seatingDepth, seats } from './counters.ts';
+import { counterFront, counterHeight, CUTOUT_LABEL, counterCorners, counterLength, counterOverlaps, counterPoint, kneeSpaceFor, peninsulaJoin, roomCounters, SEAT_WIDTH, seatingDepth, seats } from './counters.ts';
+import { furnitureCorners, isFixture } from './furniture.ts';
 import type { Counter, Cutout } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
 import { roomAt } from './lighting.ts';
@@ -12,6 +13,9 @@ import { roomAt } from './lighting.ts';
 //   landing area beside the sink 24" one side and 18" the other, the range 15" and
 //   12", the fridge 15" on one side. Countertop over a dishwasher counts; a run that
 //   turns a corner (or into a peninsula) carries on round it.
+//   seating: knee space 15" deep at counter height (36"), 12" at bar height (42");
+//   behind seated diners, 32" to a wall or obstruction with no traffic behind,
+//   36" for someone to edge past, 44" to walk past.
 // Plus a layout warning for a sink, range or appliance set in an L's corner square.
 // Distances are between the appliances' centres at mid-depth, and between the
 // counter outlines / wall faces. Inches throughout.
@@ -21,6 +25,8 @@ export const LEG_MAX = 108;
 export const TRIANGLE_MAX = 312;
 export const WORK_AISLE = 42;
 export const WALKWAY = 36;
+/** Behind seated diners: [no traffic, edge past, walk past]. */
+export const DINER_CLEAR = [32, 36, 44] as const;
 
 const SECTION = 'NKBA guideline';
 
@@ -135,20 +141,87 @@ export function kitchenChecks(project: Project): CodeCheck[] {
       const tight = aisle < WORK_AISLE - 0.5 || walk < WALKWAY - 0.5;
       const parts = [Number.isFinite(aisle) ? `${formatFtIn(aisle)} to the nearest counter (min 42")` : null, Number.isFinite(walk) ? `${formatFtIn(Math.max(0, walk))} to the nearest wall (min 36")` : null].filter(Boolean);
       out.push({ rule: 'Clearance around the island', section: SECTION, status: tight ? 'warn' : 'pass', message: `${label}: ${parts.join(', ')}`, targetId: isl.id });
-      // Seating: knee space under the overhang, and room for the stools.
+      // Seating: knee space under the overhang, room for the stools, and room behind them.
       const knee = seatingDepth(isl);
       if (knee > 0) {
         const n = seats(project, isl).length;
-        const ok = knee >= KNEE_SPACE - 0.5 && n > 0;
+        const want = kneeSpaceFor(isl);
+        const ok = knee >= want - 0.5 && n > 0;
+        const height = counterHeight(isl) > 36 ? 'bar height (42")' : 'counter height (36")';
         out.push({
-          rule: `Seating knee space (${KNEE_SPACE}" deep, ${SEAT_WIDTH}" per seat)`,
+          rule: `Seating knee space (${want}" deep, ${SEAT_WIDTH}" per seat)`,
           section: SECTION,
           status: ok ? 'pass' : 'warn',
-          message: `${label}: ${formatFtIn(knee)} overhang, ${n} seat${n === 1 ? '' : 's'}${knee < KNEE_SPACE - 0.5 ? ` — wants ${KNEE_SPACE}" of knee space at counter height` : ''}${n ? '' : ` — too short for a ${SEAT_WIDTH}" seat`}`,
+          message: `${label}: ${formatFtIn(knee)} overhang at ${height}, ${n} seat${n === 1 ? '' : 's'}${knee < want - 0.5 ? ` — wants ${want}" of knee space` : ''}${n ? '' : ` — too short for a ${SEAT_WIDTH}" seat`}`,
+          targetId: isl.id,
+        });
+        const behind = dinerClearance(project, isl);
+        const [none, edge, walk] = DINER_CLEAR;
+        const [status, note]: [CodeCheck['status'], string] = !Number.isFinite(behind)
+          ? ['pass', 'nothing behind the stools']
+          : behind >= walk - 0.5
+            ? ['pass', 'room to walk past behind them']
+            : behind >= edge - 0.5
+              ? ['pass', `room to edge past; ${walk}" to walk past`]
+              : behind >= none - 0.5
+                ? ['info', `fine only if no one passes behind them (${edge}" to edge past, ${walk}" to walk past)`]
+                : ['warn', `wants ${none}" even with no one passing behind`];
+        out.push({
+          rule: `Clearance behind seated diners (${none}" / ${edge}" / ${walk}")`,
+          section: SECTION,
+          status,
+          message: `${label}: ${Number.isFinite(behind) ? `${formatFtIn(behind)} from the seating edge` : 'open'} — ${note}`,
           targetId: isl.id,
         });
       }
     }
   }
   return out;
+}
+
+/** Distance along a ray from `o` in direction `d` to the first edge of a polygon, or Infinity. */
+function rayToPolygon(o: Point, d: Point, poly: Point[]): number {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const [a, b] = [poly[i], poly[(i + 1) % poly.length]];
+    const e = { x: b.x - a.x, y: b.y - a.y };
+    const den = d.x * e.y - d.y * e.x;
+    if (Math.abs(den) < 1e-9) continue;
+    const t = ((a.x - o.x) * e.y - (a.y - o.y) * e.x) / den;
+    const u = ((a.x - o.x) * d.y - (a.y - o.y) * d.x) / den;
+    if (t > 1e-6 && u >= -1e-9 && u <= 1 + 1e-9) best = Math.min(best, t);
+  }
+  return best;
+}
+
+/**
+ * Clear floor behind an island's stools: from its seating edge straight out to
+ * the nearest wall face, counter or fixture, the least along the seated stretch
+ * (sampled every 3"). Infinity if nothing is within 10 ft.
+ */
+export function dinerClearance(project: Project, c: Counter): number {
+  const len = counterLength(c);
+  const join = peninsulaJoin(project, c);
+  const [lo, hi] = !join ? [0, len] : join.end === 'a' ? [join.cut, len] : [0, len - join.cut];
+  const out = counterFront(c);
+  const solids: Point[][] = [
+    ...project.walls.map((w) => {
+      const n = { x: -(w.b.y - w.a.y), y: w.b.x - w.a.x };
+      const l = Math.hypot(n.x, n.y) || 1;
+      const h = w.thickness / 2;
+      const [nx, ny] = [(n.x / l) * h, (n.y / l) * h];
+      return [{ x: w.a.x + nx, y: w.a.y + ny }, { x: w.b.x + nx, y: w.b.y + ny }, { x: w.b.x - nx, y: w.b.y - ny }, { x: w.a.x - nx, y: w.a.y - ny }];
+    }),
+    ...project.counters.filter((o) => o.id !== c.id).map(counterCorners),
+    ...project.furniture.filter(isFixture).map(furnitureCorners),
+  ];
+  let best = Infinity;
+  const steps = Math.max(1, Math.ceil((hi - lo) / 3));
+  for (let i = 0; i <= steps; i++) {
+    const t = lo + ((hi - lo) * i) / steps;
+    // Just inside the ends so a joined wall counter's corner doesn't count.
+    const p = counterPoint(c, Math.min(hi - 0.5, Math.max(lo + 0.5, t)), c.depth);
+    for (const poly of solids) best = Math.min(best, rayToPolygon(p, out, poly));
+  }
+  return best <= 120 ? best : Infinity;
 }

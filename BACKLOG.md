@@ -41,7 +41,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Counters v2: follow wall drags; fridge and dishwasher; work-triangle and island-clearance guideline checks
 - [x] Counters v3: L-shaped runs (shared corner), peninsulas (connecting-edge rule), appliance-in-corner warning, wall cabinets + range hood, NKBA landing areas
 - [x] Counters v4: draw an L in one drag; corner cabinets (lazy susan / blind) in the estimate; tall pantry / oven cabinets; island seating overhang and knee space; island / peninsula receptacle note even before any outlets are placed
-- [ ] Counters v5: U in one drag (three walls); corner wall cabinets (uppers double-count the corner today); clearance behind seated diners (NKBA 32" / 36" / 44"); bar-height (42") seating with 12" knee space; cabinet-by-cabinet layout (standard widths, fillers)
+- [x] Counters v5: U in one drag (three walls, back wall = nearest the drag); 24" diagonal corner wall cabinet at L corners (uppers no longer double-count); clearance behind seated diners (NKBA 32" / 36" / 44"); bar-height (42") seating with 12" knee space; cabinet-by-cabinet base layout (9"–36" stock widths, sink base, fillers in the estimate)
+- [ ] Counters v6: wall cabinets laid out by width too (and 30" / 36" / 42" heights); drag a cabinet joint to resize neighbours; per-cabinet types (drawer base, trash pull-out) priced from the layout instead of LF; a two-level island (36" work side + 42" bar side)
 - [x] Outdoor receptacles front + back (E3901.7): auto GFCI beside an exterior door, front-of-house setting, in-use covers in the estimate
 - [ ] Dedicated appliance circuits, AFCI; outdoor receptacles v2: decks / balconies / porches, height above real grade
 - [ ] Circuits, NEC 220 load calc, panel schedule

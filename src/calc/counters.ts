@@ -23,9 +23,14 @@ export const FRIDGE_HEIGHT = 70;
 export const TALL_HEIGHT = 84;
 /** Full-height units in a run: no countertop or base cabinet there. */
 export const isTall = (k: Cutout) => k.kind === 'fridge' || k.kind === 'pantry' || k.kind === 'oven';
-/** Seating at an island: one stool per 24" of overhang edge; 15" of knee space at counter height (NKBA guideline). */
+/** Seating at an island: one stool per 24" of overhang edge; 15" of knee space at counter height, 12" at bar height (NKBA guideline). */
 export const SEAT_WIDTH = 24;
 export const KNEE_SPACE = 15;
+export const BAR_HEIGHT = 42;
+export const BAR_KNEE_SPACE = 12;
+/** A counter's top: 36", or 42" for a bar-height island. */
+export const counterHeight = (c: Counter) => (c.island && c.bar ? BAR_HEIGHT : COUNTER_HEIGHT);
+export const kneeSpaceFor = (c: Counter) => (c.island && c.bar ? BAR_KNEE_SPACE : KNEE_SPACE);
 
 const TOL = 0.5;
 
@@ -163,7 +168,10 @@ export function counterLines(project: Project): MaterialLine[] {
   add('Wall oven (allowance)', count('oven'), 'ea', 'one per oven cabinet');
   add('Countertop support brackets (allowance)', seats.reduce((s, c) => s + Math.max(2, Math.ceil(counterLength(c) / 36) + 1), 0), 'ea', 'under seating overhangs, about every 3 ft');
   const upper = project.counters.reduce((s, c) => s + upperSpans(project, c).reduce((t, [a, b]) => t + b - a, 0), 0) / 12;
-  add('Wall cabinets (allowance)', Math.ceil(upper * 2) / 2, 'LF', 'over wall counters, less windows and range hoods');
+  add('Wall cabinets (allowance)', Math.ceil(upper * 2) / 2, 'LF', 'over wall counters, less windows, range hoods and corner wall cabinets');
+  add('Corner wall cabinet (allowance)', cornerUppers(project).length, 'ea', 'one diagonal unit per L corner with wall cabinets on both runs');
+  const fillers = project.counters.reduce((s, c) => s + cabinetLayout(project, c).filter((x) => x.kind === 'filler').length, 0);
+  add('Cabinet filler strips (allowance)', fillers, 'ea', 'from the cabinet-by-cabinet layout');
   add('Range hood (allowance)', count('range'), 'ea', 'one over each range');
   return lines;
 }
@@ -378,6 +386,11 @@ export function upperSpans(project: Project, c: Counter): [number, number][] {
   if (!hasUppers(c)) return [];
   const len = counterLength(c);
   const gaps: [number, number][] = c.cutouts.filter((k) => k.kind === 'range' || k.kind === 'pantry' || k.kind === 'oven').map((k) => [k.offset - k.width / 2, k.offset + k.width / 2]);
+  // The corner wall cabinet takes the first 24" of each leg at an L (counted once, on its own).
+  for (const u of cornerUppers(project)) {
+    if (u.a.id === c.id) gaps.push(u.ta < len / 2 ? [0, CORNER_UPPER] : [len - CORNER_UPPER, len]);
+    if (u.b.id === c.id) gaps.push(u.tb < len / 2 ? [0, CORNER_UPPER] : [len - CORNER_UPPER, len]);
+  }
   const host = counterHost(project, c);
   if (host) {
     const sign = host.tb >= host.ta ? 1 : -1;
@@ -423,13 +436,42 @@ function wallCounter(w: Wall, side: 1 | -1, t0: number, t1: number, id: string):
   return { id, a: face(lo), b: face(hi), depth: COUNTER_DEPTH, side, island: false, cutouts: [] };
 }
 
+/** Where the inside faces of two crossing walls meet, and how far along each wall that is. */
+function faceCorner(A: Wall, fa: ReturnType<typeof faceToward>, B: Wall, fb: ReturnType<typeof faceToward>): { at: Point; tA: number; tB: number } | null {
+  const [dA, dB] = [wallDir(A), wallDir(B)];
+  const den = dA.x * dB.y - dA.y * dB.x;
+  if (Math.abs(den) < 0.98) return null;
+  const [p0, q0] = [fa.at(0), fb.at(0)];
+  const s = ((q0.x - p0.x) * dB.y - (q0.y - p0.y) * dB.x) / den;
+  const at = { x: p0.x + dA.x * s, y: p0.y + dA.y * s };
+  const [tA, tB] = [projectOnWall(A, at).along, projectOnWall(B, at).along];
+  if (tA < -A.thickness || tA > wallLength(A) + A.thickness || tB < -B.thickness || tB > wallLength(B) + B.thickness) return null;
+  return { at, tA, tB };
+}
+
+/** Walls whose line `p` is within reach of (36" past the face), turned square to / parallel with `dir`. */
+function wallsBy(project: Project, p: Point, dir: Point, square: boolean, skip: string[]): Wall[] {
+  return project.walls
+    .filter((w) => {
+      if (skip.includes(w.id)) return false;
+      const d = wallDir(w);
+      const dot = Math.abs(dir.x * d.x + dir.y * d.y);
+      if (square ? dot > 0.02 : dot < 0.98) return false;
+      const { along, perp } = projectOnWall(w, p);
+      return perp <= w.thickness / 2 + 36 && along >= 0 && along <= wallLength(w);
+    })
+    .sort((a, b) => projectOnWall(a, p).perp - projectOnWall(b, p).perp);
+}
+
 /**
  * Counters from one Counter-tool drag. Starting by one wall and ending by a
  * wall square to it, past the corner where their inside faces meet, makes an
- * L: a run on each face, sharing the corner square. Anything else is one
- * counter, as newCounter.
+ * L: a run on each face, sharing the corner square. Ending by the wall facing
+ * the first one makes a U: a run on each of the two and one along the wall
+ * that joins them (the one nearest the drag). Anything else is one counter,
+ * as newCounter.
  */
-export function newCounters(project: Project, start: Point, end: Point, ids: [string, string]): Counter[] {
+export function newCounters(project: Project, start: Point, end: Point, ids: string[]): Counter[] {
   const one = newCounter(project, start, end, ids[0]);
   if (one.island) return [one];
   const host = nearestWall(project.walls, start, 36)!.wall;
@@ -437,37 +479,45 @@ export function newCounters(project: Project, start: Point, end: Point, ids: [st
   const own = projectOnWall(host, end);
   if (own.perp <= host.thickness / 2 + 36 && own.along >= 0 && own.along <= wallLength(host)) return [one];
   const dA = wallDir(host);
-  let best: { w: Wall; perp: number } | null = null;
+  const fa = faceToward(host, start);
+  const sA = Math.round(projectOnWall(host, start).along);
+  // Each leg must reach past the corner square to be worth a counter.
+  const long = (c: Counter) => counterLength(c) >= COUNTER_DEPTH + MIN_COUNTER_SPACE;
+  const B = wallsBy(project, end, dA, true, [host.id])[0];
+  if (B) {
+    const fb = faceToward(B, end);
+    const k = faceCorner(host, fa, B, fb);
+    if (!k) return [one];
+    const first = wallCounter(host, fa.side, sA, k.tA, ids[0]);
+    const second = wallCounter(B, fb.side, k.tB, Math.round(projectOnWall(B, end).along), ids[1]);
+    return long(first) && long(second) ? [first, second] : [one];
+  }
+  // A U: the facing wall by the end, and a wall square to both that meets each one's face.
+  const C = wallsBy(project, end, dA, false, [host.id])[0];
+  if (!C || ids.length < 3) return [one];
+  const fc = faceToward(C, end);
+  if (fa.side * fc.side * (wallNormal(host).x * wallNormal(C).x + wallNormal(host).y * wallNormal(C).y) > 0) return [one];
+  const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  let best: { B: Wall; ab: NonNullable<ReturnType<typeof faceCorner>>; cb: NonNullable<ReturnType<typeof faceCorner>>; gap: number } | null = null;
   for (const w of project.walls) {
-    if (w.id === host.id) continue;
+    if (w.id === host.id || w.id === C.id) continue;
     const d = wallDir(w);
     if (Math.abs(dA.x * d.x + dA.y * d.y) > 0.02) continue;
-    const { along, perp } = projectOnWall(w, end);
-    if (perp > w.thickness / 2 + 36 || along < 0 || along > wallLength(w)) continue;
-    if (!best || perp < best.perp) best = { w, perp };
+    const fb = faceToward(w, mid);
+    const ab = faceCorner(host, fa, w, fb);
+    const cb = faceCorner(C, fc, w, fb);
+    if (!ab || !cb) continue;
+    const gap = projectOnWall(w, mid).perp;
+    if (!best || gap < best.gap) best = { B: w, ab, cb, gap };
   }
   if (!best) return [one];
-  const B = best.w;
-  const fa = faceToward(host, start);
-  const fb = faceToward(B, end);
-  // Corner: where the two inside faces cross.
-  const p0 = fa.at(0);
-  const q0 = fb.at(0);
-  const dB = wallDir(B);
-  const den = dA.x * dB.y - dA.y * dB.x;
-  const s = ((q0.x - p0.x) * dB.y - (q0.y - p0.y) * dB.x) / den;
-  const corner = { x: p0.x + dA.x * s, y: p0.y + dA.y * s };
-  const tA = projectOnWall(host, corner).along;
-  const tB = projectOnWall(B, corner).along;
-  const slack = (w: Wall) => w.thickness;
-  if (tA < -slack(host) || tA > wallLength(host) + slack(host) || tB < -slack(B) || tB > wallLength(B) + slack(B)) return [one];
-  const sA = Math.round(projectOnWall(host, start).along);
-  const eB = Math.round(projectOnWall(B, end).along);
-  const first = wallCounter(host, fa.side, sA, tA, ids[0]);
-  const second = wallCounter(B, fb.side, tB, eB, ids[1]);
-  // Each leg must reach past the corner square to be worth a counter.
-  if (counterLength(first) < COUNTER_DEPTH + MIN_COUNTER_SPACE || counterLength(second) < COUNTER_DEPTH + MIN_COUNTER_SPACE) return [one];
-  return [first, second];
+  const fb = faceToward(best.B, mid);
+  const legs = [
+    wallCounter(host, fa.side, sA, best.ab.tA, ids[0]),
+    wallCounter(best.B, fb.side, best.ab.tB, best.cb.tB, ids[1]),
+    wallCounter(C, fc.side, best.cb.tA, Math.round(projectOnWall(C, end).along), ids[2]),
+  ];
+  return legs.every(long) ? legs : [one];
 }
 
 export interface CornerUnit {
@@ -508,4 +558,136 @@ export function seats(project: Project, c: Counter): number[] {
 export function flipCounter(c: Counter): Pick<Counter, 'a' | 'b' | 'side'> {
   const n = counterFront(c);
   return { a: { x: c.a.x + n.x * c.depth, y: c.a.y + n.y * c.depth }, b: { x: c.b.x + n.x * c.depth, y: c.b.y + n.y * c.depth }, side: c.side === 1 ? -1 : 1 };
+}
+
+// ── v5: corner wall cabinets, cabinet layout ──────────────────────────────
+
+/** A diagonal corner wall cabinet: 24" along each wall from the inside corner. */
+export const CORNER_UPPER = 24;
+
+export interface CornerUpper {
+  a: Counter;
+  b: Counter;
+  /** Which end of each run is at the corner (0 or its length). */
+  ta: number;
+  tb: number;
+  /** Plan outline: the inside corner, 24" along each wall, 12" deep, cut on the diagonal. */
+  outline: Point[];
+}
+
+/** Where two wall counters with wall cabinets meet in an L: one corner wall cabinet instead of two overlapping runs. */
+export function cornerUppers(project: Project): CornerUpper[] {
+  const out: CornerUpper[] = [];
+  for (const o of counterOverlaps(project)) {
+    if (!hasUppers(o.a) || !hasUppers(o.b)) continue;
+    const [la, lb] = [counterLength(o.a), counterLength(o.b)];
+    // An L meets at a run's end; a run crossing another mid-way isn't a corner.
+    const end = (span: [number, number], len: number) => (span[0] <= 1 ? 0 : span[1] >= len - 1 ? len : null);
+    const [ta, tb] = [end(o.onA, la), end(o.onB, lb)];
+    if (ta === null || tb === null || la < CORNER_UPPER || lb < CORNER_UPPER) continue;
+    const ia = ta === 0 ? CORNER_UPPER : la - CORNER_UPPER;
+    const ib = tb === 0 ? CORNER_UPPER : lb - CORNER_UPPER;
+    out.push({
+      a: o.a,
+      b: o.b,
+      ta,
+      tb,
+      outline: [counterPoint(o.a, ta, 0), counterPoint(o.a, ia, 0), counterPoint(o.a, ia, UPPER_DEPTH), counterPoint(o.b, ib, UPPER_DEPTH), counterPoint(o.b, ib, 0)],
+    });
+  }
+  return out;
+}
+
+/** Stock base-cabinet widths run 9" to 36" in 3" steps (wider ones exist; this keeps doors a usual size). */
+export const CABINET_MIN = 9;
+export const CABINET_MAX = 36;
+export const CABINET_STEP = 3;
+
+export type CabinetKind = 'base' | 'sink' | 'appliance' | 'tall' | 'corner' | 'filler' | 'joined';
+
+export interface CabinetSlot {
+  s: number;
+  e: number;
+  kind: CabinetKind;
+  label: string;
+}
+
+/** Fill a stretch with stock widths: as few as fit under 36", near-equal, the odd inch or two left as a filler. */
+export function fillStretch(len: number): number[] {
+  if (len < CABINET_MIN - 1e-6) return [];
+  const n = Math.ceil(len / CABINET_MAX - 1e-9);
+  const base = Math.floor(len / n / CABINET_STEP + 1e-9) * CABINET_STEP;
+  const widths = Array<number>(n).fill(base);
+  let rem = len - n * base;
+  for (let i = 0; i < n && rem >= CABINET_STEP - 1e-6 && widths[i] + CABINET_STEP <= CABINET_MAX; i++) {
+    widths[i] += CABINET_STEP;
+    rem -= CABINET_STEP;
+  }
+  return widths;
+}
+
+/**
+ * The run broken into cabinets along its length: the corner unit, a sink base
+ * under the sink (the sink's width rounded up to a stock size), gaps for the
+ * dishwasher, range and fridge, tall cabinets, and stock-width base cabinets in
+ * between, with fillers making up what's left (against a wall or the corner
+ * where there is one).
+ */
+export function cabinetLayout(project: Project, c: Counter): CabinetSlot[] {
+  const len = counterLength(c);
+  const taken: CabinetSlot[] = [];
+  const clip = (s: number, e: number): [number, number] => [Math.max(0, s), Math.min(len, e)];
+  const join = peninsulaJoin(project, c);
+  if (join && join.cut > TOL) taken.push({ ...(join.end === 'a' ? { s: 0, e: join.cut } : { s: len - join.cut, e: len }), kind: 'joined', label: 'joins the run' });
+  for (const k of cornerCabinets(project)) {
+    if (k.a.id !== c.id && k.b.id !== c.id) continue;
+    const ov = counterOverlaps(project).find((o) => (o.a.id === k.a.id && o.b.id === k.b.id) || (o.a.id === k.b.id && o.b.id === k.a.id));
+    if (!ov) continue;
+    const [s, e] = ov.a.id === c.id ? ov.onA : ov.onB;
+    if (join && c.island) continue; // a peninsula's joined end is already out
+    taken.push({ s, e, kind: 'corner', label: k.kind === 'lazy-susan' ? 'Corner (lazy susan)' : 'Corner (blind)' });
+  }
+  for (const k of c.cutouts) {
+    const stock = Math.ceil(k.width / CABINET_STEP - 1e-9) * CABINET_STEP;
+    const [s, e] = clip(k.offset - k.width / 2, k.offset + k.width / 2);
+    if (k.kind === 'sink') taken.push({ s, e, kind: 'sink', label: `SB${stock}` });
+    else if (k.kind === 'pantry' || k.kind === 'oven') taken.push({ s, e, kind: 'tall', label: `${k.kind === 'pantry' ? 'Pantry' : 'Oven'} ${stock}` });
+    else taken.push({ s, e, kind: 'appliance', label: `${CUTOUT_LABEL[k.kind]} ${formatIn(k.width)}` });
+  }
+  taken.sort((p, q) => p.s - q.s);
+  const out: CabinetSlot[] = [];
+  let at = 0;
+  const host = counterHost(project, c);
+  const stretch = (s: number, e: number) => {
+    const span = e - s;
+    if (span <= TOL) return;
+    const widths = fillStretch(span);
+    const used = widths.reduce((t, w) => t + w, 0);
+    const filler = span - used;
+    // The filler goes at a wall or corner end of the stretch (it gets scribed to fit); else at its far end.
+    const atStart = (s <= TOL && !!host) || out.at(-1)?.kind === 'corner' || out.at(-1)?.kind === 'joined';
+    let t = s;
+    if (filler > TOL && atStart) out.push({ s: t, e: (t += filler), kind: 'filler', label: `Filler ${formatIn(filler)}` });
+    for (const w of widths) out.push({ s: t, e: (t += w), kind: 'base', label: `B${w}` });
+    if (filler > TOL && !atStart) out.push({ s: t, e: (t += filler), kind: 'filler', label: `Filler ${formatIn(filler)}` });
+  };
+  for (const k of taken) {
+    if (k.e <= at + TOL) continue;
+    stretch(at, Math.max(at, k.s));
+    const s = Math.max(at, k.s);
+    out.push({ ...k, s });
+    at = k.e;
+  }
+  stretch(at, len);
+  return out;
+}
+
+/** 1-1/2" style inches for cabinet labels. */
+function formatIn(n: number): string {
+  const whole = Math.floor(n + 1e-6);
+  const eighths = Math.round((n - whole) * 8);
+  if (eighths === 8) return `${whole + 1}"`;
+  if (!eighths) return `${whole}"`;
+  const [num, den] = eighths % 4 === 0 ? [eighths / 4, 2] : eighths % 2 === 0 ? [eighths / 2, 4] : [eighths, 8];
+  return whole ? `${whole}-${num}/${den}"` : `${num}/${den}"`;
 }

@@ -180,6 +180,8 @@ export interface Counter {
   uppers?: boolean;
   /** Islands / peninsulas: how much of the depth, at the front, is seating overhang (knee space, no cabinets under). */
   seating?: number;
+  /** Islands / peninsulas: the top at bar height (42") instead of counter height (36"). */
+  bar?: boolean;
   /** The corner cabinet where this counter meets another (an L or a peninsula's end); see cornerCabinets. */
   corner?: CornerCabinet;
 }

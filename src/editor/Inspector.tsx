@@ -49,7 +49,7 @@ import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { centrelineForFace, faceSpans, outerSides } from '../calc/faces.ts';
 import { MAX_FLIGHT_RISE, stairGeometry } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
-import { cornerCabinets, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, KNEE_SPACE, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
+import { BAR_HEIGHT, cabinetLayout, cornerCabinets, cornerUppers, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, kneeSpaceFor, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 
 interface Props {
@@ -483,7 +483,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           <label className="link-row">
             <input type="checkbox" checked={c.uppers !== false} onChange={(e) => up({ uppers: e.target.checked })} /> Wall cabinets above
             {c.uppers !== false && (
-              <span className="muted"> · {formatFtIn(upperSpans(project, c).reduce((s, [a, b]) => s + b - a, 0), { compact: true })}, skipping windows and the range hood</span>
+              <span className="muted">
+                {' '}
+                · {formatFtIn(upperSpans(project, c).reduce((s, [a, b]) => s + b - a, 0), { compact: true })}, skipping windows and the range hood
+                {cornerUppers(project).some((u) => u.a.id === c.id || u.b.id === c.id) ? ', plus a 24" corner wall cabinet' : ''}
+              </span>
             )}
           </label>
         )}
@@ -512,7 +516,10 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         })}
         {c.island && (
           <>
-            <Field label="Seating overhang" hint={`Knee space at the front, no cabinets under; ${KNEE_SPACE}" suits a 36" counter (NKBA). 0 = no seating`}>
+            <label className="link-row">
+              <input type="checkbox" checked={!!c.bar} onChange={(e) => up({ bar: e.target.checked || undefined })} /> Bar height ({BAR_HEIGHT}")
+            </label>
+            <Field label="Seating overhang" hint={`Knee space at the front, no cabinets under; ${kneeSpaceFor(c)}" suits ${c.bar ? 'a 42" bar top' : 'a 36" counter'} (NKBA). 0 = no seating`}>
               <LengthInput value={c.seating ?? 0} min={0} onChange={(v) => up({ seating: v > 0 ? Math.min(v, c.depth - MIN_COUNTER_SPACE) : undefined })} />
             </Field>
             {(c.seating ?? 0) > 0 && (
@@ -525,6 +532,14 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             )}
           </>
         )}
+        <div className="field">
+          <span>Cabinets, start to end</span>
+          <p className="small cabinet-list">
+            {cabinetLayout(project, c)
+              .map((k) => k.label)
+              .join(' · ') || '—'}
+          </p>
+        </div>
         <div className="stat-grid">
           <Stat label="Countertop" value={`${Math.round((len * c.depth) / 144)} sq ft`} />
           <Stat label="Counter spaces" value={spaces} />

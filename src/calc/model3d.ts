@@ -5,7 +5,7 @@ import { FURNITURE, isFixture } from './furniture.ts';
 import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
-import { COUNTER_HEIGHT, counterDir, counterLength, counterPoint, FRIDGE_HEIGHT, seatingDepth, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
+import { counterDir, counterHeight, cornerUppers, counterLength, counterPoint, FRIDGE_HEIGHT, seatingDepth, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
 // Axes: plan x → X, plan y → Z, height → Y (up). Inches throughout.
@@ -221,10 +221,11 @@ export function buildScene(project: Project): Scene3D {
     const knee = seatingDepth(c);
     const base = c.depth - knee;
     const mid = counterPoint(c, len / 2, base / 2);
-    boxes.push({ kind: 'counter', c: [mid.x, COUNTER_HEIGHT / 2, mid.y], size: [len, COUNTER_HEIGHT, base], rotY: -Math.atan2(d.y, d.x) });
+    const h = counterHeight(c);
+    boxes.push({ kind: 'counter', c: [mid.x, h / 2, mid.y], size: [len, h, base], rotY: -Math.atan2(d.y, d.x) });
     if (knee > 0) {
       const top = counterPoint(c, len / 2, base + knee / 2);
-      boxes.push({ kind: 'counter', c: [top.x, COUNTER_HEIGHT - 0.75, top.y], size: [len, 1.5, knee], rotY: -Math.atan2(d.y, d.x) });
+      boxes.push({ kind: 'counter', c: [top.x, h - 0.75, top.y], size: [len, 1.5, knee], rotY: -Math.atan2(d.y, d.x) });
     }
     for (const [s, e] of upperSpans(project, c)) {
       const at = counterPoint(c, (s + e) / 2, UPPER_DEPTH / 2);
@@ -234,6 +235,14 @@ export function buildScene(project: Project): Scene3D {
       const h = k.kind === 'fridge' ? FRIDGE_HEIGHT : TALL_HEIGHT;
       const at = counterPoint(c, k.offset, c.depth / 2);
       boxes.push({ kind: 'counter', c: [at.x, h / 2, at.y], size: [k.width, h, c.depth], rotY: -Math.atan2(d.y, d.x) });
+    }
+  }
+  // Corner wall cabinets: a 24" × 12" box along each wall from the inside corner.
+  for (const u of cornerUppers(project)) {
+    for (const [c, t] of [[u.a, u.ta], [u.b, u.tb]] as const) {
+      const d = counterDir(c);
+      const at = counterPoint(c, t === 0 ? 12 : t - 12, UPPER_DEPTH / 2);
+      boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + UPPER_TOP) / 2, at.y], size: [24, UPPER_TOP - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
     }
   }
   for (const f of project.furniture) {

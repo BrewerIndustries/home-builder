@@ -611,6 +611,15 @@ svg.plan {
 .furniture.sel line {
   stroke: var(--accent);
 }
+.cabinets line {
+  stroke: var(--counter-edge);
+  pointer-events: none;
+}
+.cabinets text {
+  fill: var(--muted);
+  font-weight: 600;
+  pointer-events: none;
+}
 .upper {
   fill: none;
   stroke: var(--counter-edge);

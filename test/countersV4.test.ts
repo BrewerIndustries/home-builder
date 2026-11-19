@@ -79,7 +79,7 @@ test('island seating: overhang drawn as knee space, a stool per 24", NKBA wants 
   assert.deepEqual(seats(p, p.counters[0]), [12, 36, 60, 84]);
   const knee = kitchenChecks(p).find((c) => c.rule.startsWith('Seating knee space'))!;
   assert.equal(knee.status, 'warn');
-  assert.match(knee.message, /1' 0" overhang, 4 seats — wants 15"/);
+  assert.match(knee.message, /1' 0" overhang at counter height \(36"\), 4 seats — wants 15"/);
   const ok = kitchen([{ ...isl, seating: 15 }]);
   assert.equal(kitchenChecks(ok).find((c) => c.rule.startsWith('Seating knee space'))!.status, 'pass');
   // 3D: cabinets 21" deep plus a 1-1/2" top over the overhang.

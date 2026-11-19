@@ -80,7 +80,8 @@ test('wall cabinets skip windows and the range; they can be turned off', () => {
   const a = c.a.x;
   // Range 15–45 along the counter; the window's 62–98 on the wall is 58.75–94.75 along the counter (which starts at x = 3.25).
   assert.equal(a, 3.25);
-  assert.deepEqual(upperSpans(p, c).map(([s, e]) => [Math.round(s), Math.round(e)]), [[0, 15], [45, 59], [95, 117]]);
+  // (Counters v5: the first 24" by the L corner is the corner wall cabinet, so 0–15 isn't a run of its own.)
+  assert.deepEqual(upperSpans(p, c).map(([s, e]) => [Math.round(s), Math.round(e)]), [[45, 59], [95, 117]]);
   assert.equal(qty(p, 'Range hood (allowance)'), 1);
   assert.ok(qty(p, 'Wall cabinets (allowance)') > 0);
   p = projectReducer(p, { type: 'updateCounter', id: top.id, patch: { uppers: false } });

@@ -469,7 +469,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       case 'counter': {
         const p = { x: Math.round(raw.x), y: Math.round(raw.y) };
         drag.current = { kind: 'newCounter', start: p, end: p };
-        setCounterDraft(newCounters(project, p, p, ['draft', 'draft2']));
+        setCounterDraft(newCounters(project, p, p, ['draft', 'draft2', 'draft3']));
         return;
       }
       case 'door':
@@ -633,7 +633,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     }
     if (d?.kind === 'newCounter') {
       d.end = { x: Math.round(raw.x), y: Math.round(raw.y) };
-      setCounterDraft(newCounters(project, d.start, d.end, ['draft', 'draft2']));
+      setCounterDraft(newCounters(project, d.start, d.end, ['draft', 'draft2', 'draft3']));
       return;
     }
     if (d?.kind === 'counter') {
@@ -742,8 +742,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     setRoomDrag(null);
     if (d?.kind === 'newCounter') {
       setCounterDraft([]);
-      // One drag can make an L: two counters, one undo step.
-      const counters = newCounters(project, d.start, d.end, [uid('ct'), uid('ct')]);
+      // One drag can make an L or a U: two or three counters, one undo step.
+      const counters = newCounters(project, d.start, d.end, [uid('ct'), uid('ct'), uid('ct')]);
       dispatch({ type: 'addCounters', counters });
       setSelection({ kind: 'counter', id: counters[0].id });
       return;
@@ -1039,7 +1039,7 @@ function hintFor(tool: Tool, drawing: boolean): string {
     case 'furniture':
       return 'Click to place the chosen fixture or furniture — near a wall its back goes flat against it · drag to move (Shift = free-standing) · turn it in the panel';
     case 'counter':
-      return 'Drag along a wall for a counter on that face (click = 6 ft) · carry the drag round a corner onto the next wall for an L · drag in open floor for an island · add a sink, range or tall cabinet in the panel';
+      return 'Drag along a wall for a counter on that face (click = 6 ft) · carry the drag round a corner onto the next wall for an L, or across to the facing wall for a U · drag in open floor for an island · add a sink, range or tall cabinet in the panel';
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
     case 'dimension':

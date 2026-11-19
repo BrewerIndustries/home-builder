@@ -3,7 +3,7 @@ import { exclusiveArea } from '../calc/regions.ts';
 import { isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
-import { counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
+import { cabinetLayout, cornerUppers, counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
 import { openingChains, partitionStrings, runningLabels, type Keepout, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, UserDim, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
@@ -51,6 +51,40 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       ))}
       {project.counters.map((c) => (
         <CounterGlyph key={c.id} c={c} selected={selection?.kind === 'counter' && selection.id === c.id} px={px} seatAt={seats(project, c)} />
+      ))}
+      {project.counters.map((c) => {
+        // Cabinet joints along the cabinet face (a short tick), labelled on the selected run.
+        const sel = selection?.kind === 'counter' && selection.id === c.id;
+        const cab = c.depth - seatingDepth(c);
+        const slots = cabinetLayout(project, c);
+        return (
+          <g key={`${c.id}cab`} className="cabinets">
+            {slots.slice(1).map((k) => {
+              const [p, q] = [counterPoint(c, k.s, cab - 4), counterPoint(c, k.s, cab)];
+              return <line key={k.s} x1={p.x} y1={p.y} x2={q.x} y2={q.y} strokeWidth={px(1)} />;
+            })}
+            {sel &&
+              slots
+                .filter((k) => k.kind === 'base' || k.kind === 'filler' || k.kind === 'sink')
+                .map((k) => {
+                  const at = counterPoint(c, (k.s + k.e) / 2, cab - 7);
+                  return (
+                    <text key={`t${k.s}`} x={at.x} y={at.y} fontSize={px(9)} textAnchor="middle" dominantBaseline="central">
+                      {k.kind === 'filler' ? 'F' : k.label}
+                    </text>
+                  );
+                })}
+          </g>
+        );
+      })}
+      {cornerUppers(project).map((u) => (
+        <polygon
+          key={`${u.a.id}${u.b.id}cu`}
+          className="upper"
+          points={u.outline.map((p) => `${p.x},${p.y}`).join(' ')}
+          strokeWidth={px(1)}
+          strokeDasharray={`${px(4)} ${px(3)}`}
+        />
       ))}
       {project.counters.flatMap((c) =>
         // Wall cabinets overhead: dashed, the usual plan convention for things above the cut.
