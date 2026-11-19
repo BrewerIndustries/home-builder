@@ -4,6 +4,7 @@ import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
 import { followDims } from '../calc/faces.ts';
+import { applyGroupOp, pasteClip, type Clip, type GroupOp, type SelItem } from './selection.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -69,6 +70,10 @@ export type Action =
   | { type: 'rotateRoom'; id: string; deg: number; pivot?: Point; transient?: boolean }
   | { type: 'moveRoom'; id: string; delta: Point; transient?: boolean }
   | { type: 'mirrorRoom'; id: string; axis: 'x' | 'y' }
+  /** Several picked items moved, turned, mirrored, aligned or spaced out together (one undo step, or a drag's transient steps). */
+  | { type: 'groupEdit'; sel: SelItem[]; op: GroupOp; transient?: boolean }
+  /** A copied clip, already given new ids and placed (see placeClip). */
+  | { type: 'paste'; clip: Clip }
   | { type: 'addFurniture'; item: Furniture }
   | { type: 'updateFurniture'; id: string; patch: Partial<Omit<Furniture, 'id'>>; transient?: boolean }
   | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
@@ -214,6 +219,12 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'mirrorRoom':
       return followWalls(p, reclampOpenings(mirrorRoom(p, action.id, action.axis)));
+
+    case 'groupEdit':
+      return followWalls(p, reclampOpenings(applyGroupOp(p, action.sel, action.op)));
+
+    case 'paste':
+      return reclampOpenings(pasteClip(p, action.clip));
 
     case 'splitWall':
       return splitWall(p, action.id, action.at, action.newId);
