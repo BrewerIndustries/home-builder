@@ -4,6 +4,8 @@
 // All lengths are in INCHES. Plan coordinates are inches too: x grows right,
 // y grows down (screen convention), origin is arbitrary.
 
+import type { Irrigation } from './irrigation.ts';
+
 export interface Point {
   x: number;
   y: number;
@@ -287,6 +289,8 @@ export interface Site {
   zone?: number;
   areas: SiteArea[];
   plants: Plant[];
+  /** Sprinkler / drip layout (src/model/irrigation.ts). */
+  irrigation?: Irrigation;
 }
 
 /** A traced-over picture of an existing floorplan, placed in plan space. */

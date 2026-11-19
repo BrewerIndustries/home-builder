@@ -8,11 +8,12 @@ import { dist, orthoFrom, pointInPolygon, polygonArea, polygonCentroid, snapToGr
 import type { Action } from '../model/store.ts';
 import { EMPTY_SITE, uid, type Point, type Project, type SurfaceMaterial } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
+import { useIrrigationTool } from './IrrigationLayer.tsx';
 
 // Site plan: lot outline + setbacks, hardscape / bed areas and plants, drawn around
 // the house in the floor plan's own coordinates.
 
-type SiteTool = 'select' | 'lot' | 'area' | 'plant';
+type SiteTool = 'select' | 'lot' | 'area' | 'plant' | 'irrigation';
 type SiteSel = { kind: 'lot' } | { kind: 'area'; id: string } | { kind: 'plant'; id: string };
 interface View {
   scale: number;
@@ -29,6 +30,7 @@ const TOOLS: { id: SiteTool; label: string; key: string; icon: string }[] = [
   { id: 'lot', label: 'Lot', key: 'l', icon: '⬠' },
   { id: 'area', label: 'Area', key: 'a', icon: '▨' },
   { id: 'plant', label: 'Plant', key: 'p', icon: '✿' },
+  { id: 'irrigation', label: 'Irrigation', key: 'i', icon: '≋' },
 ];
 const MATERIALS = Object.keys(MATERIAL_LABEL) as SurfaceMaterial[];
 const FORMS = Object.keys(FORM_LABEL) as PlantForm[];
@@ -50,6 +52,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
   const drag = useRef<Drag | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
+  const irr = useIrrigationTool(project, dispatch, view.scale, tool === 'irrigation');
 
   const toWorld = (sx: number, sy: number): Point => {
     const r = svgRef.current!.getBoundingClientRect();
@@ -133,6 +136,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
     const down = (e: KeyboardEvent) => {
       if (e.key === 'Shift') setShift(true);
       if (isField(e) || e.metaKey || e.ctrlKey) return;
+      if (tool === 'irrigation' && irr.onKey(e)) return void e.preventDefault();
       if (e.key === 'Escape') {
         if (draft.length) setDraft([]);
         else setSel(null);
@@ -193,6 +197,10 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
       drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
       return;
     }
+    if (tool === 'irrigation') {
+      if (!irr.onDown(raw)) drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
+      return;
+    }
     if (tool === 'lot' || tool === 'area') {
       const p = snap(raw, draft.at(-1));
       if (draft.length >= 3 && dist(p, draft[0]) <= SNAP_PX / view.scale) closeDraft();
@@ -224,6 +232,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     const raw = toWorld(e.clientX, e.clientY);
+    if (tool === 'irrigation' && irr.onMove(raw)) return;
     const d = drag.current;
     if (!d) {
       setCursor(tool === 'lot' || tool === 'area' ? snap(raw, draft.at(-1)) : raw);
@@ -268,7 +277,10 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
           style={{ cursor: tool === 'select' ? 'default' : 'crosshair' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={() => (drag.current = null)}
+          onPointerUp={() => {
+            drag.current = null;
+            irr.onUp();
+          }}
           onPointerCancel={() => (drag.current = null)}
           onPointerLeave={() => !drag.current && setCursor(null)}
           onDoubleClick={() => closeDraft(draft.slice(0, -1).length >= 3 ? draft.slice(0, -1) : draft)}
@@ -319,6 +331,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
                 </g>
               );
             })}
+            {irr.svg(px)}
             {sp?.pts.map((v, i) => <rect key={i} className="handle" x={v.x - px(4)} y={v.y - px(4)} width={px(8)} height={px(8)} strokeWidth={px(1.5)} />)}
             {draft.length > 0 && (
               <g className="preview">
@@ -333,14 +346,16 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
           </g>
         </svg>
         <div className="hint">
-          {tool === 'lot' || tool === 'area'
+          {tool === 'irrigation'
+            ? irr.hint
+            : tool === 'lot' || tool === 'area'
             ? 'Click corners · click the first corner, double-click or Enter to close · Shift = any angle · Esc cancels'
             : tool === 'plant'
               ? `Click to plant ${PLANT_BY_ID.get(species)?.name} — circles show mature spread`
               : 'Click to select · drag plants or outline corners · drag empty space to pan · ⌘-scroll to zoom'}
         </div>
       </div>
-      <SiteInspector
+      {tool === 'irrigation' ? irr.panel : <SiteInspector
         project={project}
         dispatch={dispatch}
         sel={sel}
@@ -351,7 +366,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
         species={species}
         setSpecies={setSpecies}
         onLotCreated={() => requestAnimationFrame(fit)}
-      />
+      />}
     </main>
   );
 }
