@@ -26,7 +26,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Foundation v2: basement type (walls, slab, footing drain R405.1, damp/waterproofing R406, foam, window wells R310), interior bearing footings (R403.1.1 minimum), pier pad size + rebar allowance, foundation in 3D; soil / storeys inputs only point to Table R403.1
 - [ ] Foundation v3: Table R403.1 footing widths (needs verified values); window wells placed on the plan; sample prices for the basement lines; post / pier lines under bearing footings
 - [x] Floor joist layout + subfloor sheet layout (crawlspace floors: joists over girders, piers, staggered T&G sheets; framing plan on the Framing tab)
-- [ ] Floor v2: joist hangers / cantilevers, openings for stairs, I-joists, floor insulation, framed floors on upper storeys
+- [x] Floor v2: joist hangers / cantilevers, openings for stairs, I-joists, floor insulation, framed floors on upper storeys
+- [ ] Floor v3: stair openings on single-storey plans over a basement; one opening per flight for L / U stairs; outrigger cantilevers along joist-parallel edges; per-storey joist size / type; floor checks in the Code check tab
 - [x] Cut lists optimised to stock lengths, with waste report (Framing tab: plates / jacks / cripples / sills / header plies, FFD onto 8'–16' with 1/8" kerf, boards per stock, waste %, keepable offcuts, per-board diagram, CSV)
 - [x] Cut lists v2: optional "price these boards" — the Estimate uses the cut list's boards by stock length instead of plate / header LF + waste (jacks and cripples move off the stud count); top plate joints offset ≥ 24" from the cap plate's (R602.3.2)
 - [x] Cut lists v3: plate joints landed on studs; roof (rafters, ridge, fascia) and floor (rim, blocking) members in the cut list; kept offcuts listed as blocking stock; a printable cut sheet

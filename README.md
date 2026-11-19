@@ -221,6 +221,14 @@ The checks cover the following:
   - Headroom is checked along the walk line.
   - An Attic access hatch (Fixture tool) is checked against M1305.1.3 (20"×30" opening, passageway, 30"×30" service space). Handrail continuity (R311.7.8.2) and under-floor access (M1305.1.4) get info notes.
 
+- **Floor v2.**
+  - Joists can hang flush between girders.
+  - Cantilevers are set per edge. The back-span rule of thumb is labelled as such, not as a code figure.
+  - Stair openings are framed with doubled headers and trimmers.
+  - I-joists can be picked by series and depth, priced per foot with rim board.
+  - Floor insulation batts are added only when chosen.
+  - Storeys above the lowest get a real framed-floor plan on the Framing tab, bearing on the walls below. Joist direction, cantilevers and insulation are set per storey.
+
 ## Code layout
 
 ```
