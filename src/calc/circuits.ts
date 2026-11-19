@@ -10,7 +10,7 @@ import { exclusiveArea } from './regions.ts';
 // Branch circuits. Every receptacle, light, alarm and fixed appliance on the plan is
 // grouped onto a circuit; the user can move any device to another circuit (or a new
 // one) and override a circuit's breaker, AFCI and GFCI. The grouping follows the NEC
-// (which IRC Chapters 37–39 mirror):
+// (which IRC Chapters 37–39 mirror; section numbers as in the 2020 NEC):
 //   210.11(C)(1)  two or more 20 A small-appliance circuits for the kitchen receptacles
 //   210.52(B)(2)  … which serve no other outlets (a refrigerator's own circuit is allowed)
 //   210.11(C)(2)  a 20 A laundry circuit for the laundry receptacles
@@ -18,7 +18,7 @@ import { exclusiveArea } from './regions.ts';
 //   422.12        central heating equipment on its own branch circuit
 //   210.12        AFCI on 120 V 15/20 A circuits feeding kitchens, living spaces, bedrooms,
 //                 halls, closets, laundry areas and similar rooms (not baths, garages, outdoors)
-//   210.8         GFCI for kitchen, bath, garage, laundry and outdoor receptacles; 210.8(D) the dishwasher
+//   210.8         GFCI for kitchen, bath, garage, laundry and outdoor receptacles, and the dishwasher
 // Fixed appliances get dedicated circuits. Their loads are the nameplate the user types
 // on the appliance; until then a TYPICAL figure is used and flagged — never a code value.
 // General lighting / receptacle circuits are grouped room by room up to 600 sq ft each:

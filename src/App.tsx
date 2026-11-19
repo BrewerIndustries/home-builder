@@ -17,13 +17,14 @@ import { FURNITURE, FURNITURE_KINDS } from './calc/furniture.ts';
 import { SiteView } from './site/SiteView.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
+import { ElectricalView } from './views/Electrical.tsx';
 
-type Tab = 'plan' | 'site' | '3d' | 'framing' | 'materials' | 'code';
+type Tab = 'plan' | 'site' | '3d' | 'framing' | 'materials' | 'electrical' | 'code';
 
 // three.js is most of the 3D tab's weight — load it only when the tab opens.
 const View3D = lazy(() => import('./views/View3D.tsx'));
 
-const TAB_LABEL: Record<Tab, string> = { plan: 'Plan', site: 'Site', '3d': '3D', framing: 'Framing', materials: 'Estimate', code: 'Code check' };
+const TAB_LABEL: Record<Tab, string> = { plan: 'Plan', site: 'Site', '3d': '3D', framing: 'Framing', materials: 'Estimate', electrical: 'Electrical', code: 'Code check' };
 
 const DIM_MODES: { id: DimMode; label: string; title: string }[] = [
   { id: 'centre', label: '℄', title: 'Dimensions to wall centrelines' },
@@ -362,6 +363,7 @@ export function App() {
         <main className="report-page">
           {tab === 'framing' && <FramingView project={project} dispatch={dispatch} />}
           {tab === 'materials' && <MaterialsView project={project} dispatch={dispatch} />}
+          {tab === 'electrical' && <ElectricalView project={project} dispatch={dispatch} />}
           {tab === 'code' && (
             <CodeView
               project={project}
