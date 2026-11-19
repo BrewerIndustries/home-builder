@@ -52,6 +52,7 @@ import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry,
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { BAR_HEIGHT, cabinetLayout, cornerCabinets, cornerUppers, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, kneeSpaceFor, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
+import { DimStyleFields, OrdinatePanel } from './DimPanels.tsx';
 
 interface Props {
   project: Project;
@@ -446,6 +447,8 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     const placed = project.dims?.find((d) => d.id === id);
     const angle = project.angleDims?.find((d) => d.id === id);
     const offset = project.dimOffsets?.[id] ?? 0;
+    const ord = project.ordDims?.find((d) => d.id === id);
+    if (ord) return <OrdinatePanel project={project} dispatch={dispatch} d={ord} onDelete={() => del(id)} />;
     if (angle) {
       const a = angleBetween(project, angle.a, angle.b);
       const name = (wid: string) => `W${project.walls.findIndex((x) => x.id === wid) + 1}`;
@@ -483,7 +486,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </Field>
         )}
         {placed && (
-          <Field label="Ends" hint="An end snapped to a wall end or face corner, a door or window jamb, or a fixture's corner or centre moves with it; others stay where they were put">
+          <Field label="Ends" hint="An end snapped to a wall end or face corner, a door or window jamb, a fixture's corner or centre, a counter's end or corner, or a room's corner or centre moves with it; others stay where they were put">
             <span>
               {[placed.aAt, placed.bAt]
                 .map((at) => anchorTarget(project, at))
@@ -969,6 +972,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           <option value="running">Running (ordinate)</option>
         </select>
       </Field>
+      <DimStyleFields project={project} dispatch={dispatch} />
 
       <h4>Electrical</h4>
       <Field label="Fuel-burning appliances" hint="Gas or oil furnace, water heater or range, or a fireplace — CO alarms follow from this (R315)">

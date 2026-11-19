@@ -87,7 +87,7 @@ export function App() {
     if (!selection) return;
     if (selection.kind === 'dim') {
       // A placed dimension that's gone, or a string now hidden.
-      if ((selection.id.startsWith('dm_') && !project.dims?.some((d) => d.id === selection.id)) || project.hiddenDims?.includes(selection.id)) setSelection(null);
+      if ((selection.id.startsWith('dm_') && !project.dims?.some((d) => d.id === selection.id)) || (selection.id.startsWith('od_') && !project.ordDims?.some((d) => d.id === selection.id)) || project.hiddenDims?.includes(selection.id)) setSelection(null);
       return;
     }
     const lists = { wall: project.walls, opening: project.openings, room: project.rooms, outlet: project.outlets, switch: project.switches, fixture: project.fixtures, counter: project.counters, furniture: project.furniture };
@@ -112,7 +112,7 @@ export function App() {
       if (mod) return;
       if ((e.key === 'Delete' || e.key === 'Backspace') && selection && tab === 'plan') {
         // A built-in dimension string can't be deleted, only hidden.
-        if (selection.kind === 'dim' && !selection.id.startsWith('dm_') && !selection.id.startsWith('ang_')) dispatch({ type: 'setDimHidden', id: selection.id, hidden: true });
+        if (selection.kind === 'dim' && !selection.id.startsWith('dm_') && !selection.id.startsWith('ang_') && !selection.id.startsWith('od_')) dispatch({ type: 'setDimHidden', id: selection.id, hidden: true });
         else dispatch({ type: 'delete', ids: [selection.id] });
         setSelection(null);
         e.preventDefault();

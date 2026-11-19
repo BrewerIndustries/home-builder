@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim, type OrdinateDim, type DimLook } from './types.ts';
 import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
@@ -31,6 +31,9 @@ export type Action =
   | { type: 'addAngleDim'; dim: AngleDim }
   | { type: 'setScheduleBy'; by: 'kind' | 'room' }
   | { type: 'addDim'; dim: UserDim; offset: number }
+  | { type: 'addOrdDim'; dim: OrdinateDim }
+  | { type: 'updateOrdDim'; id: string; patch: Partial<Omit<OrdinateDim, 'id'>> }
+  | { type: 'setDimLook'; patch: DimLook }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
@@ -150,6 +153,18 @@ export function projectReducer(p: Project, action: Action): Project {
     case 'addDim':
       return { ...p, dims: [...(p.dims ?? []), action.dim], dimOffsets: action.offset ? { ...p.dimOffsets, [action.dim.id]: action.offset } : p.dimOffsets };
 
+    case 'addOrdDim':
+      return { ...p, ordDims: [...(p.ordDims ?? []), action.dim] };
+
+    case 'updateOrdDim':
+      return p.ordDims?.some((d) => d.id === action.id) ? { ...p, ordDims: p.ordDims.map((d) => (d.id === action.id ? { ...d, ...action.patch } : d)) } : p;
+
+    case 'setDimLook': {
+      // Unset keys go back to the defaults (1× text, ticks); an all-default look is dropped.
+      const look = Object.fromEntries(Object.entries({ ...p.dimLook, ...action.patch }).filter(([k, v]) => v !== undefined && !(k === 'text' && v === 1) && !(k === 'ends' && v === 'tick')));
+      return { ...p, dimLook: Object.keys(look).length ? look : undefined };
+    }
+
     case 'setDimFaces':
       return { ...p, dimFaces: action.faces };
 
@@ -250,6 +265,10 @@ export function projectReducer(p: Project, action: Action): Project {
         furniture: p.furniture.filter((f) => !ids.has(f.id)),
         ...(p.dims?.some((d) => ids.has(d.id)) && {
           dims: p.dims.filter((d) => !ids.has(d.id)),
+          dimOffsets: Object.fromEntries(Object.entries(p.dimOffsets ?? {}).filter(([k]) => !ids.has(k))),
+        }),
+        ...(p.ordDims?.some((d) => ids.has(d.id)) && {
+          ordDims: p.ordDims.filter((d) => !ids.has(d.id)),
           dimOffsets: Object.fromEntries(Object.entries(p.dimOffsets ?? {}).filter(([k]) => !ids.has(k))),
         }),
         // An angle dimension goes with either of its walls.

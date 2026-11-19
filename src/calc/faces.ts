@@ -1,5 +1,5 @@
-import { pointAlong, pointInPolygon, polygonArea, projectOnWall, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
-import type { DimAnchor, DimMode, Point, Project, Room, Wall } from '../model/types.ts';
+import { nearestWall, pointAlong, pointInPolygon, polygonArea, polygonCentroid, projectOnWall, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
+import type { Counter, DimAnchor, DimMode, OrdPoint, Point, Project, Room, Wall } from '../model/types.ts';
 import { wallFaces } from './enclosure.ts';
 import { projectReducer } from '../model/store.ts';
 
@@ -455,7 +455,37 @@ function itemPoint(f: Project['furniture'][number], x: number, y: number): Point
   return { x: f.at.x + x * c - y * s, y: f.at.y + x * s + y * c };
 }
 
-/** Points a dimension can pick on doors, windows and fixtures: jambs (centreline and both faces), centres, corners. */
+/** A counter's point: `along` its back edge from a, `inset` toward the front (as counterPoint; kept here to stay free of the counter code). */
+function counterAt(c: Counter, along: number, inset: number): Point {
+  const len = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y) || 1;
+  const d = { x: (c.b.x - c.a.x) / len, y: (c.b.y - c.a.y) / len };
+  const n = { x: d.y * c.side, y: -d.x * c.side };
+  return { x: c.a.x + d.x * along + n.x * inset, y: c.a.y + d.y * along + n.y * inset };
+}
+
+/** Where a counter anchor's `along` is measured from: its a end, b end or middle. */
+function counterBase(c: Counter, from: 'b' | 'mid' | undefined): number {
+  const len = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y);
+  return from === 'b' ? len : from === 'mid' ? len / 2 : 0;
+}
+
+/** A room's centre: the middle of its outline's area. */
+function roomMiddle(r: Room): Point {
+  return polygonCentroid(r.points);
+}
+
+/** Points a dimension can pick on rooms: each outline corner and the centre. Pinned after wall ends, so a corner on a wall end follows the wall. */
+export function roomSnapPoints(project: Project): { p: Point; at: DimAnchor }[] {
+  const out: { p: Point; at: DimAnchor }[] = [];
+  for (const r of project.rooms) {
+    if (r.points.length < 3) continue;
+    r.points.forEach((q, corner) => out.push({ p: { ...q }, at: { roomId: r.id, corner } }));
+    out.push({ p: roomMiddle(r), at: { roomId: r.id } });
+  }
+  return out;
+}
+
+/** Points a dimension can pick on doors, windows, fixtures, counters and rooms: jambs (centreline and both faces), centres, corners, counter ends. */
 export function dimSnapPoints(project: Project): { p: Point; at: DimAnchor }[] {
   const out: { p: Point; at: DimAnchor }[] = [];
   for (const o of project.openings) {
@@ -471,7 +501,17 @@ export function dimSnapPoints(project: Project): { p: Point; at: DimAnchor }[] {
     const [hw, hd] = [f.w / 2, f.d / 2];
     for (const [x, y] of [[0, 0], [-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd], [0, hd], [0, -hd], [-hw, 0], [hw, 0]] as const) out.push({ p: itemPoint(f, x, y), at: { furnitureId: f.id, x, y } });
   }
-  return out;
+  // Counters: back and front corners, the middle of each end and of the front, and the centre.
+  for (const c of project.counters) {
+    const len = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y);
+    if (len < 1) continue;
+    // Pinned from the end (or middle) they're at, so they stay at that end when the counter is lengthened.
+    for (const [from, inset] of [[undefined, 0], ['b', 0], ['b', c.depth], [undefined, c.depth], [undefined, c.depth / 2], ['b', c.depth / 2], ['mid', c.depth], ['mid', c.depth / 2]] as const) {
+      const at: DimAnchor = { counterId: c.id, ...(from && { from }), along: 0, inset };
+      out.push({ p: counterAt(c, counterBase(c, from), inset), at });
+    }
+  }
+  return [...out, ...roomSnapPoints(project)];
 }
 
 /**
@@ -480,12 +520,16 @@ export function dimSnapPoints(project: Project): { p: Point; at: DimAnchor }[] {
  * face corner) within a wall's thickness. None if nothing is that close.
  */
 export function anchorFor(project: Project, p: Point): DimAnchor | undefined {
-  let item: { at: DimAnchor; d: number } | null = null;
-  for (const s of dimSnapPoints(project)) {
-    const d = Math.hypot(s.p.x - p.x, s.p.y - p.y);
-    if (d <= 1.5 && (!item || d < item.d - 1e-9)) item = { at: s.at, d };
-  }
-  if (item) return item.at;
+  const nearest = (pts: { p: Point; at: DimAnchor }[]) => {
+    let item: { at: DimAnchor; d: number } | null = null;
+    for (const s of pts) {
+      const d = Math.hypot(s.p.x - p.x, s.p.y - p.y);
+      if (d <= 1.5 && (!item || d < item.d - 1e-9)) item = { at: s.at, d };
+    }
+    return item?.at;
+  };
+  const item = nearest(dimSnapPoints(project).filter((s) => !('roomId' in s.at)));
+  if (item) return item;
   let best: { at: DimAnchor; d: number } | null = null;
   for (const w of project.walls) {
     const len = wallLength(w);
@@ -501,7 +545,7 @@ export function anchorFor(project: Project, p: Point): DimAnchor | undefined {
       if (Math.abs(along) <= w.thickness && Math.abs(perp) <= w.thickness && (!best || d < best.d - 1e-9)) best = { at: { wallId: w.id, end, along, perp }, d };
     }
   }
-  return best?.at;
+  return best?.at ?? nearest(roomSnapPoints(project));
 }
 
 /** What a dimension end follows, in words; null if that's gone. */
@@ -514,6 +558,15 @@ export function anchorTarget(project: Project, at: DimAnchor | undefined): strin
   if ('furnitureId' in at) {
     const f = project.furniture.find((x) => x.id === at.furnitureId);
     return f ? `the ${f.kind.replace('-', ' ')}` : null;
+  }
+  if ('counterId' in at) {
+    const c = project.counters.find((x) => x.id === at.counterId);
+    return c ? `the ${c.island ? 'island' : 'counter'}` : null;
+  }
+  if ('roomId' in at) {
+    const r = project.rooms.find((x) => x.id === at.roomId);
+    if (!r || (at.corner !== undefined && at.corner >= r.points.length)) return null;
+    return `the ${r.name || 'room'} ${at.corner === undefined ? 'centre' : 'corner'}`;
   }
   const i = project.walls.findIndex((w) => w.id === at.wallId);
   return i >= 0 ? `W${i + 1}` : null;
@@ -533,6 +586,17 @@ export function anchorPoint(project: Project, at: DimAnchor): Point | null {
     const f = project.furniture.find((x) => x.id === at.furnitureId);
     return f ? itemPoint(f, at.x, at.y) : null;
   }
+  if ('counterId' in at) {
+    const c = project.counters.find((x) => x.id === at.counterId);
+    return c ? counterAt(c, counterBase(c, at.from) + at.along, at.inset) : null;
+  }
+  if ('roomId' in at) {
+    const r = project.rooms.find((x) => x.id === at.roomId);
+    if (!r || r.points.length < 3) return null;
+    if (at.corner === undefined) return roomMiddle(r);
+    const q = r.points[at.corner];
+    return q ? { ...q } : null;
+  }
   const w = project.walls.find((x) => x.id === at.wallId);
   if (!w) return null;
   const len = wallLength(w);
@@ -542,24 +606,46 @@ export function anchorPoint(project: Project, at: DimAnchor): Point | null {
   return { x: e.x + ((o.x - e.x) / len) * at.along + n.x * at.perp, y: e.y + ((o.y - e.y) / len) * at.along + n.y * at.perp };
 }
 
-/** Placed dimensions follow the wall ends they were snapped to; a point whose wall is gone stays put and lets go. */
+/** Placed and ordinate dimensions follow what they were snapped to; a point whose target is gone stays put and lets go. */
 export function followDims(_prev: Project, next: Project): Project {
-  if (!next.dims?.length || !next.dims.some((d) => d.aAt || d.bAt)) return next;
-  let changed = false;
-  const dims = next.dims.map((d) => {
-    if (!d.aAt && !d.bAt) return d;
-    const move = (p: Point, at: DimAnchor | undefined): [Point, DimAnchor | undefined] => {
-      if (!at) return [p, at];
-      const q = anchorPoint(next, at);
-      return q ? [q, at] : [p, undefined];
+  const anyDims = next.dims?.some((d) => d.aAt || d.bAt);
+  const anyOrd = next.ordDims?.some((o) => o.origin.at || o.pts.some((q) => q.at));
+  if (!anyDims && !anyOrd) return next;
+  const move = (p: Point, at: DimAnchor | undefined): [Point, DimAnchor | undefined] => {
+    if (!at) return [p, at];
+    const q = anchorPoint(next, at);
+    return q ? [q, at] : [p, undefined];
+  };
+  let out = next;
+  if (anyDims) {
+    let changed = false;
+    const dims = next.dims!.map((d) => {
+      if (!d.aAt && !d.bAt) return d;
+      const [a, aAt] = move(d.a, d.aAt);
+      const [b, bAt] = move(d.b, d.bAt);
+      if (a.x === d.a.x && a.y === d.a.y && b.x === d.b.x && b.y === d.b.y && aAt === d.aAt && bAt === d.bAt) return d;
+      changed = true;
+      return { ...d, a, b, aAt, bAt };
+    });
+    if (changed) out = { ...out, dims };
+  }
+  if (anyOrd) {
+    let changed = false;
+    const one = (o: OrdPoint): OrdPoint => {
+      if (!o.at) return o;
+      const [p, at] = move(o.p, o.at);
+      if (p.x === o.p.x && p.y === o.p.y && at === o.at) return o;
+      changed = true;
+      return at ? { p, at } : { p };
     };
-    const [a, aAt] = move(d.a, d.aAt);
-    const [b, bAt] = move(d.b, d.bAt);
-    if (a.x === d.a.x && a.y === d.a.y && b.x === d.b.x && b.y === d.b.y && aAt === d.aAt && bAt === d.bAt) return d;
-    changed = true;
-    return { ...d, a, b, aAt, bAt };
-  });
-  return changed ? { ...next, dims } : next;
+    const ordDims = next.ordDims!.map((d) => {
+      const origin = one(d.origin);
+      const pts = d.pts.map(one);
+      return origin === d.origin && pts.every((q, i) => q === d.pts[i]) ? d : { ...d, origin, pts };
+    });
+    if (changed) out = { ...out, ordDims };
+  }
+  return out;
 }
 
 /**
@@ -601,4 +687,10 @@ export function angleNeighbours(project: Project, wallId: string): Wall[] {
     if (Math.abs(d.x * e.y - d.y * e.x) < 0.02) return false;
     return touches(w.a, q) || touches(w.b, q) || touches(q.a, w) || touches(q.b, w);
   });
+}
+
+/** The wall a click picks for an angle dimension: the nearest whose body (its thickness plus `slop`) the click is on. */
+export function pickWall(project: Project, p: Point, slop: number): string | null {
+  const walls = project.walls.filter((w) => nearestWall([w], p, w.thickness / 2 + slop));
+  return nearestWall(walls, p, Infinity)?.wall.id ?? null;
 }

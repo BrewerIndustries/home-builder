@@ -1371,3 +1371,7 @@ table.schedule th {
 .cut-list .board { display: flex; height: 18px; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; font-size: 10px; max-width: 640px; }
 .cut-list .cut { background: #e8d3a8; color: #3b2b10; border-right: 1px solid #8a6a30; padding: 0 3px; white-space: nowrap; overflow: hidden; line-height: 16px; min-width: 0; }
 .cut-list .offcut { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(128,128,128,.25) 4px 6px); min-width: 0; }
+
+/* Dimension tool kinds: Linear / Angle / Ordinate, floating at the bottom of the plan. */
+.dim-kinds { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: var(--panel); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); }
+.dim-kinds button { padding: 4px 12px; }
