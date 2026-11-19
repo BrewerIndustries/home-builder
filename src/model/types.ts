@@ -43,13 +43,14 @@ export interface Opening {
   sill: number;
   /** Door swing side: which side of the wall the leaf opens toward, and hinge end. */
   swing?: { side: 1 | -1; hinge: 'a' | 'b' };
-  /** How a door opens: one hinged leaf (default), a hinged pair, sliding into a wall pocket (on the hinge end's side), or bifold panels. */
+  /** How a door opens: one hinged leaf (default), a hinged pair, sliding into a wall pocket (on the hinge end's side), bifold panels,
+   * two bypass panels sliding past each other in the opening, or a barn door sliding along a track on the swing-side face (toward the hinge end). */
   operation?: DoorOperation;
   /** Window operation — drives the estimated net clear opening for egress checks. */
   style?: WindowStyle;
 }
 
-export type DoorOperation = 'swing' | 'double' | 'pocket' | 'bifold';
+export type DoorOperation = 'swing' | 'double' | 'pocket' | 'bifold' | 'bypass' | 'barn';
 
 export type WindowStyle = 'single-hung' | 'slider' | 'casement' | 'fixed';
 
@@ -138,7 +139,7 @@ export type FurnitureKind =
   | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'tub-shower' | 'shower' | 'kitchen-sink' | 'laundry-sink'
   | 'washer' | 'dryer' | 'water-heater' | 'furnace' | 'air-handler' | 'range' | 'fridge'
   | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser'
-  | 'stairs' | 'closet-rod';
+  | 'stairs' | 'closet-rod' | 'corner-shower' | 'neo-shower' | 'linen';
 
 /**
  * A plan symbol: a plumbing fixture or appliance (priced and code-checked) or a

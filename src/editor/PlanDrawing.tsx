@@ -426,6 +426,28 @@ export function OpeningGlyph({ wall, o, selected, ghost, px }: { wall: Wall; o: 
         <line x1={pocketEnd.x} y1={pocketEnd.y} x2={doorEnd.x} y2={doorEnd.y} stroke={stroke} strokeWidth={px(2)} />
       </>
     );
+  } else if (op === 'bypass') {
+    // Two panels, one each side of the centreline, overlapping in the middle.
+    const at = (p: Point, q: Point, k: number, off: number) => ({ x: p.x + (q.x - p.x) * k + n.x * t * off, y: p.y + (q.y - p.y) * k + n.y * t * off });
+    body = [
+      <line key="a" x1={at(p1, p2, 0, 0.35).x} y1={at(p1, p2, 0, 0.35).y} x2={at(p1, p2, 0.56, 0.35).x} y2={at(p1, p2, 0.56, 0.35).y} stroke={stroke} strokeWidth={px(2)} />,
+      <line key="b" x1={at(p1, p2, 0.44, -0.35).x} y1={at(p1, p2, 0.44, -0.35).y} x2={at(p1, p2, 1, -0.35).x} y2={at(p1, p2, 1, -0.35).y} stroke={stroke} strokeWidth={px(2)} />,
+    ];
+  } else if (op === 'barn') {
+    // The slab on the swing-side face, slid open past the hinge-end jamb, on a dashed track twice the door width.
+    const away = { x: hinge.x - free.x, y: hinge.y - free.y };
+    const len = Math.hypot(away.x, away.y) || 1;
+    const u = { x: away.x / len, y: away.y / len };
+    const slideEnd = { x: hinge.x + u.x * o.width, y: hinge.y + u.y * o.width };
+    const [f0, s0, s1] = [out(offEdge(free), 1.5), out(offEdge(hinge), 1.5), out(offEdge(slideEnd), 1.5)];
+    const slab = out(s0, 1.2);
+    const slabEnd = out(s1, 1.2);
+    body = (
+      <>
+        <line x1={f0.x} y1={f0.y} x2={s1.x} y2={s1.y} stroke={stroke} strokeWidth={px(0.8)} strokeDasharray={dash} />
+        <line x1={slab.x} y1={slab.y} x2={slabEnd.x} y2={slabEnd.y} stroke={stroke} strokeWidth={px(2.4)} />
+      </>
+    );
   } else if (op === 'bifold') {
     // Panels folded part way: a V from each jamb (one V from the hinge jamb up to 36"), standing out a panel deep.
     const pairs = o.width > 36 ? [[p1, c] as const, [p2, c] as const] : [[hinge, free] as const];
@@ -647,6 +669,43 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
           <circle cx={l + 9} cy={0} r={1.5} strokeWidth={sw} />
           <circle cx={l + 4} cy={t + 5} r={2.5} strokeWidth={sw} />
           <line x1={l} y1={b - 1.5} x2={r} y2={b - 1.5} strokeWidth={sw} strokeDasharray={`${px(3)} ${px(2)}`} />
+        </>
+      );
+      break;
+    case 'corner-shower':
+      // Glass on the two open sides (front and left), the door at the corner where they meet.
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <line x1={l} y1={t} x2={r} y2={b} strokeWidth={sw} />
+          <line x1={r} y1={t} x2={l} y2={b} strokeWidth={sw} />
+          <circle cx={0} cy={0} r={2} strokeWidth={sw} />
+          <line x1={l + 1.5} y1={t} x2={l + 1.5} y2={b - 1.5} strokeWidth={px(1.6)} />
+          <line x1={l + 1.5} y1={b - 1.5} x2={r} y2={b - 1.5} strokeWidth={px(1.6)} />
+          <path d={`M ${l + 1.5} ${b - 1.5 - Math.min(14, d / 2)} A ${Math.min(14, d / 2)} ${Math.min(14, d / 2)} 0 0 0 ${l + 1.5 + Math.min(14, w / 2)} ${b - 1.5}`} fill="none" strokeWidth={sw} strokeDasharray={`${px(3)} ${px(2)}`} />
+        </>
+      );
+      break;
+    case 'neo-shower': {
+      // The front-left corner cut on the diagonal: the angled door panel.
+      const c = Math.min(14, w, d);
+      body = (
+        <>
+          <polygon points={`${l},${t} ${r},${t} ${r},${b} ${l + c},${b} ${l},${b - c}`} strokeWidth={sw} />
+          <line x1={l} y1={b - c} x2={l + c} y2={b} strokeWidth={px(1.8)} />
+          <circle cx={(l + r) / 2 + 2} cy={(t + b) / 2 - 2} r={2} strokeWidth={sw} />
+          <line x1={r} y1={t} x2={l + c / 2} y2={b - c / 2} strokeWidth={sw} />
+        </>
+      );
+      break;
+    }
+    case 'linen':
+      // Casework: the box, shelves shown as a line near the front, LIN.
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <line x1={l} y1={b - 2} x2={r} y2={b - 2} strokeWidth={sw} />
+          {label('LIN')}
         </>
       );
       break;

@@ -1,3 +1,4 @@
+import { pocketSpan } from './framing.ts';
 import { dist, pointAlong, projectOnWall, samePoint, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
 import type { CutoutKind, Furniture, FurnitureKind, Opening, Outlet, Point, Project, Room, Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
@@ -39,6 +40,8 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   tub: { label: 'Bathtub', w: 60, d: 30, h: 20, fixture: true },
   'tub-shower': { label: 'Tub / shower combo', w: 60, d: 32, h: 20, fixture: true },
   shower: { label: 'Shower', w: 36, d: 36, h: 4, fixture: true },
+  'corner-shower': { label: 'Corner shower (corner entry)', w: 36, d: 36, h: 4, fixture: true },
+  'neo-shower': { label: 'Neo-angle shower', w: 38, d: 38, h: 4, fixture: true },
   'kitchen-sink': { label: 'Kitchen sink (sink base)', w: 33, d: 24, h: 36, fixture: true },
   'laundry-sink': { label: 'Laundry sink', w: 24, d: 22, h: 34, fixture: true },
   washer: { label: 'Washer', w: 27, d: 30, h: 38, fixture: true },
@@ -56,6 +59,7 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   dresser: { label: 'Dresser', w: 60, d: 20, h: 36, fixture: false },
   stairs: { label: 'Stairs', w: 36, d: 120, h: 0, fixture: false },
   'closet-rod': { label: 'Closet rod + shelf', w: 48, d: 12, h: 1, fixture: false },
+  linen: { label: 'Linen cabinet / shelving unit', w: 24, d: 18, h: 84, fixture: false },
 };
 
 export const FURNITURE_KINDS = Object.keys(FURNITURE) as FurnitureKind[];
@@ -67,6 +71,13 @@ export const BED_SIZES: [string, number, number][] = [
   ['Queen', 60, 80],
   ['King', 76, 80],
 ];
+
+/** Showers of every shape (a stall, corner entry or neo-angle): P2708.1 size, 24" in front, R306.1's tub or shower. */
+export const SHOWERS: ReadonlySet<FurnitureKind> = new Set(['shower', 'corner-shower', 'neo-shower']);
+/** A neo-angle shower's front corner is cut on the diagonal, this far back along each side (the angled door panel). */
+export const NEO_CUT = 14;
+/** Floor area inside a shower (square inches): the stall, less a neo-angle's cut corner. */
+export const showerArea = (f: Furniture) => f.w * f.d - (f.kind === 'neo-shower' ? (Math.min(NEO_CUT, f.w, f.d) ** 2) / 2 : 0);
 
 /** Fixed fixtures and appliances (not furniture, which moves): checked, and solid to clearances. */
 export const isFixture = (f: Furniture) => FURNITURE[f.kind].fixture;
@@ -205,7 +216,18 @@ export function clearZones(f: Furniture): [string, Point[]][] {
     case 'tub-shower':
       return [['21" clear in front', localRect(f, -hw, hd, hw, hd + 21)]];
     case 'shower':
+    case 'corner-shower':
       return [['24" clear in front of the opening', localRect(f, -hw, hd, hw, hd + 24)]];
+    case 'neo-shower': {
+      // The door is the diagonal across the front-left corner; 24" out square to it.
+      const c = Math.min(NEO_CUT, f.w, f.d);
+      const [a, b] = [furniturePoint(f, -hw, hd - c), furniturePoint(f, -hw + c, hd)];
+      const mid = furniturePoint(f, -hw + c / 2, hd - c / 2);
+      const o = furniturePoint(f, -hw + c / 2 - 1, hd - c / 2 + 1);
+      const len = Math.hypot(o.x - mid.x, o.y - mid.y) || 1;
+      const u = { x: ((o.x - mid.x) / len) * 24, y: ((o.y - mid.y) / len) * 24 };
+      return [['24" clear in front of the opening', [a, b, { x: b.x + u.x, y: b.y + u.y }, { x: a.x + u.x, y: a.y + u.y }]]];
+    }
     default:
       return [];
   }
@@ -274,8 +296,8 @@ export function furnitureChecks(project: Project): CodeCheck[] {
   const has = (k: FurnitureKind) => fixtures.some((f) => f.kind === k);
   if (!fixtures.length && project.rooms.some((r) => r.type === 'bath')) {
     out.push({ rule: 'Required sanitary fixtures', section: 'R306.1', status: 'info', message: 'draw the toilet, vanity and tub or shower with the Fixture tool to check them' });
-  } else if (fixtures.some((f) => ['toilet', 'lavatory', 'tub', 'tub-shower', 'shower'].includes(f.kind))) {
-    const missing = [!has('toilet') && 'a toilet', !has('lavatory') && 'a lavatory', !has('tub') && !has('tub-shower') && !has('shower') && 'a tub or shower'].filter(Boolean);
+  } else if (fixtures.some((f) => ['toilet', 'lavatory', 'tub', 'tub-shower'].includes(f.kind) || SHOWERS.has(f.kind))) {
+    const missing = [!has('toilet') && 'a toilet', !has('lavatory') && 'a lavatory', !has('tub') && !has('tub-shower') && ![...SHOWERS].some(has) && 'a tub or shower'].filter(Boolean);
     out.push({
       rule: 'Required sanitary fixtures',
       section: 'R306.1',
@@ -294,9 +316,11 @@ export function furnitureChecks(project: Project): CodeCheck[] {
       const appliance = APPLIANCE.has(f.kind);
       out.push({ rule: appliance ? `Appliance working space (${label})` : `Fixture clearances (${label})`, section: zoneSection(f), status: bad.length ? 'fail' : 'pass', message: bad.length ? `${name} needs ${bad.join(' and ')}` : `${name}: clear`, targetId: f.id });
     }
-    if (f.kind === 'shower') {
-      const ok = f.w * f.d >= 900 - 0.5 && Math.min(f.w, f.d) >= 30 - 0.5;
-      out.push({ rule: 'Shower size (900 sq in, 30" each way)', section: 'P2708.1', status: ok ? 'pass' : 'fail', message: `${name}: ${formatFtIn(f.w)} × ${formatFtIn(f.d)} = ${Math.round(f.w * f.d)} sq in`, targetId: f.id });
+    if (SHOWERS.has(f.kind)) {
+      const area = showerArea(f);
+      const ok = area >= 900 - 0.5 && Math.min(f.w, f.d) >= 30 - 0.5;
+      const cut = f.kind === 'neo-shower' ? ` less the ${formatFtIn(Math.min(NEO_CUT, f.w, f.d))} angled corner` : '';
+      out.push({ rule: 'Shower size (900 sq in, 30" each way)', section: 'P2708.1', status: ok ? 'pass' : 'fail', message: `${name}: ${formatFtIn(f.w)} × ${formatFtIn(f.d)}${cut} = ${Math.round(area)} sq in`, targetId: f.id });
     }
   }
   out.push(...spacingChecks(project));
@@ -336,7 +360,7 @@ export function spacingChecks(project: Project): CodeCheck[] {
 }
 
 /** Fixtures that need a supply, drain and vent. */
-const WET: ReadonlySet<FurnitureKind> = new Set(['toilet', 'bidet', 'lavatory', 'tub', 'tub-shower', 'shower', 'kitchen-sink', 'laundry-sink', 'washer']);
+const WET: ReadonlySet<FurnitureKind> = new Set(['toilet', 'bidet', 'lavatory', 'tub', 'tub-shower', 'shower', 'corner-shower', 'neo-shower', 'kitchen-sink', 'laundry-sink', 'washer']);
 
 export function furnitureLines(project: Project): MaterialLine[] {
   const count = (k: FurnitureKind) => project.furniture.filter((f) => f.kind === k).length;
@@ -346,7 +370,8 @@ export function furnitureLines(project: Project): MaterialLine[] {
   add('Vanity + lavatory faucet (allowance)', count('lavatory'), 'lavatories on the plan');
   add('Bathtub + valve (allowance)', count('tub'), 'tubs on the plan');
   add('Tub / shower combo + valve + surround (allowance)', count('tub-shower'), 'tub / shower combos on the plan');
-  add('Shower pan + valve + door (allowance)', count('shower'), 'showers on the plan');
+  add('Shower pan + valve + door (allowance)', count('shower') + count('corner-shower'), 'showers on the plan (stall and corner entry)');
+  add('Neo-angle shower base + valve + glass (allowance)', count('neo-shower'), 'neo-angle showers on the plan');
   add('Bidet (allowance)', count('bidet'), 'bidets on the plan');
   add('Kitchen sink + faucet (allowance)', count('kitchen-sink'), 'free-standing sink bases on the plan');
   add('Laundry sink + faucet (allowance)', count('laundry-sink'), 'laundry sinks on the plan');
@@ -364,6 +389,7 @@ export function furnitureLines(project: Project): MaterialLine[] {
   const shelfFt = feet((f) => f.closet === 'shelf');
   if (rodFt) lines.push({ category: 'Lumber', item: 'Closet rod + shelf (allowance)', qty: rodFt, unit: 'lf', basis: 'rod-and-shelf run (double hang counts twice), rounded up to whole feet' });
   if (shelfFt) lines.push({ category: 'Lumber', item: 'Closet shelf (allowance)', qty: shelfFt, unit: 'lf', basis: 'shelf-only run, rounded up to whole feet' });
+  add('Linen cabinet / shelving unit (allowance)', count('linen'), 'from the plan');
   const rough = project.furniture.filter((f) => WET.has(f.kind)).length;
   add('Plumbing rough-in per fixture (allowance)', rough, 'supply, drain and vent per fixture; size runs with a plumber (IRC Chapters 29–31)');
   return lines;
@@ -476,6 +502,9 @@ export function doorSweeps(project: Project, o: Opening): Point[][] {
       return [[f.hinge, f.free, push(f.free), push(f.hinge)]];
     }
     case 'pocket':
+    case 'bypass':
+    case 'barn':
+      // Sliding: in the wall, in the opening, or flat against the wall face.
       return [];
   }
 }
@@ -518,31 +547,38 @@ export function doorSwingChecks(project: Project): CodeCheck[] {
   return out;
 }
 
-/** Along its wall, the stretch a pocket door slides into: a door width past the hinge-end jamb. */
-export function pocketSpan(o: Opening): [number, number] {
-  const jamb = (o.swing?.hinge ?? 'a') === 'a' ? o.offset - o.width / 2 : o.offset + o.width / 2;
-  return jamb < o.offset ? [jamb - o.width, jamb] : [jamb, jamb + o.width];
-}
+export { pocketSpan };
 
-/** Pocket doors need their pocket: inside the wall, with no other door, window, receptacle or switch in it. */
+/**
+ * Pocket doors need their pocket: inside the wall, with no other door, window,
+ * receptacle or switch in it. A barn door slides along the swing-side face over
+ * the same stretch: no door or window there, nor a receptacle or switch on that face.
+ */
 export function pocketChecks(project: Project): CodeCheck[] {
   const out: CodeCheck[] = [];
-  for (const o of project.openings.filter((x) => x.kind === 'door' && x.operation === 'pocket')) {
+  for (const o of project.openings.filter((x) => x.kind === 'door' && (x.operation === 'pocket' || x.operation === 'barn'))) {
     const wall = project.walls.find((w) => w.id === o.wallId);
     if (!wall) continue;
+    const barn = o.operation === 'barn';
+    const face = o.swing?.side ?? 1;
     const [s, e] = pocketSpan(o);
     const inSpan = (a: number, b = a) => b > s + 0.5 && a < e - 0.5;
+    const onFace = (x: { side: 1 | -1 }) => !barn || x.side === face;
     const hits = [
       (s < -0.5 || e > wallLength(wall) + 0.5) && 'the wall’s end',
       ...project.openings.filter((x) => x.id !== o.id && x.wallId === o.wallId && inSpan(x.offset - x.width / 2, x.offset + x.width / 2)).map((x) => `a ${x.kind}`),
-      ...project.outlets.filter((x) => x.wallId === o.wallId && inSpan(x.offset)).map(() => 'a receptacle'),
-      ...project.switches.filter((x) => x.wallId === o.wallId && inSpan(x.offset)).map(() => 'a switch'),
+      ...project.outlets.filter((x) => x.wallId === o.wallId && inSpan(x.offset) && onFace(x)).map(() => 'a receptacle'),
+      ...project.switches.filter((x) => x.wallId === o.wallId && inSpan(x.offset) && onFace(x)).map(() => 'a switch'),
     ].filter((x): x is string => !!x);
+    const what = barn ? 'barn door' : 'pocket door';
+    const span = barn ? 'its slide' : 'its pocket';
     out.push({
-      rule: 'Pocket door pocket clear',
+      rule: barn ? 'Barn door slide clear' : 'Pocket door pocket clear',
       section: 'Layout',
       status: hits.length ? 'warn' : 'pass',
-      message: hits.length ? `${formatFtIn(o.width)} pocket door on ${wall.id}: its pocket runs into ${[...new Set(hits)].join(' and ')} — flip the pocket side or move it` : `${formatFtIn(o.width)} pocket door on ${wall.id}: pocket clear`,
+      message: hits.length
+        ? `${formatFtIn(o.width)} ${what} on ${wall.id}: ${span} runs into ${[...new Set(hits)].join(' and ')} — ${barn ? 'slide it the other way' : 'flip the pocket side'} or move it`
+        : `${formatFtIn(o.width)} ${what} on ${wall.id}: ${barn ? 'slide' : 'pocket'} clear`,
       targetId: o.id,
     });
   }
@@ -551,7 +587,7 @@ export function pocketChecks(project: Project): CodeCheck[] {
 
 /** Plan-schedule tag prefixes. Counter appliances share the free-standing ones. */
 const MARK: Partial<Record<FurnitureKind, string>> = {
-  toilet: 'WC', bidet: 'BD', lavatory: 'LAV', tub: 'T', 'tub-shower': 'TS', shower: 'SH', 'kitchen-sink': 'S', 'laundry-sink': 'LS',
+  toilet: 'WC', bidet: 'BD', lavatory: 'LAV', tub: 'T', 'tub-shower': 'TS', shower: 'SH', 'corner-shower': 'SH', 'neo-shower': 'SH', 'kitchen-sink': 'S', 'laundry-sink': 'LS',
   washer: 'W', dryer: 'D', 'water-heater': 'WH', furnace: 'F', 'air-handler': 'AH', range: 'R', fridge: 'REF',
 };
 /** Counter cutouts: the free-standing kind they share a tag with, or their own tag (a pantry is a cabinet, not scheduled). */

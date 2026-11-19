@@ -236,20 +236,33 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           <LengthInput value={o.offset} onChange={(v) => up({ offset: v })} />
         </Field>
         {o.kind === 'door' && o.width <= VEHICLE_DOOR && (
-          <Field label="Opens" hint={o.operation === 'pocket' ? 'Slides into the wall: keep a door width of plain wall beside it (no other door, window or box in the pocket)' : 'Hinged leaves and bifold panels are checked against fixtures, their clear space, furniture, counters and other doors'}>
+          <Field
+            label="Opens"
+            hint={
+              o.operation === 'pocket'
+                ? 'Slides into the wall: keep a door width of plain wall beside it (no other door, window or box in the pocket). Framing runs one header over the door and pocket'
+                : o.operation === 'barn'
+                  ? 'Slides along a track on the swing-side face: keep a door width of plain wall beside it on that face'
+                  : o.operation === 'bypass'
+                    ? 'Two panels slide past each other in the opening: no swing, but only half the width is open at once'
+                    : 'Hinged leaves and bifold panels are checked against fixtures, their clear space, furniture, counters and other doors'
+            }
+          >
             <select value={o.operation ?? 'swing'} onChange={(e) => up({ operation: e.target.value === 'swing' ? undefined : (e.target.value as DoorOperation) })}>
               <option value="swing">Hinged (one leaf)</option>
               <option value="double">Double (a pair of leaves)</option>
               <option value="pocket">Pocket (slides into the wall)</option>
               <option value="bifold">Bifold</option>
+              <option value="bypass">Bypass (two sliding panels)</option>
+              <option value="barn">Barn door (slides on the wall face)</option>
             </select>
           </Field>
         )}
         {o.kind === 'door' && (
           <div className="row">
-            {o.operation !== 'pocket' && <button onClick={() => up({ swing: { side: (o.swing?.side ?? 1) === 1 ? -1 : 1, hinge: o.swing?.hinge ?? 'a' } })}>Flip swing side</button>}
-            {o.operation !== 'double' && (
-              <button onClick={() => up({ swing: { side: o.swing?.side ?? 1, hinge: (o.swing?.hinge ?? 'a') === 'a' ? 'b' : 'a' } })}>{o.operation === 'pocket' ? 'Flip pocket side' : 'Flip hinge'}</button>
+            {o.operation !== 'pocket' && o.operation !== 'bypass' && <button onClick={() => up({ swing: { side: (o.swing?.side ?? 1) === 1 ? -1 : 1, hinge: o.swing?.hinge ?? 'a' } })}>{o.operation === 'barn' ? 'Other face' : 'Flip swing side'}</button>}
+            {o.operation !== 'double' && o.operation !== 'bypass' && (
+              <button onClick={() => up({ swing: { side: o.swing?.side ?? 1, hinge: (o.swing?.hinge ?? 'a') === 'a' ? 'b' : 'a' } })}>{o.operation === 'pocket' ? 'Flip pocket side' : o.operation === 'barn' ? 'Slide the other way' : 'Flip hinge'}</button>
             )}
           </div>
         )}
@@ -666,7 +679,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         ))}
         <p className="muted small">
           {room ? `In ${room.name || room.type}. ` : 'Not inside a room. '}
-          {spec.fixture || f.kind === 'closet-rod' ? 'Priced in the estimate; ' : 'Drawn on the plan and in 3D only; '}drag to move — it backs onto the wall you drop it by (Shift keeps it free-standing).
+          {spec.fixture || f.kind === 'closet-rod' || f.kind === 'linen' ? 'Priced in the estimate; ' : 'Drawn on the plan and in 3D only; '}drag to move — it backs onto the wall you drop it by (Shift keeps it free-standing).
         </p>
         <button className="danger" onClick={() => del(f.id)}>
           Delete {spec.label.toLowerCase()}

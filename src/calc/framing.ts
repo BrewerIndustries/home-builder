@@ -83,9 +83,34 @@ export interface FramingTakeoff {
   };
 }
 
-/** Rough opening — what the framer leaves for the unit to slide into. */
+/** Along its wall, the stretch a pocket door slides into: a door width past the hinge-end jamb. */
+export function pocketSpan(o: Opening): [number, number] {
+  const jamb = (o.swing?.hinge ?? 'a') === 'a' ? o.offset - o.width / 2 : o.offset + o.width / 2;
+  return jamb < o.offset ? [jamb - o.width, jamb] : [jamb, jamb + o.width];
+}
+
+/**
+ * Rough opening — what the framer leaves for the unit to slide into. A pocket
+ * door's takes in its pocket too: the door and the pocket beside it under one
+ * header, with no studs in the pocket (the kit's split studs go there; check
+ * its instructions for the exact opening).
+ */
 export function roughOpening(o: Opening): { width: number; height: number } {
-  return o.kind === 'door' ? { width: o.width + 2, height: o.height + 2.5 } : { width: o.width + 0.5, height: o.height + 0.5 };
+  if (o.kind !== 'door') return { width: o.width + 0.5, height: o.height + 0.5 };
+  return { width: (o.operation === 'pocket' ? 2 * o.width : o.width) + 2, height: o.height + 2.5 };
+}
+
+/** Where a rough opening runs along its wall: centred on the unit, or for a pocket door over the door and its pocket. */
+export function roughOpeningSpan(o: Opening): [number, number] {
+  const ro = roughOpening(o);
+  if (o.kind === 'door' && o.operation === 'pocket') {
+    const [s, e] = pocketSpan(o);
+    const lo = Math.min(s, o.offset - o.width / 2);
+    const hi = Math.max(e, o.offset + o.width / 2);
+    const extra = (ro.width - (hi - lo)) / 2;
+    return [lo - extra, hi + extra];
+  }
+  return [o.offset - ro.width / 2, o.offset + ro.width / 2];
 }
 
 /** Rule-of-thumb header for a single-storey bearing wall by rough-opening width. */
@@ -136,8 +161,7 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
   for (const o of openings) {
     const ro = roughOpening(o);
     const jacksPerSide = ro.width > 72 ? 2 : 1;
-    const start = o.offset - ro.width / 2;
-    const end = o.offset + ro.width / 2;
+    const [start, end] = roughOpeningSpan(o);
     // Layout studs that land inside the opening (or where its kings/jacks go) are
     // dropped; the ones inside the rough opening come back as cripples.
     const framedStart = start - T * (jacksPerSide + 1);
@@ -164,6 +188,7 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
 
     const size = headerSizeFor(ro.width, bearing);
     if (size === 'LVL') notes.push(`${o.kind} ${Math.round(o.width)}" wide: header needs an engineered (LVL) span check`);
+    if (o.kind === 'door' && o.operation === 'pocket') notes.push(`pocket door at ${Math.round(o.offset)}": rough opening ${Math.round(ro.width)}" over the door and its pocket, no studs in the pocket — check the kit's rough opening`);
     const headerLen = ro.width + 2 * T * jacksPerSide;
     headers.push({ openingId: o.id, size, plies: 2, length: headerLen });
     members.push({ kind: 'header', x: start - T * jacksPerSide, y: roTop, w: headerLen, h: HEADER_DEPTH[size] });

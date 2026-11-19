@@ -216,6 +216,8 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   const ops = (op: string) => project.openings.filter((o) => o.kind === 'door' && o.operation === op).length;
   if (ops('pocket')) lines.push({ category: 'Openings', item: 'Pocket door frame kit (allowance)', qty: ops('pocket'), unit: 'ea', basis: 'one per pocket door; the pocket needs a door width of clear wall beside the opening' });
   if (ops('bifold')) lines.push({ category: 'Openings', item: 'Bifold door hardware (allowance)', qty: ops('bifold'), unit: 'ea', basis: 'track and pivots, one set per bifold door' });
+  if (ops('bypass')) lines.push({ category: 'Openings', item: 'Bypass door track + hardware (allowance)', qty: ops('bypass'), unit: 'ea', basis: 'overhead track, rollers and floor guide, one set per bypass door' });
+  if (ops('barn')) lines.push({ category: 'Openings', item: 'Barn door track + hardware (allowance)', qty: ops('barn'), unit: 'ea', basis: 'face-mounted track (twice the door width) and rollers, one set per barn door; needs blocking in the wall over the slide' });
 
   // Gable-end framing above the plate: vaulted / cathedral room ends, and a
   // rafter-framed roof's gable ends (trusses bring their own gable-end truss).
