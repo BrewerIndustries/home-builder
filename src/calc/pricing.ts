@@ -1,6 +1,7 @@
 import type { Pricing } from '../model/types.ts';
 import type { MaterialLine } from './materials.ts';
 import { IRRIGATION_SAMPLE } from './irrigation.ts';
+import { DEMO_SAMPLE } from './demolition.ts';
 
 // Turns the materials list into money. Prices are per the line's unit and keyed
 // by the line's item text, so a price the user types sticks to that item across
@@ -25,6 +26,7 @@ export interface Estimate {
 
 const SAMPLE: [RegExp, number][] = [
   ...IRRIGATION_SAMPLE,
+  ...DEMO_SAMPLE,
   [/^2x4 stud, 92/, 4.5],
   [/^2x6 stud, 92/, 7.5],
   [/^2x8 stud, 92/, 11],

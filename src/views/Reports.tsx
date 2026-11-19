@@ -6,7 +6,9 @@ import { RoofSummary } from './RoofSummary.tsx';
 import { foundationCalc, foundationVolumes } from '../calc/foundation.ts';
 import { FloorFraming } from './FloorFraming.tsx';
 import { siteChecks } from '../calc/site.ts';
-import { materialsList, studStock, wallAreas } from '../calc/materials.ts';
+import { studStock, wallAreas } from '../calc/materials.ts';
+import { phasedMaterials } from '../calc/phasing.ts';
+import { isPhased } from '../model/phase.ts';
 import { DEFAULT_PRICING, estimate, money } from '../calc/pricing.ts';
 import type { Hit } from '../editor/hitTest.ts';
 import { Stat } from '../editor/Inspector.tsx';
@@ -133,7 +135,7 @@ function FoundationSummary({ project }: { project: Project }) {
 }
 
 export function MaterialsView({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
-  const est = useMemo(() => estimate(materialsList(project), project.pricing ?? DEFAULT_PRICING), [project]);
+  const est = useMemo(() => estimate(phasedMaterials(project), project.pricing ?? DEFAULT_PRICING), [project]);
   if (!project.walls.length) return <Empty />;
   const pricing = project.pricing ?? DEFAULT_PRICING;
   const setPricing = (patch: Partial<Pricing>) => dispatch({ type: 'setPricing', pricing: { ...pricing, ...patch } });
@@ -168,6 +170,7 @@ export function MaterialsView({ project, dispatch }: { project: Project; dispatc
       <p className="muted">
         Walls, sheathing, drywall, insulation, rough electrical and openings. Floor, roof and foundation systems aren't in the takeoff yet. Prices in grey are
         sample ballpark figures — type your supplier's price to replace one.
+        {isPhased(project) && ' Remodel: only new work is priced, plus a demolition allowance per kind of item marked Demolish; existing items aren\'t counted.'}
       </p>
 
       <div className="estimate-summary">

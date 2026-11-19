@@ -11,7 +11,7 @@ import type { Hit } from './editor/hitTest.ts';
 import { Inspector } from './editor/Inspector.tsx';
 import { PlanCanvas, type PlanCanvasHandle, type Tool } from './editor/PlanCanvas.tsx';
 import { downloadJson, loadSaved, readProjectFile, readUnderlay, save } from './model/persist.ts';
-import { historyReducer, initHistory } from './model/store.ts';
+import { historyReducer, initHistory, type Action } from './model/store.ts';
 import type { DimMode, FurnitureKind, WallKind } from './model/types.ts';
 import { FURNITURE, FURNITURE_KINDS } from './calc/furniture.ts';
 import { SiteView } from './site/SiteView.tsx';
@@ -19,6 +19,9 @@ import { SitePrintSheet } from './site/SitePrint.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
 import { ElectricalView } from './views/Electrical.tsx';
+import { PhaseBar } from './editor/PhaseBar.tsx';
+import { PlanAltsDialog } from './editor/PlanAlts.tsx';
+import { phaseOf, phaseView, planElementIds, setPhase, type PhaseView } from './model/phase.ts';
 
 type Tab = 'plan' | 'site' | '3d' | 'framing' | 'materials' | 'electrical' | 'code';
 
@@ -61,7 +64,27 @@ export function App() {
   const canvas = useRef<PlanCanvasHandle>(null);
   const projectFile = useRef<HTMLInputElement>(null);
   const imageFile = useRef<HTMLInputElement>(null);
-  const [dialog, setDialog] = useState<'projects' | 'account' | null>(null);
+  const [dialog, setDialog] = useState<'projects' | 'account' | 'options' | null>(null);
+  // Remodel phases the plan shows (see model/phase.ts); the plan canvas and print sheet get the filtered project.
+  const [phases, setPhases] = useState<PhaseView>('all');
+  const shown = useMemo(() => phaseView(project, phases), [project, phases]);
+  // Drawing in the existing or demolition plan draws existing conditions: what's added there is marked existing (same undo step).
+  const known = useRef<Set<string> | null>(null);
+  const fromCanvas = useRef(0);
+  const canvasDispatch = useCallback((a: Action) => {
+    if (a.type !== 'checkpoint') fromCanvas.current = Date.now();
+    dispatch(a);
+  }, []);
+  useEffect(() => {
+    const ids = planElementIds(project);
+    const prev = known.current;
+    known.current = new Set(ids);
+    const drawn = Date.now() - fromCanvas.current < 1000;
+    fromCanvas.current = 0;
+    if (!prev || !drawn || (phases !== 'existing' && phases !== 'demo')) return;
+    const added = ids.filter((id) => !prev.has(id) && phaseOf(project, id) === 'new');
+    if (added.length) dispatch({ type: 'replaceProject', project: setPhase(project, added, 'existing'), transient: true });
+  }, [project, phases]);
   const [pdf, setPdf] = useState<{ doc: Awaited<ReturnType<typeof openPdf>>; at: { x: number; y: number } } | null>(null);
   const [invite, setInvite] = useState(() => new URLSearchParams(location.search).get('invite') ?? undefined);
 
@@ -209,6 +232,9 @@ export function App() {
           <button onClick={() => window.print()} disabled={!project.walls.length} title="Print or save as PDF — the Plan tab prints a to-scale sheet">
             Print / PDF
           </button>
+          <button onClick={() => setDialog('options')} title="Design options (Option A / Plan B) with a cost compare, remodel phases, and saved plan versions with change orders">
+            Options
+          </button>
           <details className="menu">
             <summary>File</summary>
             <div className="menu-body">
@@ -254,6 +280,7 @@ export function App() {
           }}
         />
       )}
+      {dialog === 'options' && <PlanAltsDialog project={project} dispatch={dispatch} onClose={() => setDialog(null)} />}
       {dialog === 'projects' && <ProjectsDialog ws={ws} onClose={() => setDialog(null)} onSignIn={() => setDialog('account')} />}
       {dialog === 'account' && (
         <AccountDialog
@@ -267,7 +294,7 @@ export function App() {
       )}
       {notice && <div className="toast">{notice}</div>}
 
-      {tab === 'plan' && <PrintSheet project={project} />}
+      {tab === 'plan' && <PrintSheet project={shown} />}
       {tab === 'site' && <SitePrintSheet project={project} />}
       {tab === 'plan' ? (
         <main className="workspace">
@@ -327,6 +354,8 @@ export function App() {
                 Show {project.hiddenDims.length} hidden
               </button>
             )}
+            <div className="sep" />
+            <PhaseBar project={project} dispatch={dispatch} selection={selection} view={phases} setView={setPhases} />
             <div className="spacer" />
             <button onClick={() => canvas.current?.zoom(1.25)} title="Zoom in">
               +
@@ -340,8 +369,8 @@ export function App() {
           </div>
           <PlanCanvas
             ref={canvas}
-            project={project}
-            dispatch={dispatch}
+            project={shown}
+            dispatch={canvasDispatch}
             tool={tool}
             setTool={setTool}
             wallKind={wallKind}
