@@ -3,6 +3,7 @@ import { DEFAULT_FOUNDATION, type Foundation, type Project } from '../model/type
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { childRooms } from './regions.ts';
+import { basementGeometry, foundationV2Checks, foundationV2Lines, foundationWallHeight, interiorFootings } from './foundationV2.ts';
 
 // Foundation under the exterior walls: monolithic slab with a thickened edge, or
 // spread footing + stem wall around a crawlspace. Sizes are the user's inputs;
@@ -56,16 +57,20 @@ export interface FoundationVolumes {
   edge: number;
   footing: number;
   stem: number;
+  /** v2: interior bearing footings (0 when none are marked). */
+  interior: number;
 }
 
-export function foundationVolumes(c: FoundationCalc): FoundationVolumes {
+export function foundationVolumes(c: FoundationCalc, project?: Project): FoundationVolumes {
   const { f } = c;
+  const interior = project ? interiorFootings(project, f).volume : 0;
   if (f.type === 'slab') {
-    return { slab: c.area * f.slabThickness, edge: c.perimeter * f.edgeWidth * Math.max(0, f.edgeDepth - f.slabThickness), footing: 0, stem: 0 };
+    return { slab: c.area * f.slabThickness, edge: c.perimeter * f.edgeWidth * Math.max(0, f.edgeDepth - f.slabThickness), footing: 0, stem: 0, interior };
   }
   // Footing and stem run on the wall line: outer perimeter less the stem's own corners.
   const run = c.perimeter - 4 * f.stemThickness;
-  return { slab: 0, edge: 0, footing: run * f.footingWidth * f.footingThickness, stem: run * f.stemThickness * f.stemHeight };
+  const slab = f.type === 'basement' ? basementGeometry(f, c.perimeter, c.area).slabArea * f.slabThickness : 0;
+  return { slab, edge: 0, footing: run * f.footingWidth * f.footingThickness, stem: run * f.stemThickness * foundationWallHeight(f), interior };
 }
 
 export function foundationLines(project: Project, waste: number): MaterialLine[] {
@@ -87,24 +92,29 @@ export function foundationLines(project: Project, waste: number): MaterialLine[]
     add("2x12 edge form, 16'", ceil(lf / 16), 'ea', `${Math.round(lf)} LF of slab edge (reusable)`);
   } else {
     const run = (c.perimeter - 4 * f.stemThickness) / 12;
+    const H = foundationWallHeight(f);
+    const wallWord = f.type === 'basement' ? 'basement wall' : 'stem wall';
     add('Concrete, footings', quarterYards(v.footing * 1.05), 'yd³', `${f.footingWidth}" × ${f.footingThickness}" × ${Math.round(run)} LF, +5%`);
     if (f.stemMaterial === 'poured') {
-      add('Concrete, stem wall', quarterYards(v.stem * 1.05), 'yd³', `${f.stemThickness}" × ${f.stemHeight}" × ${Math.round(run)} LF, +5%`);
+      add(f.type === 'basement' ? 'Concrete, basement wall' : 'Concrete, stem wall', quarterYards(v.stem * 1.05), 'yd³', `${f.stemThickness}" × ${H}" × ${Math.round(run)} LF, +5%`);
     } else {
       // 8×8×16 block: 1.125 per sq ft of wall face.
-      const blocks = ceil(((run * f.stemHeight) / 12) * 1.125 * (1 + waste));
-      add('8×8×16 concrete block', blocks, 'ea', `${Math.round((run * f.stemHeight) / 12)} sq ft of stem wall, 1.125 per sq ft ${`+${Math.round(waste * 100)}%`}`);
+      const blocks = ceil(((run * H) / 12) * 1.125 * (1 + waste));
+      add('8×8×16 concrete block', blocks, 'ea', `${Math.round((run * H) / 12)} sq ft of ${wallWord}, 1.125 per sq ft ${`+${Math.round(waste * 100)}%`}`);
       add('Type S mortar, 80 lb', ceil(blocks / 30), 'bags', '~30 blocks per bag');
     }
     add('#4 rebar, 20\'', ceil((run * 2 * 1.1) / 20), 'ea', '2 continuous bars in the footing, +10% laps');
-    add('6-mil poly ground cover, 10×100', ceil((sf * 1.15) / 1000), 'rolls', `${Math.round(sf)} sq ft crawlspace floor +15% up the walls`);
-    // R408.1: 1 sq ft of net vent area per 150 sq ft of crawlspace.
-    add('Foundation vent, 8×16 (~50 sq in net)', ceil(((sf / 150) * SQFT) / 50), 'ea', `${(sf / 150).toFixed(1)} sq ft net free area (R408.1) — check the vent's rating`);
+    if (f.type === 'crawl') {
+      add('6-mil poly ground cover, 10×100', ceil((sf * 1.15) / 1000), 'rolls', `${Math.round(sf)} sq ft crawlspace floor +15% up the walls`);
+      // R408.1: 1 sq ft of net vent area per 150 sq ft of crawlspace.
+      add('Foundation vent, 8×16 (~50 sq in net)', ceil(((sf / 150) * SQFT) / 50), 'ea', `${(sf / 150).toFixed(1)} sq ft net free area (R408.1) — check the vent's rating`);
+    }
   }
   add('1/2" × 10" anchor bolt, nut + washer', c.anchorBolts, 'ea', 'per wall: ≤ 6 ft o.c., one within 12" of each end (R403.1.6)');
   const sill = project.framing.exteriorStud;
   add(`${sill} pressure-treated sill plate, 16'`, ceil((lf * (1 + waste)) / 16), 'ea', `${Math.round(lf)} LF of foundation`);
   add('Sill seal gasket, 50\' roll', ceil(lf / 50), 'rolls', `${Math.round(lf)} LF`);
+  lines.push(...foundationV2Lines(project, f, c.perimeter, c.area, waste));
   return lines;
 }
 
@@ -114,7 +124,7 @@ export function foundationChecks(project: Project): CodeCheck[] {
   if (!c) return [];
   const { f } = c;
   const out: CodeCheck[] = [];
-  if (f.type === 'slab') {
+  if (f.type === 'slab' || f.type === 'basement') {
     out.push({
       rule: 'Slab thickness',
       section: 'R506.1',
@@ -149,5 +159,6 @@ export function foundationChecks(project: Project): CodeCheck[] {
   if (f.footingDepth < 12) {
     out.push({ rule: 'Footing below grade', section: 'R403.1.4', status: 'fail', message: `exterior footings go at least 12" below undisturbed ground (this is ${f.footingDepth}")` });
   }
+  out.push(...foundationV2Checks(project, f));
   return out;
 }

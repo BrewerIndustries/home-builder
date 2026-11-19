@@ -3,6 +3,7 @@ import type { Point, Project } from '../model/types.ts';
 import { foundationOf } from './foundation.ts';
 import type { MaterialLine } from './materials.ts';
 import { childRooms } from './regions.ts';
+import { pierPadLines } from './foundationV2.ts';
 import { stockFeet } from './roof.ts';
 
 // Framed floor over a crawlspace: joist layout broken over girder lines, piers
@@ -34,7 +35,7 @@ export interface FloorLayout {
 }
 
 /** Footprint polygons at the wall centrelines: outermost rooms, else the exterior walls' box. */
-function outline(project: Project): Point[][] {
+export function floorOutline(project: Project): Point[][] {
   const outer = project.rooms.filter((r) => !project.rooms.some((o) => o !== r && childRooms(project, o).includes(r)));
   if (outer.length) return outer.map((r) => r.points);
   const ext = project.walls.filter((w) => w.kind === 'exterior');
@@ -66,8 +67,8 @@ export function scan(polys: { u: number; v: number }[][], c: number): [number, n
 
 export function floorLayout(project: Project): FloorLayout | null {
   const f = foundationOf(project);
-  if (f.type !== 'crawl') return null;
-  const polys = outline(project);
+  if (f.type !== 'crawl' && f.type !== 'basement') return null;
+  const polys = floorOutline(project);
   if (!polys.length) return null;
   const all = polys.flat();
   const xs = all.map((p) => p.x);
@@ -157,7 +158,7 @@ export function floorLines(project: Project, waste: number): MaterialLine[] {
   }
   if (L.piers.length) {
     add('Pier / post with footing', L.piers.length, 'ea', `under the girders at ${Math.round(f.pierSpacing / 12)}' o.c.`);
-    add('Concrete, pier footings 24×24×10', Math.ceil(((L.piers.length * 24 * 24 * 10) / 46656) * 1.1 * 4) / 4, 'yd³', `${L.piers.length} pads +10%`);
+    lines.push(...pierPadLines(f, L.piers.length));
   }
   const full = L.sheets.length;
   const area = L.outline.reduce((s, p) => s + polygonArea(p), 0) / 144;

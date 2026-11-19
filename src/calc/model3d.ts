@@ -7,6 +7,7 @@ import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { cofferBeams, trayOutline } from './roomShape.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
+import { foundationScene } from './foundation3d.ts';
 import { counterDir, counterHeight, cornerUppers, counterLength, counterPoint, FRIDGE_HEIGHT, raisedDepth, seatingDepth, seatingHeight, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, upperSpans, upperTop } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
@@ -16,7 +17,7 @@ export type V3 = [number, number, number];
 
 /** Axis-aligned-in-wall-space box: a wall piece or a coffer beam. */
 export interface Box {
-  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door';
+  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door' | 'footing' | 'foundation' | 'girder';
   /** Centre. */
   c: V3;
   /** Size along the wall, height, thickness. */
@@ -260,6 +261,10 @@ export function buildScene(project: Project): Scene3D {
     boxes.push({ kind: isFixture(f) ? 'fixture' : 'furniture', c: [f.at.x, h / 2, f.at.y], size: [f.w, h, f.d], rotY: (-f.rot * Math.PI) / 180 });
   }
   faces.push(...roofFaces(project).map((f) => ({ ...f, roofPart: true })));
+  // Below the floor (y < 0); bounds stay from the floor up so the camera framing is unchanged.
+  const below = foundationScene(project);
+  boxes.push(...below.boxes);
+  flats.push(...below.flats);
   const pts = project.walls.flatMap((w) => [w.a, w.b]);
   const maxH = Math.max(0, ...project.walls.map((w) => w.height), ...faces.flatMap((f) => f.pts.map((p) => p[1])));
   const b = pts.length ? bbox(pts) : { x0: 0, x1: 0, y0: 0, y1: 0 };

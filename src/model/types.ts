@@ -571,7 +571,7 @@ export interface Dormer {
 
 export const DEFAULT_ROOF: Roof = { type: 'gable', pitch: 6, overhang: 12, rake: 12, ridge: 'auto', framing: 'trusses', rafterSize: '2x8', spacing: 24 };
 
-export type FoundationType = 'slab' | 'crawl' | 'none';
+export type FoundationType = 'slab' | 'crawl' | 'basement' | 'none';
 
 /** One foundation under the exterior walls. Depths are measured down from finished grade. */
 export interface Foundation {
@@ -601,6 +601,35 @@ export interface Foundation {
   /** Posts / piers along a girder, on centre. */
   pierSpacing: number;
   subfloor: 'osb' | 'plywood';
+  /** Foundation v2 (see calc/foundationV2.ts). All optional and off when unset, so older plans are unchanged. */
+  v2?: FoundationV2;
+}
+
+/** Interior bearing footings, pier pads, basement walls and the Table R403.1 inputs. */
+export interface FoundationV2 {
+  /** Interior walls carried on their own footing (wall ids). */
+  bearingWalls?: string[];
+  /** Interior bearing footing size; unset = the perimeter footing's. */
+  interiorFootingWidth?: number;
+  interiorFootingThickness?: number;
+  /** Pier pads under the girder posts: square side and thickness (unset = 24 × 10), and #4 bars each way. */
+  pierPad?: number;
+  pierPadThickness?: number;
+  pierBars?: number;
+  /** Basement: top of footing to top of wall (unset = 96). Thickness and material are the stem wall's. */
+  basementHeight?: number;
+  /** Basement: perforated footing drain round the outside (R405.1). */
+  footingDrain?: boolean;
+  /** Basement: coating on the outside of the wall below grade (R406). */
+  wallCoating?: 'dampproof' | 'waterproof' | 'none';
+  /** Basement: rigid foam on the walls, inches (0 / unset = none). */
+  wallFoam?: number;
+  foamSide?: 'interior' | 'exterior';
+  /** Basement window wells: count and inside size (width along the wall, projection out, depth below grade). */
+  wells?: { count: number; width: number; projection: number; depth: number };
+  /** Inputs for looking footing width up in Table R403.1 — the table itself is not built in. */
+  soilBearing?: number;
+  storeys?: number;
 }
 
 export type JoistSize = '2x8' | '2x10' | '2x12';
