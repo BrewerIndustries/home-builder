@@ -9,6 +9,8 @@ import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, User
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { outletPosition } from './outletGeometry.ts';
+import { DimEnd, lookOf, stopDirs, type Look } from './dimLook.tsx';
+import { OrdinateDimension } from './OrdinateDimension.tsx';
 
 // The plan as a picture: rooms, walls, openings, outlets and dimensions, in plan
 // inches. Shared by the interactive canvas and the to-scale print sheet. `px`
@@ -29,6 +31,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
   const wallsById = new Map(project.walls.map((w) => [w.id, w]));
   const hidden = new Set(project.hiddenDims);
   const selDim = selection?.kind === 'dim' ? selection.id : null;
+  const look = lookOf(project);
   const labels = project.rooms.map((r) => ({ room: r, lines: roomLabelLines(project, r, px, wallDims, outlets) }));
   return (
     <g className="plan-drawing">
@@ -127,7 +130,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         })}
       {outlets && <Lighting project={project} selection={selection} px={px} />}
 
-      {wallDims && wallDimLabels(project, project.dimMode ?? 'centre').map((l, i) => <WallDimension key={`${l.wall.id}-${i}`} l={l} px={px} />)}
+      {wallDims && wallDimLabels(project, project.dimMode ?? 'centre').map((l, i) => <WallDimension key={`${l.wall.id}-${i}`} l={l} look={look} px={px} />)}
       {wallDims &&
         openingChains(project, project.dimMode ?? 'centre')
           .filter((c) => !hidden.has(`chain:${c.wall.id}`))
@@ -138,6 +141,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
               extra={project.dimOffsets?.[`chain:${c.wall.id}`] ?? 0}
               selected={selDim === `chain:${c.wall.id}`}
               running={stringStyle(project, `chain:${c.wall.id}`) === 'running'}
+              look={look}
               px={px}
             />
           ))}
@@ -145,10 +149,13 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {(project.dims ?? [])
         .filter((d) => !hidden.has(d.id))
         .map((d) => (
-          <UserDimension key={d.id} d={d} offset={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} px={px} />
+          <UserDimension key={d.id} d={d} offset={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} look={look} px={px} />
         ))}
+      {(project.ordDims ?? []).map((d) => (
+        <OrdinateDimension key={d.id} d={d} offset={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} look={look} px={px} />
+      ))}
       {(project.angleDims ?? []).map((d) => (
-        <AngleDimension key={d.id} project={project} id={d.id} a={d.a} b={d.b} extra={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} px={px} />
+        <AngleDimension key={d.id} project={project} id={d.id} a={d.a} b={d.b} extra={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} look={look} px={px} />
       ))}
       {marks.map((m, i) => (
         <text key={`mark${i}`} x={m.at.x} y={m.at.y} className="fixture-mark" fontSize={px(8)} strokeWidth={px(2.5)} textAnchor="middle" dominantBaseline="central">
@@ -201,6 +208,7 @@ function labelBox(l: LabelLine): Keepout {
 export function OverallDimensions({ project, selected = null, keepout = [], px }: { project: Project; selected?: string | null; keepout?: Keepout[]; px(n: number): number }) {
   const ext = project.walls.filter((w) => w.kind === 'exterior');
   if (!ext.length) return null;
+  const look = lookOf(project);
   const pts = (project.dimMode ?? 'centre') === 'centre' ? ext.flatMap((w) => [w.a, w.b]) : outerCorners(project);
   const t = Math.max(...ext.map((w) => w.thickness)) / 2;
   const xs = uniq(pts.map((p) => p.x));
@@ -243,14 +251,14 @@ export function OverallDimensions({ project, selected = null, keepout = [], px }
   return (
     <g className="dims">
       {all.map((d) => (
-        <DimString key={d.id} {...d} selected={selected === d.id} running={stringStyle(project, d.id) === 'running'} px={px} />
+        <DimString key={d.id} {...d} selected={selected === d.id} running={stringStyle(project, d.id) === 'running'} look={look} px={px} />
       ))}
     </g>
   );
 }
 
 /** A dimension the user placed between two points: aligned with them, pushed out to one side by `offset`, with extension lines back to the points. */
-function UserDimension({ d, offset, selected, px }: { d: UserDim; offset: number; selected: boolean; px(n: number): number }) {
+function UserDimension({ d, offset, selected, look, px }: { d: UserDim; offset: number; selected: boolean; look: Look; px(n: number): number }) {
   const len = Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y);
   if (len < 0.5) return null;
   const u = { x: (d.b.x - d.a.x) / len, y: (d.b.y - d.a.y) / len };
@@ -262,7 +270,7 @@ function UserDimension({ d, offset, selected, px }: { d: UserDim; offset: number
   if (angle > 90 || angle <= -90) angle += 180;
   // Label on the far side of the line from the points.
   const side = offset >= 0 ? 1 : -1;
-  const m = at({ x: (d.a.x + d.b.x) / 2, y: (d.a.y + d.b.y) / 2 }, side * px(7));
+  const m = at({ x: (d.a.x + d.b.x) / 2, y: (d.a.y + d.b.y) / 2 }, side * px(7 * look.text));
   const gap = side * px(3);
   return (
     <g className={`dims user-dim${selected ? ' selected' : ''}`} data-dim={d.id} data-out={`${n.x},${n.y}`}>
@@ -273,11 +281,10 @@ function UserDimension({ d, offset, selected, px }: { d: UserDim; offset: number
           return <line key={i} x1={s.x} y1={s.y} x2={e.x} y2={e.y} className="dim-line" strokeWidth={px(0.6)} />;
         })}
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-line" strokeWidth={px(1)} />
-      {[a, b].map((p, i) => {
-        const v = { x: (u.x + n.x) * tick, y: (u.y + n.y) * tick };
-        return <line key={i} x1={p.x - v.x} y1={p.y - v.y} x2={p.x + v.x} y2={p.y + v.y} className="dim-line" strokeWidth={px(1.2)} />;
-      })}
-      <text x={m.x} y={m.y} transform={`rotate(${angle} ${m.x} ${m.y})`} className="dim" fontSize={px(11)} textAnchor="middle" dominantBaseline="middle">
+      {[a, b].map((p, i) => (
+        <DimEnd key={i} p={p} tick={{ x: (u.x + n.x) * tick, y: (u.y + n.y) * tick }} dirs={stopDirs(i, 2, u)} look={look} px={px} />
+      ))}
+      <text x={m.x} y={m.y} transform={`rotate(${angle} ${m.x} ${m.y})`} className="dim" fontSize={px(11 * look.text)} textAnchor="middle" dominantBaseline="middle">
         {formatFtIn(len)}
       </text>
     </g>
@@ -285,7 +292,7 @@ function UserDimension({ d, offset, selected, px }: { d: UserDim; offset: number
 }
 
 /** An angle between two walls: an arc across the corner where their lines meet, with the degrees at its middle. Drag it to change the radius. */
-function AngleDimension({ project, id, a, b, extra, selected, px }: { project: Project; id: string; a: string; b: string; extra: number; selected: boolean; px(n: number): number }) {
+function AngleDimension({ project, id, a, b, extra, selected, look, px }: { project: Project; id: string; a: string; b: string; extra: number; selected: boolean; look: Look; px(n: number): number }) {
   const g = angleBetween(project, a, b);
   if (!g) return null;
   const r = Math.max(px(12), 30 + extra);
@@ -295,16 +302,21 @@ function AngleDimension({ project, id, a, b, extra, selected, px }: { project: P
   const mid = { x: g.u.x + g.v.x, y: g.u.y + g.v.y };
   const ml = Math.hypot(mid.x, mid.y) || 1;
   const m = { x: mid.x / ml, y: mid.y / ml };
-  const label = { x: g.at.x + m.x * (r + px(10)), y: g.at.y + m.y * (r + px(10)) };
+  const label = { x: g.at.x + m.x * (r + px(10 * look.text)), y: g.at.y + m.y * (r + px(10 * look.text)) };
   const arc = `M ${p.x} ${p.y} A ${r} ${r} 0 0 ${sweep} ${q.x} ${q.y}`;
   return (
     <g className={`dims angle-dim${selected ? ' selected' : ''}`} data-dim={id} data-out={`${m.x},${m.y}`}>
       <path d={arc} className="dim-hit" fill="none" strokeWidth={px(10)} />
       <path d={arc} className="dim-line" fill="none" strokeWidth={px(1)} />
-      {[p, q].map((e, i) => (
-        <circle key={i} cx={e.x} cy={e.y} r={px(1.6)} className="dim-dot" />
-      ))}
-      <text x={label.x} y={label.y} className="dim" fontSize={px(11)} textAnchor="middle" dominantBaseline="middle">
+      {[p, q].map((e, i) => {
+        // Arrows point along the arc into each wall; any other style keeps the dots.
+        const t = i === 0 ? g.u : g.v;
+        const o = i === 0 ? g.v : g.u;
+        const s = t.x * o.y - t.y * o.x > 0 ? 1 : -1;
+        const tan = { x: s * t.y, y: -s * t.x };
+        return look.ends === 'arrow' ? <DimEnd key={i} p={e} tick={{ x: 0, y: 0 }} dirs={[tan]} look={look} px={px} /> : <circle key={i} cx={e.x} cy={e.y} r={px(1.6)} className="dim-dot" />;
+      })}
+      <text x={label.x} y={label.y} className="dim" fontSize={px(11 * look.text)} textAnchor="middle" dominantBaseline="middle">
         {Math.round(g.deg * 10) / 10}°
       </text>
     </g>
@@ -312,7 +324,7 @@ function AngleDimension({ project, id, a, b, extra, selected, px }: { project: P
 }
 
 /** A dimension chain along one wall, outside it: end → each opening centre → end; or running totals from the first end. */
-function OpeningChain({ wall, side, stops, extra, selected, running, px }: { wall: Wall; side: 1 | -1; stops: number[]; extra: number; selected: boolean; running?: boolean; px(n: number): number }) {
+function OpeningChain({ wall, side, stops, extra, selected, running, look, px }: { wall: Wall; side: 1 | -1; stops: number[]; extra: number; selected: boolean; running?: boolean; look: Look; px(n: number): number }) {
   const d = wallDir(wall);
   const n = wallNormal(wall);
   const off = (wall.thickness / 2 + px(24) + extra) * side;
@@ -329,28 +341,27 @@ function OpeningChain({ wall, side, stops, extra, selected, running, px }: { wal
         const p = P(s);
         // Running: an open circle at the zero. Else a 45° tick, turned with the wall.
         if (running && i === 0) return <circle key={i} cx={p.x} cy={p.y} r={px(2.5)} className="dim-line" fill="none" strokeWidth={px(1)} />;
-        const u = { x: (d.x + n.x) * tick, y: (d.y + n.y) * tick };
-        return <line key={i} x1={p.x - u.x} y1={p.y - u.y} x2={p.x + u.x} y2={p.y + u.y} className="dim-line" strokeWidth={px(1)} />;
+        return <DimEnd key={i} p={p} tick={{ x: (d.x + n.x) * tick, y: (d.y + n.y) * tick }} dirs={running ? [d] : stopDirs(i, stops.length, d)} look={look} px={px} width={1} />;
       })}
       {running &&
-        runningLabels(stops, px(11)).map((s) => {
+        runningLabels(stops, px(11 * look.text)).map((s) => {
           // Written square to the wall, outward from the line, so close ticks don't collide.
           const p = P(s, px(4));
           const rot = angle - 90;
           const tx = { x: Math.cos((rot * Math.PI) / 180), y: Math.sin((rot * Math.PI) / 180) };
           const anchor = tx.x * n.x * side + tx.y * n.y * side > 0 ? 'start' : 'end';
           return (
-            <text key={s} x={p.x} y={p.y} transform={`rotate(${rot} ${p.x} ${p.y})`} className="dim" fontSize={px(9)} textAnchor={anchor} dominantBaseline="middle">
+            <text key={s} x={p.x} y={p.y} transform={`rotate(${rot} ${p.x} ${p.y})`} className="dim" fontSize={px(9 * look.text)} textAnchor={anchor} dominantBaseline="middle">
               {formatFtIn(s - stops[0])}
             </text>
           );
         })}
       {!running && stops.slice(1).map((s, i) => {
         const len = s - stops[i];
-        if (len < px(28)) return null;
-        const m = P((stops[i] + s) / 2, px(6));
+        if (len < px(28 * look.text)) return null;
+        const m = P((stops[i] + s) / 2, px(6 * look.text));
         return (
-          <text key={i} x={m.x} y={m.y} transform={`rotate(${angle} ${m.x} ${m.y})`} className="dim" fontSize={px(9)} textAnchor="middle" dominantBaseline="middle">
+          <text key={i} x={m.x} y={m.y} transform={`rotate(${angle} ${m.x} ${m.y})`} className="dim" fontSize={px(9 * look.text)} textAnchor="middle" dominantBaseline="middle">
             {formatFtIn(len)}
           </text>
         );
@@ -365,7 +376,7 @@ function uniq(ns: number[]): number[] {
   return out;
 }
 
-function DimString({ id, axis, stops, at, out, selected, running, px }: { id: string; axis: 'x' | 'y'; stops: number[]; at: number; out: 1 | -1; selected: boolean; running?: boolean; px(n: number): number }) {
+function DimString({ id, axis, stops, at, out, selected, running, look, px }: { id: string; axis: 'x' | 'y'; stops: number[]; at: number; out: 1 | -1; selected: boolean; running?: boolean; look: Look; px(n: number): number }) {
   const P = (along: number, across: number): Point => (axis === 'x' ? { x: along, y: across } : { x: across, y: along });
   const a = P(stops[0], at);
   const b = P(stops.at(-1)!, at);
@@ -380,14 +391,15 @@ function DimString({ id, axis, stops, at, out, selected, running, px }: { id: st
         const p = P(s, at);
         // Running: an open circle at the zero point. Otherwise a 45° architectural tick.
         if (running && i === 0) return <circle key={s} cx={p.x} cy={p.y} r={px(3)} className="dim-line" fill="none" strokeWidth={px(1.2)} />;
-        return <line key={s} x1={p.x - tick} y1={p.y + tick} x2={p.x + tick} y2={p.y - tick} className="dim-line" strokeWidth={px(1.2)} />;
+        const u = axis === 'x' ? { x: 1, y: 0 } : { x: 0, y: 1 };
+        return <DimEnd key={s} p={p} tick={{ x: -tick, y: tick }} dirs={running ? [u] : stopDirs(i, stops.length, u)} look={look} px={px} />;
       })}
-      {running && runningLabels(stops, px(12)).map((s) => {
+      {running && runningLabels(stops, px(12 * look.text)).map((s) => {
         // The total so far at each tick, written outward from the line so neighbours don't collide.
         const p = P(s, at + out * px(5));
         const anchor = (axis === 'x' ? -out : out) > 0 ? 'start' : 'end';
         return (
-          <text key={s} x={p.x} y={p.y} fontSize={px(10)} textAnchor={anchor} dominantBaseline="middle" className="dim" transform={axis === 'x' ? `rotate(-90 ${p.x} ${p.y})` : undefined}>
+          <text key={s} x={p.x} y={p.y} fontSize={px(10 * look.text)} textAnchor={anchor} dominantBaseline="middle" className="dim" transform={axis === 'x' ? `rotate(-90 ${p.x} ${p.y})` : undefined}>
             {formatFtIn(s - stops[0])}
           </text>
         );
@@ -396,13 +408,13 @@ function DimString({ id, axis, stops, at, out, selected, running, px }: { id: st
         // Text on the outer side of the line (hanging below it when outward is +).
         const mid = P((stops[i] + s) / 2, at + out * px(5));
         const len = s - stops[i];
-        if (len < px(30)) return null;
+        if (len < px(30 * look.text)) return null;
         return (
           <text
             key={s}
             x={mid.x}
             y={mid.y}
-            fontSize={px(11)}
+            fontSize={px(11 * look.text)}
             textAnchor="middle"
             dominantBaseline={out > 0 ? 'hanging' : undefined}
             className="dim"
@@ -653,18 +665,18 @@ function FixtureGlyph({ f, selected, px }: { f: Fixture; selected: boolean; px(n
   );
 }
 
-function WallDimension({ l, px }: { l: DimLabel; px(n: number): number }) {
+function WallDimension({ l, look, px }: { l: DimLabel; look: Look; px(n: number): number }) {
   const w = l.wall;
   const len = l.length;
   if (len < 12) return null;
   const n = wallNormal(w);
   const mid = pointAlong(w, l.at);
-  const off = (w.thickness / 2 + px(10)) * l.side;
+  const off = (w.thickness / 2 + px(10 * look.text)) * l.side;
   const pos = { x: mid.x + n.x * off, y: mid.y + n.y * off };
   let angle = (Math.atan2(w.b.y - w.a.y, w.b.x - w.a.x) * 180) / Math.PI;
   if (angle > 90 || angle <= -90) angle += 180;
   return (
-    <text x={pos.x} y={pos.y} transform={`rotate(${angle} ${pos.x} ${pos.y})`} className="dim" fontSize={px(11)} textAnchor="middle" dominantBaseline="middle">
+    <text x={pos.x} y={pos.y} transform={`rotate(${angle} ${pos.x} ${pos.y})`} className="dim" fontSize={px(11 * look.text)} textAnchor="middle" dominantBaseline="middle">
       {formatFtIn(len)}
     </text>
   );

@@ -312,13 +312,37 @@ export type DimMode = 'centre' | 'inside' | 'outside';
 export type DimAnchor =
   | { wallId: string; end: 'a' | 'b'; along: number; perp: number }
   | { openingId: string; along: number; perp: number }
-  | { furnitureId: string; x: number; y: number };
+  | { furnitureId: string; x: number; y: number }
+  /** A counter: `along` its back edge (a → b) from its a end (or its b end / middle), `inset` toward its front. */
+  | { counterId: string; from?: 'b' | 'mid'; along: number; inset: number }
+  /** A room: one of its outline's corners by index, or its centre when `corner` is unset. */
+  | { roomId: string; corner?: number };
 
 /** An angle dimension between two walls: an arc where their lines meet, marked in degrees. */
 export interface AngleDim {
   id: string;
   a: string;
   b: string;
+}
+
+/** A point an ordinate dimension measures to, pinned like a placed dimension's ends. */
+export interface OrdPoint {
+  p: Point;
+  at?: DimAnchor;
+}
+
+/** An ordinate (baseline) dimension: a picked origin, then each further point labelled with its distance from it along `axis`. */
+export interface OrdinateDim {
+  id: string;
+  axis: 'x' | 'y';
+  origin: OrdPoint;
+  pts: OrdPoint[];
+}
+
+/** How the plan's dimensions look: text size (× the usual) and the marks at their ends. Unset = 1×, ticks. */
+export interface DimLook {
+  text?: number;
+  ends?: 'tick' | 'arrow' | 'dot';
 }
 
 export interface UserDim {
@@ -358,6 +382,10 @@ export interface Project {
   hiddenDims?: string[];
   /** Dimensions the user placed by picking two points; drawn aligned with a → b, offset by dimOffsets[id]. */
   dims?: UserDim[];
+  /** Ordinate (baseline) dimensions; drawn offset by dimOffsets[id]. */
+  ordDims?: OrdinateDim[];
+  /** Dimension text size and end marks, on the plan and the print sheet. */
+  dimLook?: DimLook;
   electrical?: ElectricalSettings;
   framing: FramingSettings;
   pricing?: Pricing;

@@ -25,6 +25,7 @@ import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanD
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
 import { anchorFor, dimSnapPoints, faceSpans } from '../calc/faces.ts';
+import { useDimensionModes } from './dimensionModes.tsx';
 import { hitTest, type Hit } from './hitTest.ts';
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
@@ -102,6 +103,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const [calPoints, setCalPoints] = useState<Point[]>([]);
   /** The Dimension tool's first point's wall anchor, if it snapped to one. */
   const dimAnchor = useRef<DimAnchor | undefined>(undefined);
+  /** The Dimension tool's angle and ordinate kinds. */
+  const dimModes = useDimensionModes(tool === 'dimension', project, dispatch, setSelection, onMessage);
   const [calText, setCalText] = useState('');
   const [realW, setRealW] = useState('');
   const [realH, setRealH] = useState('');
@@ -297,8 +300,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       if (e.key === 'Escape') {
         if (lengthText) setLengthText('');
         else if (chain) setChain(null);
-        else if (tool === 'dimension' && calPoints.length) {
+        else if (tool === 'dimension' && (calPoints.length || dimModes.busy)) {
           setCalPoints([]);
+          dimModes.reset();
           setMoveText(null);
         } else setTool('select');
       }
@@ -332,7 +336,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       window.removeEventListener('keydown', down, true);
       window.removeEventListener('keyup', up);
     };
-  }, [tool, chain, lengthText, cursor, shift, placeWall, setTool, entry, calPoints.length]);
+  }, [tool, chain, lengthText, cursor, shift, placeWall, setTool, entry, calPoints.length, dimModes.busy]);
 
   /** Set the last drag exactly from typed text: a distance moved, an end's length, or a swing's angle. */
   function applyEntry(last: LastEdit, text: string) {
@@ -583,6 +587,15 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       case 'dimension': {
         // First click: where it starts; second: where it ends. It goes in 1' out to the left of the pick direction.
         // A point snapped to a wall end or face corner is pinned to that wall end and follows it.
+        if (dimModes.kind === 'angle') {
+          dimModes.clickAngle(raw, SNAP_PX / viewRef.current.scale);
+          return;
+        }
+        if (dimModes.kind === 'ordinate') {
+          const o = snapDim(raw, dimModes.from);
+          dimModes.clickOrdinate(o.p, o.snapped === 'endpoint' ? anchorFor(project, o.p) : undefined);
+          return;
+        }
         const from = calPoints[0];
         const s = snapDim(raw, from);
         const p = s.p;
@@ -790,9 +803,10 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     }
     else if (tool === 'room') setCursor(snap(raw));
     else if (tool === 'dimension') {
-      const c = snapDim(raw, calPoints[0]);
+      const o = calPoints[0] ?? dimModes.from;
+      const c = snapDim(raw, o);
       setCursor(c);
-      setMoveText(calPoints[0] ? `${formatFtIn(dist(calPoints[0], c.p))} · click to place · Shift = any angle · Esc cancels` : null);
+      setMoveText(o ? `${formatFtIn(dist(o, c.p))} · click to place · Shift = any angle · Esc ${dimModes.from ? 'finishes' : 'cancels'}` : null);
     } else setCursor({ p: raw, snapped: null });
   }
 
@@ -1042,6 +1056,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             <polyline points={[...calPoints, ...(calPoints.length === 4 ? [calPoints[0]] : cursor ? [cursor.p] : [])].map((p) => `${p.x},${p.y}`).join(' ')} fill="none" className="cal-line" strokeWidth={px(2)} />
           )}
           {tool === 'dimension' && calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(1.5)} />}
+          {tool === 'dimension' && dimModes.from && cursor && <line x1={dimModes.from.x} y1={dimModes.from.y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(1.5)} />}
+          {tool === 'dimension' && dimModes.overlay(px)}
           {tool === 'calibrate' && calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(2)} />}
           {tool === 'calibrate' && calPoints.length === 2 && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={calPoints[1].x} y2={calPoints[1].y} className="cal-line" strokeWidth={px(2)} />}
 
@@ -1066,6 +1082,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         </div>
       )}
 
+      {tool === 'dimension' && dimModes.panel}
       {tool === 'calibrate' && (
         <div className="float-panel">
           {calPoints.length < 2 ? (
@@ -1152,7 +1169,7 @@ function hintFor(tool: Tool, drawing: boolean): string {
     case 'calibrate':
       return 'Pick two points on the image whose real distance you know';
     case 'dimension':
-      return 'Click two points to dimension between them — snaps to wall ends, face corners and the grid · Shift = any angle · drag it out afterwards with Select';
+      return 'Linear: click two points · Angle: click two walls · Ordinate: click an origin, then each point (Esc finishes) — snaps to wall ends, face corners, openings, fixtures, counters, room corners / centres and the grid · Shift = any angle · drag it out afterwards with Select';
     case 'straighten':
       return 'Click four corners of a rectangle in the photo, in any order';
     case 'moveImage':
