@@ -384,7 +384,7 @@ export function App() {
 
 function SyncChip({ ws }: { ws: ReturnType<typeof useWorkspace> }) {
   if (ws.current.source === 'local') return <span className="sync-chip muted" title="Saved in this browser">This device</span>;
-  const label = { idle: 'Account', pending: 'Saving…', saving: 'Saving…', saved: 'Saved', error: 'Not saved', conflict: 'Conflict' }[ws.status];
+  const label = { idle: 'Account', pending: 'Saving…', saving: 'Saving…', saved: 'Saved', error: 'Not saved', conflict: 'Conflict', offline: 'Offline · on this device' }[ws.status];
   return (
     <span className={`sync-chip ${ws.status === 'error' || ws.status === 'conflict' ? 'bad' : ''}`} title="Saved to your account">
       ☁ {label}

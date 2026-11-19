@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { cloud, inviteLink, type CloudProject, type Invite, type User } from '../model/cloud.ts';
+import { ApiError, cloud, inviteLink, type CloudProject, type Invite, type User } from '../model/cloud.ts';
+import { allCached } from '../model/cloudCache.ts';
 import { listLocal } from '../model/library.ts';
+import { accountListing, type ListingRow } from '../model/offlineSync.ts';
 import { Modal } from '../ui/Modal.tsx';
+import { ShareControls, Thumb } from './ShareControls.tsx';
 import type { Workspace } from './useWorkspace.ts';
 
 // Project library and account dialogs.
@@ -10,14 +13,21 @@ const when = (t: number) => new Date(t).toLocaleString(undefined, { month: 'shor
 const size = (b: number) => (b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 export function ProjectsDialog({ ws, onClose, onSignIn }: { ws: Workspace; onClose(): void; onSignIn(): void }) {
-  const [local, setLocal] = useState<{ id: string; name: string; updatedAt: number }[] | null>(null);
-  const [remote, setRemote] = useState<CloudProject[] | null>(null);
+  const [local, setLocal] = useState<{ id: string; name: string; updatedAt: number; thumb?: string | null }[] | null>(null);
+  const [remote, setRemote] = useState<ListingRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState<string | null>(null);
 
   const refresh = () => {
     listLocal().then(setLocal, () => setLocal([]));
-    if (ws.user) cloud.list().then(setRemote, (e) => setError(e.message));
+    const u = ws.user;
+    if (!u) return;
+    // Offline, list the account projects cached on this device.
+    Promise.all([cloud.list().catch((e) => (e instanceof ApiError && e.status === 0 ? null : Promise.reject(e))), allCached(u.id)]).then(
+      ([list, cached]: [CloudProject[] | null, Awaited<ReturnType<typeof allCached>>]) => setRemote(accountListing(list, cached, u.id)),
+      (e) => setError(e.message),
+    );
   };
   useEffect(refresh, [ws.user]);
 
@@ -44,7 +54,7 @@ export function ProjectsDialog({ ws, onClose, onSignIn }: { ws: Workspace; onClo
       <section className="lib">
         <div className="lib-head">
           <h3>Your account</h3>
-          {ws.user && (
+          {ws.user && !ws.offline && (
             <button disabled={busy} onClick={() => run(() => ws.create('cloud'), true)}>
               + New in account
             </button>
@@ -66,21 +76,33 @@ export function ProjectsDialog({ ws, onClose, onSignIn }: { ws: Workspace; onClo
         ) : (
           <ul className="lib-list">
             {remote.map((p) => (
-              <li key={p.id} className={isOpen('cloud', p.id) ? 'open' : ''}>
+              <li key={p.id} className={`${isOpen('cloud', p.id) ? 'open' : ''} ${sharing === p.id ? 'sharing' : ''}`}>
+                <Thumb svg={p.thumb} />
                 <button className="lib-name" disabled={busy || isOpen('cloud', p.id)} onClick={() => run(() => ws.open('cloud', p.id), true)}>
                   {p.name}
                   {isOpen('cloud', p.id) && <span className="badge">open</span>}
                 </button>
                 <span className="muted small">
-                  {when(p.updated_at)} · {size(p.bytes)}
+                  {when(p.updated_at)}
+                  {p.bytes !== undefined && <> · {size(p.bytes)}</>}
+                  {p.unsynced && <span className="badge warn" title="Edited offline — saves to your account when you’re back online">not synced</span>}
                 </span>
-                <button className="link danger" disabled={busy} onClick={() => confirmDelete(p.name) && run(() => ws.remove('cloud', p.id))}>
-                  Delete
-                </button>
+                {!p.offline && (
+                  <>
+                    <button className="link" disabled={busy} onClick={() => setSharing(sharing === p.id ? null : p.id)} title="A read-only link anyone can open">
+                      Share
+                    </button>
+                    <button className="link danger" disabled={busy} onClick={() => confirmDelete(p.name) && run(() => ws.remove('cloud', p.id))}>
+                      Delete
+                    </button>
+                  </>
+                )}
+                {sharing === p.id && <ShareControls projectId={p.id} />}
               </li>
             ))}
           </ul>
         )}
+        {remote?.some((p) => p.offline) && <p className="muted small">Offline — these are the copies saved on this device. Edits sync when you’re back online.</p>}
       </section>
       <section className="lib">
         <div className="lib-head">
@@ -97,12 +119,13 @@ export function ProjectsDialog({ ws, onClose, onSignIn }: { ws: Workspace; onClo
           <ul className="lib-list">
             {local.map((p) => (
               <li key={p.id} className={isOpen('local', p.id) ? 'open' : ''}>
+                <Thumb svg={p.thumb} />
                 <button className="lib-name" disabled={busy || isOpen('local', p.id)} onClick={() => run(() => ws.open('local', p.id), true)}>
                   {p.name}
                   {isOpen('local', p.id) && <span className="badge">open</span>}
                 </button>
                 <span className="muted small">{when(p.updatedAt)}</span>
-                {ws.user && (
+                {ws.user && !ws.offline && (
                   <button className="link" disabled={busy} onClick={() => run(() => ws.moveToAccount(p.id))} title="Upload to your account and remove it from this device">
                     Move to account
                   </button>

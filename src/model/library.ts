@@ -1,5 +1,6 @@
 import { migrate } from './store.ts';
 import { uid, type Project } from './types.ts';
+import { planThumbnail } from './thumbnail.ts';
 
 // Projects saved on this device, in IndexedDB (localStorage's ~5 MB would fill
 // with a couple of floorplan images). The project being edited is also mirrored
@@ -9,6 +10,8 @@ export interface LocalEntry {
   id: string;
   name: string;
   updatedAt: number;
+  /** Plan thumbnail (thumbnail.ts); absent on entries saved before thumbnails. */
+  thumb?: string | null;
   data: Project;
 }
 
@@ -43,7 +46,7 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
 
 export async function listLocal(): Promise<Omit<LocalEntry, 'data'>[]> {
   const all = await tx<LocalEntry[]>('readonly', (s) => s.getAll());
-  return all.map(({ id, name, updatedAt }) => ({ id, name, updatedAt })).sort((a, b) => b.updatedAt - a.updatedAt);
+  return all.map(({ id, name, updatedAt, thumb, data }) => ({ id, name, updatedAt, thumb: thumb === undefined ? planThumbnail(data) : thumb })).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getLocal(id: string): Promise<Project | null> {
@@ -52,7 +55,7 @@ export async function getLocal(id: string): Promise<Project | null> {
 }
 
 export async function putLocal(id: string, data: Project): Promise<void> {
-  await tx('readwrite', (s) => s.put({ id, name: data.name, updatedAt: Date.now(), data } satisfies LocalEntry));
+  await tx('readwrite', (s) => s.put({ id, name: data.name, updatedAt: Date.now(), thumb: planThumbnail(data), data } satisfies LocalEntry));
 }
 
 export async function deleteLocal(id: string): Promise<void> {

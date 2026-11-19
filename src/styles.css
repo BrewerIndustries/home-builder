@@ -1439,3 +1439,13 @@ table.schedule th {
 
 /* Roof v2: dormer rows in the project panel */
 .dormer-fields { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px; }
+
+/* Accounts follow-ups: thumbnails, share links, offline copies, shared viewer */
+.lib-thumb { flex: 0 0 48px; width: 48px; height: 36px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); overflow: hidden; display: inline-flex; }
+.lib-thumb img { width: 100%; height: 100%; display: block; }
+.lib-list li.sharing { flex-wrap: wrap; }
+.share-box { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px 58px; }
+.share-msg { overflow-wrap: anywhere; }
+.badge.warn { margin-left: 6px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+fieldset.read-only { border: none; margin: 0; padding: 0; min-width: 0; }
+.shared-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
