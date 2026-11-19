@@ -110,7 +110,7 @@ export function FramingView({ project, dispatch }: { project: Project; dispatch:
       <CutList project={project} dispatch={dispatch} />
       <RoofSummary project={project} />
       <FoundationSummary project={project} />
-      <FloorFraming project={project} />
+      <FloorFraming project={project} dispatch={dispatch} />
     </div>
   );
 }

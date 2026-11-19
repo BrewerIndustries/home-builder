@@ -561,6 +561,8 @@ export interface Storey extends Partial<StoreyData> {
   level: number;
   /** Floor-to-floor height; unset = the wall height plus a floor (joists + subfloor). */
   height?: number;
+  /** Floor v2: the framed floor under this storey (storeys above the lowest). */
+  floor?: FloorFrame;
 }
 
 export type RoofType = 'gable' | 'hip' | 'shed' | 'none';
@@ -640,6 +642,30 @@ export interface Foundation {
   subfloor: 'osb' | 'plywood';
   /** Foundation v2 (see calc/foundationV2.ts). All optional and off when unset, so older plans are unchanged. */
   v2?: FoundationV2;
+  /** Floor v2: joist type for every framed floor, and this (lowest) floor's own extras (see calc/floor.ts). Unset = v1. */
+  floor?: FloorFrame;
+}
+
+export type FloorEdge = 'n' | 'e' | 's' | 'w';
+export type FloorInsulation = 'none' | 'R-13' | 'R-19' | 'R-21' | 'R-30' | 'R-38';
+
+/**
+ * Floor v2 settings. On the foundation: the joist type (all framed floors) and
+ * the lowest floor's extras. On a storey above the lowest: that storey's floor
+ * (joist direction, cantilevers, insulation). Every field optional; unset = off.
+ */
+export interface FloorFrame {
+  joistType?: 'sawn' | 'ijoist';
+  /** I-joist series and depth as the maker lists them (e.g. "TJI 210", 11.875). */
+  iJoistSeries?: string;
+  iJoistDepth?: number;
+  /** Joists hung between girders in hangers (flush) instead of lapped on top. */
+  flushGirders?: boolean;
+  /** Storeys above the lowest: direction the joists run. */
+  joistDir?: 'auto' | 'x' | 'y';
+  /** Distance the joists run out past the support, per plan edge (n = top). */
+  cantilever?: Partial<Record<FloorEdge, number>>;
+  insulation?: FloorInsulation;
 }
 
 /** Interior bearing footings, pier pads, basement walls and the Table R403.1 inputs. */

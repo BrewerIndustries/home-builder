@@ -518,6 +518,41 @@ svg.floor-plan {
 .legend .fp-sw-cut {
   background: rgba(234, 179, 8, 0.6);
 }
+.fp-trimmer {
+  stroke: #8b3a1a;
+}
+.fp-hanger {
+  fill: #2563eb;
+}
+.fp-bearing {
+  stroke: #6b7280;
+}
+.fp-support {
+  fill: none;
+  stroke: #6b7280;
+}
+.fp-opening {
+  fill: rgba(148, 163, 184, 0.35);
+  stroke: var(--text);
+}
+.legend .fp-sw-trimmer {
+  background: #8b3a1a;
+}
+.legend .fp-sw-hanger {
+  background: #2563eb;
+}
+.legend .fp-sw-bearing,
+.legend .fp-sw-support {
+  background: #6b7280;
+}
+.floor-notes {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  color: var(--warn, #b45309);
+}
+.floor-fields {
+  margin-bottom: 8px;
+}
 
 /* ---------- canvas ---------- */
 
