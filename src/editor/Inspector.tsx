@@ -46,6 +46,7 @@ import {
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { AngleInput, LengthInput } from './LengthInput.tsx';
+import { RoofExtras } from './RoofExtras.tsx';
 import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
 import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
@@ -1218,6 +1219,7 @@ function RoofFields({ roof, set }: { roof: Roof; set(patch: Partial<Roof>): void
               </select>
             </Field>
           )}
+          <RoofExtras roof={roof} set={set} />
         </>
       )}
     </>

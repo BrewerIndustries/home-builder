@@ -385,6 +385,29 @@ export interface Roof {
   framing: 'trusses' | 'rafters';
   rafterSize: RafterSize;
   spacing: 16 | 24;
+  /** Roof v2: false = one roof over the outline's bounding box (v1); otherwise a roof per wing, valleys where they meet. */
+  perWing?: boolean;
+  /** Roof v2: dormers on the main roof. */
+  dormers?: Dormer[];
+  /** Roof v2: attic vent area at 1/300 of the attic (the R806.2 exception conditions are met) instead of 1/150. */
+  vent300?: boolean;
+}
+
+/** A dormer on one long face of the main roof. Inches. */
+export interface Dormer {
+  id: string;
+  type: 'gable' | 'shed';
+  /** Main-roof face: 'a' = the low-x / low-y eave side, 'b' = the other. */
+  side: 'a' | 'b';
+  /** Centre along the main ridge, from the main roof's start wall face. */
+  at: number;
+  width: number;
+  /** Front wall height above the main roof surface. */
+  height: number;
+  /** Front wall set back from the main wall line, horizontal. */
+  setback: number;
+  /** Dormer roof pitch (rise per 12); a shed dormer's must be lower than the main roof's. */
+  pitch: number;
 }
 
 export const DEFAULT_ROOF: Roof = { type: 'gable', pitch: 6, overhang: 12, rake: 12, ridge: 'auto', framing: 'trusses', rafterSize: '2x8', spacing: 24 };

@@ -2,7 +2,7 @@ import { useMemo, useState, type Dispatch } from 'react';
 import { CutList } from './CutList.tsx';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
-import { roofCalc, roofFraming } from '../calc/roof.ts';
+import { RoofSummary } from './RoofSummary.tsx';
 import { foundationCalc, foundationVolumes } from '../calc/foundation.ts';
 import { FloorFraming } from './FloorFraming.tsx';
 import { siteChecks } from '../calc/site.ts';
@@ -127,35 +127,6 @@ function FoundationSummary({ project }: { project: Project }) {
         <Stat label={<>Perimeter</>} value={<>{formatFtIn(c.perimeter, { compact: true })}</>} />
         <Stat label={<>Concrete (net)</>} value={<>{yd(v.slab + v.edge + v.footing + (c.f.stemMaterial === 'poured' ? v.stem : 0))}</>} />
         <Stat label={<>Anchor bolts</>} value={<>{c.anchorBolts}</>} />
-      </div>
-    </>
-  );
-}
-
-function RoofSummary({ project }: { project: Project }) {
-  const c = useMemo(() => roofCalc(project), [project]);
-  if (!c) return null;
-  const fr = roofFraming(c);
-  const { roof } = c;
-  const name = { gable: 'Gable', hip: 'Hip', shed: 'Shed', none: '' }[roof.type];
-  return (
-    <>
-      <h3>Roof</h3>
-      <p className="muted">
-        {name} roof at {roof.pitch}/12 over the exterior walls' {formatFtIn(c.x1 - c.x0, { compact: true })} × {formatFtIn(c.y1 - c.y0, { compact: true })} outline
-        (an L-shaped plan is roofed as its bounding rectangle for now). Change it under Roof in the Plan tab's project panel.
-      </p>
-      <div className="stat-grid roof-stats">
-        <Stat label={<>Roof area</>} value={<>{Math.round(c.area / 144).toLocaleString()} sq ft · {c.squares.toFixed(1)} sq</>} />
-        <Stat label={<>Rise</>} value={<>{formatFtIn(c.rise)}</>} />
-        <Stat label={<>{fr.kind === 'trusses' ? 'Trusses' : roof.type === 'hip' ? 'Rafters (approx.)' : 'Common rafters'}</>} value={<>{fr.count} @ {roof.spacing}" o.c.</>} />
-        <Stat label={<>{fr.kind === 'trusses' ? 'Truss span' : 'Rafter length'}</>} value={<>{formatFtIn(fr.kind === 'trusses' ? c.W : c.rafterLength)}</>} />
-        {c.ridgeLength > 0 && (
-          <Stat label={<>Ridge</>} value={<>{formatFtIn(c.ridgeLength)}</>} />
-        )}
-        {c.hipLength > 0 && (
-          <Stat label={<>Hips (4)</>} value={<>{formatFtIn(c.hipLength / 4)} each</>} />
-        )}
       </div>
     </>
   );
