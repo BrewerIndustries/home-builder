@@ -33,7 +33,7 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Cut lists v4: price roof / floor members from the cut list too; barn-door blocking and dormer studs in the cut list
 - [x] Layered wall assemblies (drywall / stud / sheathing / foam / siding) per wall + project defaults; faces, clear sizes and estimate follow the layers; old projects keep the +1" rule via a legacy preset
 - [ ] Wall bracing (R602.10)
-- [ ] Multiple floors (ghosted floor below) + stairs tool checked against R311.7
+- [x] Multiple floors (ghosted floor below) + stairs tool checked against R311.7 — done as Storeys v1 + Lighting v4–v6
 
 ## Electrical
 
@@ -43,8 +43,10 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Lighting v3: stairs symbol + stairway switches at each level (other level counted); water-heater rooms, attic and crawlspace equipment lights (E3903.4); fan-only (no light kit) option; outdoor-door lights refiled under E3903.3
 - [x] Lighting v4: furnace / air-handler symbols as E3903.4 equipment (+ M1305.1 30" working space, door gaps open); landing-level 4-way switch where a door opens off the landing (E3903.3); stair geometry checks (R311.7.1 width, R311.7.5.1 riser, R311.7.5.2 tread, R311.7.3 flight rise, R311.7.6 landing, R311.7.2 headroom as info); new stairs sized from floor-to-floor. Real storeys split out to Storeys v1
 - [x] Lighting v5: handrail check (R311.7.8, one side at 4+ risers; R311.7.8.1 34"–38") with left / right / both / none and height; open sides found from the walls; guard check (R312.1.1, from the first riser over 30" up, 34" along a stair, 36" round the opening going down); handrail and guard lengths priced along the slope; plan handrail lines; M1305.1.3 attic equipment access listed when the attic holds equipment
-- [ ] Lighting v6: L- and U-shaped stairs (turn at the landing); headroom checked against the floor above once storeys exist; attic access placed on the plan (hatch symbol + passageway); under-floor access (M1305.1.4); handrail returns / continuity
-- [ ] Storeys v1: real multi-storey plans (floor switcher, walls/rooms per floor, stairs linking two floors); stairway switches placed on the other floor instead of only counted; headroom checked against the floor opening above
+- [x] Lighting v6: L- and U-shaped stairs (turn at the landing); headroom checked against the floor above once storeys exist; attic access placed on the plan (hatch symbol + passageway); under-floor access (M1305.1.4); handrail returns / continuity
+- [ ] Lighting v7: winder treads; Auto lights across every storey at once; floor framing cut round stair openings (Floor v2)
+- [x] Storeys v1: real multi-storey plans (floor switcher, walls/rooms per floor, stairs linking two floors); stairway switches placed on the other floor instead of only counted; headroom checked against the floor opening above
+- [ ] Storeys v2: branch circuits / load calc / panel for the whole house (today per storey); Site tab independent of the active storey; split-levels; copy a storey
 - [x] Countertop and island modelling so kitchen receptacles follow real counters, not every wall
 - [x] Counters v2: follow wall drags; fridge and dishwasher; work-triangle and island-clearance guideline checks
 - [x] Counters v3: L-shaped runs (shared corner), peninsulas (connecting-edge rule), appliance-in-corner warning, wall cabinets + range hood, NKBA landing areas

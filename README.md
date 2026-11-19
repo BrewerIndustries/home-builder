@@ -211,6 +211,16 @@ The checks cover the following:
   - Account projects are cached on the device and open offline. Edits made offline sync when you're back online: the open project goes through the conflict banner, the others are last-write-wins with a notice.
   - These need API migration 0002 on dev (`npm run migrate:dev`, then `npm run deploy:dev`).
 
+- **Storeys v1.**
+  - The floor switcher at the top-left of the plan adds floors above or a basement, renames them and sets floor-to-floor height.
+  - The floor below shows faint, and stair openings are hatched.
+  - Framing, estimate, code checks, 3D and print cover every storey. The roof sits on the top floor and the foundation under the lowest.
+  - Stairs link floors: an up stair opens the floor above, its headroom is checked against that opening (R311.7.2), and Auto lights puts the second stair switch on the other floor.
+- **Lighting v6.**
+  - Stairs can be straight, L or U, turning left or right. Each flight is checked on its own, and the landing is checked against R311.7.6.
+  - Headroom is checked along the walk line.
+  - An Attic access hatch (Fixture tool) is checked against M1305.1.3 (20"×30" opening, passageway, 30"×30" service space). Handrail continuity (R311.7.8.2) and under-floor access (M1305.1.4) get info notes.
+
 ## Code layout
 
 ```
