@@ -15,6 +15,7 @@ import { historyReducer, initHistory } from './model/store.ts';
 import type { DimMode, FurnitureKind, WallKind } from './model/types.ts';
 import { FURNITURE, FURNITURE_KINDS } from './calc/furniture.ts';
 import { SiteView } from './site/SiteView.tsx';
+import { SitePrintSheet } from './site/SitePrint.tsx';
 import { PrintSheet } from './views/PrintSheet.tsx';
 import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
 
@@ -266,6 +267,7 @@ export function App() {
       {notice && <div className="toast">{notice}</div>}
 
       {tab === 'plan' && <PrintSheet project={project} />}
+      {tab === 'site' && <SitePrintSheet project={project} />}
       {tab === 'plan' ? (
         <main className="workspace">
           <div className="toolbar">

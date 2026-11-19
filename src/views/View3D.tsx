@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildScene, type Box, type Scene3D } from '../calc/model3d.ts';
+import { buildSiteScene } from '../calc/site3d.ts';
 import type { Project } from '../model/types.ts';
 
 // Orbitable 3D model of the plan. Loaded lazily (three.js is most of its weight).
@@ -23,6 +24,21 @@ function palette(dark: boolean) {
     counter: dark ? 0x8a7a62 : 0xd8ccb6,
     fixture: dark ? 0xe8edf2 : 0xfdfdfd,
     furniture: dark ? 0x6f7f96 : 0x9fb0c6,
+    // Site (Landscape v2)
+    lawn: dark ? 0x2f4a2a : 0x8fbf72,
+    pavers: 0xc9a98a,
+    concrete: 0xc8c8c4,
+    gravel: 0xddd3c0,
+    mulch: 0x6b4630,
+    sod: dark ? 0x3d6b34 : 0x6fae5a,
+    decking: 0xb9875a,
+    trunk: 0x5b4030,
+    tree: 0x3f8f4a,
+    shrub: 0x2f6b3a,
+    perennial: 0xc06aa8,
+    grass: 0xc8b26a,
+    groundcover: 0x5d9a8a,
+    retaining: dark ? 0x8d8a84 : 0xa9a49a,
   };
 }
 
@@ -32,7 +48,9 @@ export default function View3D({ project }: { project: Project }) {
   const [ceilings, setCeilings] = useState(false);
   const [cutaway, setCutaway] = useState(false);
   const [showRoof, setShowRoof] = useState(true);
+  const [showSite, setShowSite] = useState(true);
   const scene3d = useMemo(() => buildScene(project), [project]);
+  const site3d = useMemo(() => buildSiteScene(project), [project]);
   const fitted = useRef(false);
 
   // One renderer per mount.
@@ -163,11 +181,37 @@ export default function View3D({ project }: { project: Project }) {
       w.group.add(new THREE.Mesh(g, mat(f.kind === 'roof' ? c.roof : f.kind === 'gable' ? c.gable : c.ceiling)));
     }
 
-    if (!fitted.current && scene3d.boxes.length) {
-      fitted.current = true;
-      w.fit(scene3d);
+    if (showSite) {
+      for (const f of site3d.flats) {
+        const m = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(f.outline.map((p) => new THREE.Vector2(p.x, p.y)))), mat(f.kind === 'lot' ? c.lawn : c[f.kind]));
+        m.rotation.x = Math.PI / 2;
+        m.position.y = f.y;
+        w.group.add(m);
+      }
+      for (const b of site3d.walls) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(...b.size), mat(c.retaining));
+        m.position.set(...b.c);
+        m.rotation.y = b.rotY;
+        w.group.add(m);
+      }
+      for (const p of site3d.plants) {
+        const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), mat(c[p.form], { transparent: p.form === 'tree', opacity: 0.85 }));
+        canopy.scale.set(p.r, p.ry, p.r);
+        canopy.position.set(...p.c);
+        w.group.add(canopy);
+        if (p.trunk > 0) {
+          const t = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(3, p.r * 0.06), Math.max(4, p.r * 0.08), p.trunk, 8), mat(c.trunk));
+          t.position.set(p.c[0], p.c[1] - p.ry - p.trunk / 2, p.c[2]);
+          w.group.add(t);
+        }
+      }
     }
-  }, [scene3d, ceilings, cutaway, showRoof]);
+
+    if (!fitted.current && (scene3d.boxes.length || site3d.bounds)) {
+      fitted.current = true;
+      w.fit(scene3d.boxes.length ? scene3d : { ...scene3d, bounds: site3d.bounds! });
+    }
+  }, [scene3d, site3d, ceilings, cutaway, showRoof, showSite]);
 
   return (
     <div className="view3d">
@@ -181,11 +225,16 @@ export default function View3D({ project }: { project: Project }) {
         <label>
           <input type="checkbox" checked={cutaway} onChange={(e) => setCutaway(e.target.checked)} /> Cut walls at 4 ft
         </label>
+        {site3d.bounds && (
+          <label>
+            <input type="checkbox" checked={showSite} onChange={(e) => setShowSite(e.target.checked)} /> Site
+          </label>
+        )}
         <button onClick={() => world.current?.fit(scene3d)}>Reset view</button>
         <span className="muted small">Drag to orbit · right-drag to pan · scroll to zoom</span>
       </div>
       <div className="view3d-canvas" ref={host} />
-      {!project.walls.length && <p className="view3d-empty muted">Draw some walls on the Plan tab first.</p>}
+      {!project.walls.length && !site3d.bounds && <p className="view3d-empty muted">Draw some walls on the Plan tab first.</p>}
     </div>
   );
 }
