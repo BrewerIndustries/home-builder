@@ -1,5 +1,5 @@
 import { useMemo, useState, type Dispatch } from 'react';
-import { cutList, cutListCsv, KEEP_OFFCUT } from '../calc/cutlist.ts';
+import { CutList } from './CutList.tsx';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
 import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
 import { roofCalc, roofFraming } from '../calc/roof.ts';
@@ -107,86 +107,6 @@ export function FramingView({ project, dispatch }: { project: Project; dispatch:
       <FoundationSummary project={project} />
       <FloorFraming project={project} />
     </div>
-  );
-}
-
-/** Plates, jacks, cripples, sills and header plies packed onto stock lengths, with the waste. */
-function CutList({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
-  const groups = useMemo(() => cutList(project), [project]);
-  const [open, setOpen] = useState<string | null>(null);
-  if (!groups.length) return null;
-  const ft = (n: number) => `${n / 12}'`;
-  const csv = () => downloadBlob(new Blob([cutListCsv(groups, formatFtIn)], { type: 'text/csv' }), `${slug(project.name || 'plan')}-cut-list.csv`);
-  return (
-    <section className="cut-list">
-      <div className="report-head">
-        <h3>Cut list</h3>
-        <button onClick={csv}>Download CSV</button>
-      </div>
-      <p className="muted">
-        Plates, jacks, cripples, flat sills and header plies packed onto 8'–16' stock (first-fit, 1/8" kerf per cut), each board then cut down to the shortest length
-        that holds it. Plates over 16' are split into pieces. Full-height studs are bought at length
-        and LVL headers by length, so they aren't here. The top plate's joints sit at least 24" from the cap plate's (R602.3.2).
-      </p>
-      <label className="link-row">
-        <input
-          type="checkbox"
-          checked={!!project.framing.cutListEstimate}
-          onChange={(e) => dispatch({ type: 'setFraming', patch: { cutListEstimate: e.target.checked || undefined } })}
-        />{' '}
-        Price these boards in the Estimate (instead of plate and header LF plus the waste factor)
-      </label>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Size</th>
-              <th>Boards to buy</th>
-              <th className="num">Pieces</th>
-              <th className="num">Stock</th>
-              <th className="num">Cut</th>
-              <th className="num">Waste</th>
-              <th className="num">Offcuts ≥ {KEEP_OFFCUT}"</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((g) => (
-              <tr key={g.size} className={open === g.size ? 'picked' : undefined} onClick={() => setOpen(open === g.size ? null : g.size)}>
-                <td>{g.size}</td>
-                <td>{g.byStock.map((s) => `${s.n} × ${ft(s.stock)}`).join(', ')}</td>
-                <td className="num">{g.pieces}</td>
-                <td className="num">{Math.round(g.stockLength / 12)} LF</td>
-                <td className="num">{Math.round(g.usedLength / 12)} LF</td>
-                <td className="num strong">{g.wastePct.toFixed(1)}%</td>
-                <td className="num">{g.keep}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {groups
-        .filter((g) => g.size === open)
-        .map((g) => (
-          <ol key={g.size} className="boards">
-            {g.boards.map((b, i) => (
-              <li key={i}>
-                <div className="board" title={`${g.size} × ${ft(b.stock)}`}>
-                  {b.cuts.map((c, k) => (
-                    <span key={k} className="cut" style={{ flexGrow: c.length }} title={`${c.label}: ${formatFtIn(c.length)}`}>
-                      {formatFtIn(c.length)}
-                    </span>
-                  ))}
-                  <span className="offcut" style={{ flexGrow: Math.max(0, b.offcut) }} />
-                </div>
-                <span className="muted">
-                  {ft(b.stock)} — {b.cuts.map((c) => c.label).join(', ')}; {formatFtIn(b.offcut)} left
-                </span>
-              </li>
-            ))}
-          </ol>
-        ))}
-      {!open && <p className="muted">Click a size to see each board's cuts.</p>}
-    </section>
   );
 }
 

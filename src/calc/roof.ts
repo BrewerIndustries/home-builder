@@ -120,7 +120,7 @@ export function roofCalc(project: Project): RoofCalc | null {
   };
 }
 
-const NEXT_SIZE: Record<RafterSize, string> = { '2x6': '2x8', '2x8': '2x10', '2x10': '2x12', '2x12': 'LVL' };
+export const NEXT_SIZE: Record<RafterSize, string> = { '2x6': '2x8', '2x8': '2x10', '2x10': '2x12', '2x12': 'LVL' };
 
 /** Lumber stock length for a piece: even feet, 8'–20'. */
 export function stockFeet(inches: number): number {
@@ -200,6 +200,56 @@ export function roofLines(project: Project, waste: number): MaterialLine[] {
   }
   if (c.gableArea > 0) add('Sheathing', '7/16" OSB gable-end sheathing, 4×8', Math.ceil(((c.gableArea / 144) * w) / 32), 'sheets', `${Math.round(c.gableArea / 144)} sq ft of wall above the plate ${pct}`);
   return lines;
+}
+
+/** A roof member for the cut list: `count` pieces of `length` (a `run` is split onto stock lengths). */
+export interface RoofMember {
+  size: string;
+  length: number;
+  count: number;
+  label: string;
+  run?: boolean;
+}
+
+/** Roof edges that take fascia, each with its length (eaves and rakes). */
+export function roofEdges(c: RoofCalc): { name: string; length: number }[] {
+  const { roof } = c;
+  const o = roof.overhang;
+  if (roof.type === 'gable') {
+    const Le = c.L + 2 * roof.rake;
+    const rake = (c.W / 2 + o) * c.k;
+    return [{ name: 'eave', length: Le }, { name: 'eave', length: Le }, ...Array.from({ length: 4 }, () => ({ name: 'rake', length: rake }))];
+  }
+  if (roof.type === 'hip') return [c.L + 2 * o, c.W + 2 * o, c.L + 2 * o, c.W + 2 * o].map((length) => ({ name: 'eave', length }));
+  const Le = c.L + 2 * roof.rake;
+  const rake = (c.W + 2 * o) * c.k;
+  return [{ name: 'low eave', length: Le }, { name: 'high eave', length: Le }, { name: 'rake', length: rake }, { name: 'rake', length: rake }];
+}
+
+/**
+ * Roof members cut from dimensional stock. Rafter roofs: common rafters (hip
+ * roofs: commons + jacks at common length — an over-count), ridge board, hips
+ * and ceiling joists; every roof: 2x6 fascia along its edges. Trusses are
+ * ordered made, so they're not here.
+ */
+export function roofCutMembers(project: Project): RoofMember[] {
+  const c = roofCalc(project);
+  if (!c) return [];
+  const { roof } = c;
+  const out: RoofMember[] = [];
+  if (roof.framing === 'rafters') {
+    const fr = roofFraming(c);
+    out.push({ size: roof.rafterSize, length: c.rafterLength, count: fr.count, label: roof.type === 'hip' ? 'rafter (common / jack)' : 'rafter' });
+    if (c.ridgeLength > 0) out.push({ size: NEXT_SIZE[roof.rafterSize], length: c.ridgeLength, count: 1, label: 'ridge', run: true });
+    if (c.hipLength > 0) out.push({ size: NEXT_SIZE[roof.rafterSize], length: c.hipLength / 4, count: 4, label: 'hip rafter' });
+    if (roof.type !== 'shed') {
+      const n = Math.ceil(c.L / roof.spacing) + 1;
+      const pieces = c.W > 240 ? 2 : 1;
+      out.push({ size: roof.rafterSize, length: c.W / pieces, count: n * pieces, label: 'ceiling joist' });
+    }
+  }
+  for (const e of roofEdges(c)) out.push({ size: '2x6', length: e.length, count: 1, label: `fascia (${e.name})`, run: true });
+  return out;
 }
 
 /** 3D surfaces of the roof (plan x → X, plan y → Z, up = Y). */
