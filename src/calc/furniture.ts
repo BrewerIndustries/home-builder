@@ -5,6 +5,7 @@ import { convexOverlap, counterCorners, counterPoint, CUTOUT_LABEL } from './cou
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { roomAt, VEHICLE_DOOR } from './lighting.ts';
+import { floorToFloor, MAX_RISER } from './stairs.ts';
 
 // Plan symbols: plumbing fixtures and appliances (priced, code-checked, drawn in
 // 3D) and furniture (drawn, so a plan reads as rooms people use). Each is a
@@ -43,6 +44,8 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   washer: { label: 'Washer', w: 27, d: 30, h: 38, fixture: true },
   dryer: { label: 'Dryer', w: 27, d: 30, h: 38, fixture: true },
   'water-heater': { label: 'Water heater', w: 24, d: 24, h: 60, fixture: true },
+  furnace: { label: 'Furnace', w: 22, d: 30, h: 50, fixture: true },
+  'air-handler': { label: 'Air handler', w: 24, d: 24, h: 54, fixture: true },
   range: { label: 'Range (freestanding)', w: 30, d: 26, h: 36, fixture: true },
   fridge: { label: 'Refrigerator (freestanding)', w: 36, d: 30, h: 70, fixture: true },
   bed: { label: 'Bed', w: 60, d: 80, h: 24, fixture: false },
@@ -125,23 +128,43 @@ export function placeFurniture(project: Project, f: Furniture, p: Point): Furnit
 
 export function newFurniture(project: Project, kind: FurnitureKind, p: Point, id: string): Furniture {
   const s = FURNITURE[kind];
-  const extra = kind === 'stairs' ? { risers: 13 } : {};
-  return placeFurniture(project, { id, kind, at: p, rot: 0, w: s.w, d: s.d, ...extra }, p);
+  // A new stair gets enough risers for the floor-to-floor height (7-3/4" max) and 11" treads.
+  if (kind === 'stairs') {
+    const risers = Math.ceil(floorToFloor(project, { id, kind, at: p, rot: 0, w: s.w, d: s.d }) / MAX_RISER);
+    return placeFurniture(project, { id, kind, at: p, rot: 0, w: s.w, d: (risers - 1) * 11, risers }, p);
+  }
+  return placeFurniture(project, { id, kind, at: p, rot: 0, w: s.w, d: s.d }, p);
 }
 
 export const furnitureRoom = (project: Project, f: Furniture): Room | undefined => roomAt(project, f.at);
 
 /** Solid things a clear zone can't overlap: walls, counters and other fixtures. */
 function obstacles(project: Project, self: Furniture): Point[][] {
-  const walls = project.walls.map((w) => {
+  // Each wall as solid pieces, open where a door is (a window's sill is still wall at floor level).
+  const walls = project.walls.flatMap((w) => {
     const n = wallNormal(w);
     const h = w.thickness / 2;
-    return [
-      { x: w.a.x + n.x * h, y: w.a.y + n.y * h },
-      { x: w.b.x + n.x * h, y: w.b.y + n.y * h },
-      { x: w.b.x - n.x * h, y: w.b.y - n.y * h },
-      { x: w.a.x - n.x * h, y: w.a.y - n.y * h },
-    ];
+    const len = wallLength(w);
+    const gaps = project.openings
+      .filter((o) => o.wallId === w.id && o.kind === 'door')
+      .map((o) => [o.offset - o.width / 2, o.offset + o.width / 2] as const)
+      .sort((a, b) => a[0] - b[0]);
+    const pieces: [number, number][] = [];
+    let at = 0;
+    for (const [s0, e0] of gaps) {
+      if (s0 > at + 0.5) pieces.push([at, Math.min(s0, len)]);
+      at = Math.max(at, e0);
+    }
+    if (len > at + 0.5) pieces.push([at, len]);
+    return pieces.map(([s0, e0]) => {
+      const [a, b] = [pointAlong(w, s0), pointAlong(w, e0)];
+      return [
+        { x: a.x + n.x * h, y: a.y + n.y * h },
+        { x: b.x + n.x * h, y: b.y + n.y * h },
+        { x: b.x - n.x * h, y: b.y - n.y * h },
+        { x: a.x - n.x * h, y: a.y - n.y * h },
+      ];
+    });
   });
   const fixtures = project.furniture.filter((f) => f.id !== self.id && isFixture(f)).map(furnitureCorners);
   return [...walls, ...project.counters.map(counterCorners), ...fixtures];
@@ -156,9 +179,20 @@ const blocked = (zone: Point[], solids: Point[][]) =>
     return Math.abs(a) / 2 > 1;
   });
 
-/** R307.1 clear zones: [what it is, outline]. */
+/** Appliances that need a working space in front of their controls (M1305.1). */
+const APPLIANCE: ReadonlySet<FurnitureKind> = new Set(['water-heater', 'furnace', 'air-handler']);
+/** The section a fixture's clear zones come from. */
+export const zoneSection = (f: Furniture) => (APPLIANCE.has(f.kind) ? 'M1305.1' : 'R307.1');
+/** M1305.1: a level working space 30" deep and 30" wide in front of an appliance's control side (taken as its front). */
+const WORK_SPACE = 30;
+
+/** Clear zones (R307.1 fixture clearances, M1305.1 appliance working space): [what it is, outline]. */
 export function clearZones(f: Furniture): [string, Point[]][] {
   const [hw, hd] = [f.w / 2, f.d / 2];
+  if (APPLIANCE.has(f.kind)) {
+    const half = Math.max(hw, WORK_SPACE / 2);
+    return [['30" × 30" working space in front', localRect(f, -half, hd, half, hd + WORK_SPACE)]];
+  }
   switch (f.kind) {
     case 'toilet':
     case 'bidet':
@@ -257,7 +291,8 @@ export function furnitureChecks(project: Project): CodeCheck[] {
     if (zones.length) {
       const solids = obstacles(project, f);
       const bad = zones.filter(([, z]) => blocked(z, solids)).map(([what]) => what);
-      out.push({ rule: `Fixture clearances (${label})`, section: 'R307.1', status: bad.length ? 'fail' : 'pass', message: bad.length ? `${name} needs ${bad.join(' and ')}` : `${name}: clear`, targetId: f.id });
+      const appliance = APPLIANCE.has(f.kind);
+      out.push({ rule: appliance ? `Appliance working space (${label})` : `Fixture clearances (${label})`, section: zoneSection(f), status: bad.length ? 'fail' : 'pass', message: bad.length ? `${name} needs ${bad.join(' and ')}` : `${name}: clear`, targetId: f.id });
     }
     if (f.kind === 'shower') {
       const ok = f.w * f.d >= 900 - 0.5 && Math.min(f.w, f.d) >= 30 - 0.5;
@@ -320,6 +355,8 @@ export function furnitureLines(project: Project): MaterialLine[] {
   add('Washer outlet box', count('washer'), 'one per washer');
   add('Dryer vent kit', count('dryer'), 'one per dryer');
   add('Water heater (allowance)', count('water-heater'), 'water heaters on the plan');
+  add('Furnace (allowance)', count('furnace'), 'furnaces on the plan; size it with a Manual J load calculation (M1401.3)');
+  add('Air handler (allowance)', count('air-handler'), 'air handlers on the plan; size with the heat pump / condenser');
   // Closets by the foot of run: a double hang is two rods and two shelves; a shelf alone is just the shelf.
   const closets = project.furniture.filter((f) => f.kind === 'closet-rod');
   const feet = (pick: (f: Furniture) => boolean, per = 1) => Math.ceil((closets.filter(pick).reduce((t, f) => t + f.w, 0) * per) / 12);
@@ -453,7 +490,7 @@ export function doorSwingChecks(project: Project): CodeCheck[] {
   // A fixture's R307.1 clear space has to stay clear of a door standing open in it too.
   const zones: [string, Point[]][] = project.furniture
     .filter(isFixture)
-    .flatMap((f) => clearZones(f).map(([what, z]): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}'s clear space (${what}, R307.1)`, z]));
+    .flatMap((f) => clearZones(f).map(([what, z]): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}'s clear space (${what}, ${zoneSection(f)})`, z]));
   const sweeps = new Map(doors.map((o) => [o.id, doorSweeps(project, o)]));
   const hitsAny = (mine: Point[][], outline: Point[]) => mine.some((s) => blocked(s, [outline]));
   const doorName = (o: Opening) => `the ${formatFtIn(o.width)} door on ${o.wallId}`;
@@ -512,7 +549,7 @@ export function pocketChecks(project: Project): CodeCheck[] {
 /** Plan-schedule tag prefixes. Counter appliances share the free-standing ones. */
 const MARK: Partial<Record<FurnitureKind, string>> = {
   toilet: 'WC', bidet: 'BD', lavatory: 'LAV', tub: 'T', 'tub-shower': 'TS', shower: 'SH', 'kitchen-sink': 'S', 'laundry-sink': 'LS',
-  washer: 'W', dryer: 'D', 'water-heater': 'WH', range: 'R', fridge: 'REF',
+  washer: 'W', dryer: 'D', 'water-heater': 'WH', furnace: 'F', 'air-handler': 'AH', range: 'R', fridge: 'REF',
 };
 /** Counter cutouts: the free-standing kind they share a tag with, or their own tag (a pantry is a cabinet, not scheduled). */
 const CUTOUT_KIND: Record<CutoutKind, FurnitureKind | 'DW' | 'OV' | null> = { sink: 'kitchen-sink', range: 'range', fridge: 'fridge', dishwasher: 'DW', oven: 'OV', pantry: null };

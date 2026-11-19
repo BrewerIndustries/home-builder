@@ -136,7 +136,7 @@ export interface Cutout {
  */
 export type FurnitureKind =
   | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'tub-shower' | 'shower' | 'kitchen-sink' | 'laundry-sink'
-  | 'washer' | 'dryer' | 'water-heater' | 'range' | 'fridge'
+  | 'washer' | 'dryer' | 'water-heater' | 'furnace' | 'air-handler' | 'range' | 'fridge'
   | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser'
   | 'stairs' | 'closet-rod';
 
@@ -156,6 +156,10 @@ export interface Furniture {
   /** Stairs: risers in the flight, and whether it goes down from this floor (else up). The foot on this floor is the front (+y). */
   risers?: number;
   down?: boolean;
+  /** Stairs: floor-to-floor height (else estimated from the wall height and a floor), and a landing so many risers from the foot, with or without a door off it. */
+  rise?: number;
+  landing?: number;
+  landingEntry?: boolean;
   /** Fixtures: the product picked, and rough-in or other notes, for the schedule. */
   model?: string;
   note?: string;

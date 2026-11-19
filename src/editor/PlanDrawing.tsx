@@ -694,6 +694,17 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
         </>
       );
       break;
+    case 'furnace':
+    case 'air-handler':
+      // A box with its working-space side (front) marked, labelled F / AH.
+      body = (
+        <>
+          {rect(l, t, r, b)}
+          <line x1={l + 2} y1={b - 3} x2={r - 2} y2={b - 3} strokeWidth={sw} />
+          {label(f.kind === 'furnace' ? 'F' : 'AH')}
+        </>
+      );
+      break;
     case 'water-heater':
       body = (
         <>
@@ -747,15 +758,27 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       break;
     case 'stairs': {
       // Treads across the flight, an arrow from the foot (front, +y) up the run, cut line past halfway.
-      const n = Math.max(1, (f.risers ?? 13) - 1);
-      const tread = d / n;
+      // A landing (so many risers from the foot) is one deeper step, the stair's width deep (36" at least).
+      const risers = f.risers ?? 13;
+      const n = Math.max(1, risers - 1);
+      const L = f.landing && f.landing > 0 && f.landing < risers ? Math.round(f.landing) : 0;
+      const ld = L ? Math.max(36, w) : 0;
+      const tread = (d - ld) / Math.max(1, n - (L ? 1 : 0));
+      const steps = Array.from({ length: n }, (_, i) => (L && i + 1 === L ? ld : tread));
+      const edges = steps.slice(0, -1).map((_, i) => steps.slice(0, i + 1).reduce((a, x) => a + x, 0));
+      const landFrom = L ? steps.slice(0, L - 1).reduce((a, x) => a + x, 0) : 0;
       const arrow = f.down ? 'DN' : 'UP';
       body = (
         <>
           {rect(l, t, r, b)}
-          {Array.from({ length: n - 1 }, (_, i) => (
-            <line key={i} x1={l} y1={b - tread * (i + 1)} x2={r} y2={b - tread * (i + 1)} strokeWidth={sw} />
+          {edges.map((e, i) => (
+            <line key={i} x1={l} y1={b - e} x2={r} y2={b - e} strokeWidth={sw} />
           ))}
+          {L > 0 && (
+            <text x={l + 3} y={b - landFrom - ld / 2} fontSize={Math.min(6, w / 6)} dominantBaseline="central" className="stair-label">
+              LDG
+            </text>
+          )}
           <line x1={0} y1={b - 4} x2={0} y2={t + 6} strokeWidth={sw} />
           <polyline points={`${-4},${t + 12} 0,${t + 6} 4,${t + 12}`} fill="none" strokeWidth={sw} />
           <line x1={l} y1={-d * 0.1 + 6} x2={r} y2={-d * 0.1 - 6} strokeWidth={sw} strokeDasharray={`${px(4)} ${px(3)}`} />

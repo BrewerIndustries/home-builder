@@ -13,6 +13,7 @@ import { lightingChecks, roomAt } from './lighting.ts';
 import { outdoorChecks } from './outdoor.ts';
 import { kitchenChecks } from './kitchen.ts';
 import { basinReach, furnitureChecks, roomLavatories } from './furniture.ts';
+import { stairChecks } from './stairs.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -407,6 +408,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const c of outdoorChecks(project)) add(c);
   for (const c of kitchenChecks(project)) add(c);
   for (const c of furnitureChecks(project)) add(c);
+  for (const c of stairChecks(project)) add(c);
 
   return checks;
 }
@@ -414,12 +416,12 @@ export function ircChecks(project: Project): CodeCheck[] {
 /** Things this checker does not look at — shown so nobody mistakes silence for compliance. */
 export const NOT_CHECKED = [
   'Wall bracing (R602.10)',
-  'Dedicated appliance circuits, AFCI (E3703, E3902.16); stairway switches on the other floor itself (only counted here — the plan is one storey); equipment other than a water heater on the plan (E3903.3, E3903.4)',
+  'Dedicated appliance circuits, AFCI (E3703, E3902.16); stairway switches on the other floor itself (only counted here — the plan is one storey); equipment other than a water heater, furnace or air handler (E3903.3, E3903.4)',
   'Smoke alarm distance from cooking appliances and exact ceiling position (R314.3, NFPA 72); CO alarms inside bedrooms with a fuel-burning appliance (R315.3)',
   'Outdoor receptacle height above grade (E3901.7: grade isn\'t modelled, height is from the floor); balcony, deck and porch receptacles',
-  'Stairways, handrails and guards (R311.7, R312)',
+  'Handrails, guards, nosings, winders and spiral stairs (R311.7.5.3, R311.7.8, R312); headroom is only worked out, not checked against the floor above (one storey)',
   'Hallway width (R311.6)',
-  'Plumbing sizing, venting and fixture units (Chapters 29–31); tub and fixture clearances other than R307.1 water closet / lavatory / shower; the 30" between adjacent water closet and bidet centres',
+  'Plumbing sizing, venting and fixture units (Chapters 29–31); appliance access other than the M1305.1 working space in front (passageways, attic and under-floor access)',
   'Fire separation, garage–dwelling (R302)',
   'Energy efficiency (Chapter 11)',
   'Footing size for soil bearing and storeys (Table R403.1), foundation reinforcement and floor framing (Chapter 5)',

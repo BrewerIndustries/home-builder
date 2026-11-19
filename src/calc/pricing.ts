@@ -92,6 +92,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Washer outlet box/, 45],
   [/^Dryer vent kit/, 30],
   [/^Water heater \(allowance\)/, 1100],
+  [/^Furnace \(allowance\)/, 3500],
+  [/^Air handler \(allowance\)/, 2500],
   [/^Plumbing rough-in per fixture/, 400],
   [/^Roof truss|^Gable-end truss|^Mono \(shed\) truss/, 150],
   [/^Hip truss package/, 190],

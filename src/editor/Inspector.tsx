@@ -47,6 +47,7 @@ import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { centrelineForFace, faceSpans, outerSides } from '../calc/faces.ts';
+import { MAX_FLIGHT_RISE, stairGeometry } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { cornerCabinets, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, KNEE_SPACE, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
@@ -577,7 +578,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Width">
           <LengthInput value={f.w} min={6} onChange={(v) => up({ w: v })} />
         </Field>
-        <Field label="Depth" hint={f.kind === 'stairs' ? 'The run, from the foot (on this floor) to the far end' : 'Front to back'}>
+        <Field label="Depth" hint={f.kind === 'stairs' ? 'The run, from the foot (on this floor) to the far end, landing included' : 'Front to back'}>
           <LengthInput value={f.d} min={6} onChange={(v) => up({ d: v })} />
         </Field>
         {f.kind === 'stairs' && (
@@ -591,6 +592,24 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                 <option value="down">Down from this floor</option>
               </select>
             </Field>
+            {(() => {
+              const g = stairGeometry(project, f);
+              return (
+                <>
+                  <Field label="Floor to floor" hint={f.rise === undefined ? 'Estimated: wall height + joists + subfloor — type the real figure' : `${formatFtIn(g.riser)} risers, ${formatFtIn(g.tread)} treads`}>
+                    <LengthInput value={g.rise} min={12} onChange={(v) => up({ rise: v })} />
+                  </Field>
+                  <Field label="Landing at riser" hint={`0 = none. A flight may rise ${formatFtIn(MAX_FLIGHT_RISE)} at most between landings (R311.7.3); counted from the foot`}>
+                    <input type="number" min={0} max={(f.risers ?? 13) - 1} value={f.landing ?? 0} onChange={(e) => up({ landing: Math.max(0, Math.round(Number(e.target.value) || 0)) || undefined })} />
+                  </Field>
+                  {!!f.landing && (
+                    <label className="link-row">
+                      <input type="checkbox" checked={!!f.landingEntry} onChange={(e) => up({ landingEntry: e.target.checked || undefined })} /> A door opens off the landing (it gets a switch too, E3903.3)
+                    </label>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
         {f.kind === 'closet-rod' && (

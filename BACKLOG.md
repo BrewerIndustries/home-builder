@@ -34,7 +34,9 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] **Auto smoke / CO alarm placement (R314 / R315)** — every bedroom, one shared alarm outside each sleeping area, one per storey; combination smoke / CO where there are fuel-burning appliances or an attached garage; 3 ft bathroom-door check.
 - [x] Lighting v2: exterior lights at outdoor doors (E3903.4), switched receptacles as the E3903.2 alternative, ceiling fans
 - [x] Lighting v3: stairs symbol + stairway switches at each level (other level counted); water-heater rooms, attic and crawlspace equipment lights (E3903.4); fan-only (no light kit) option; outdoor-door lights refiled under E3903.3
-- [ ] Lighting v4: real storeys (switch placed on the other floor); furnace / air-handler symbols as E3903.4 equipment; landing-level switches on long flights; stair geometry checks (R311.7 riser / tread / headroom)
+- [x] Lighting v4: furnace / air-handler symbols as E3903.4 equipment (+ M1305.1 30" working space, door gaps open); landing-level 4-way switch where a door opens off the landing (E3903.3); stair geometry checks (R311.7.1 width, R311.7.5.1 riser, R311.7.5.2 tread, R311.7.3 flight rise, R311.7.6 landing, R311.7.2 headroom as info); new stairs sized from floor-to-floor. Real storeys split out to Storeys v1
+- [ ] Lighting v5: handrail (R311.7.8) and guard (R312) checks; L- and U-shaped stairs (turn at the landing); headroom checked against the floor above once storeys exist; equipment access other than the working space (attic / crawlspace passageways, M1305.1.3–.4)
+- [ ] Storeys v1: real multi-storey plans (floor switcher, walls/rooms per floor, stairs linking two floors); stairway switches placed on the other floor instead of only counted; headroom checked against the floor opening above
 - [x] Countertop and island modelling so kitchen receptacles follow real counters, not every wall
 - [x] Counters v2: follow wall drags; fridge and dishwasher; work-triangle and island-clearance guideline checks
 - [x] Counters v3: L-shaped runs (shared corner), peninsulas (connecting-edge rule), appliance-in-corner warning, wall cabinets + range hood, NKBA landing areas
