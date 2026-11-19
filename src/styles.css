@@ -773,6 +773,51 @@ svg.site {
 .plant-groundcover circle {
   fill: #5d9a8a;
 }
+/* Landscape v2: easements, retaining walls, spot grades */
+.easement polygon {
+  fill: color-mix(in srgb, var(--warn) 14%, transparent);
+  stroke: var(--warn);
+}
+.easement.selected polygon {
+  stroke: var(--accent);
+}
+.easement-label {
+  fill: var(--warn);
+  font-weight: 600;
+  pointer-events: none;
+}
+.retaining polyline {
+  stroke: #8d877c;
+  stroke-linecap: square;
+}
+.retaining.selected polyline {
+  stroke: var(--accent);
+}
+.spot-grade path {
+  stroke: var(--text);
+}
+.spot-grade.selected path {
+  stroke: var(--accent);
+}
+.grade-run.ok {
+  stroke: #2f855a;
+}
+.grade-run.bad {
+  stroke: var(--fail);
+}
+.grade-arrow {
+  fill: var(--muted);
+}
+.cal-point {
+  fill: var(--accent);
+}
+.preview line {
+  stroke: var(--accent);
+}
+table.traverse input {
+  width: 100%;
+  min-width: 0;
+}
 .preview polyline {
   stroke: var(--accent);
 }

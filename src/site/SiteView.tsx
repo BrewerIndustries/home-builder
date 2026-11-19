@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
 import { DEFAULT_DEPTH, footprint, IMPERVIOUS, MATERIAL_LABEL, siteLines, siteSummary, SQFT } from '../calc/site.ts';
-import { FORM_LABEL, PLANT_BY_ID, PLANTS, type PlantForm } from '../data/plants.ts';
+import { FORM_LABEL, isNative, PLANT_BY_ID, PLANTS, REGION_LABEL, type NativeRegion, type PlantForm } from '../data/plants.ts';
 import { Field, Stat } from '../editor/Inspector.tsx';
 import { LengthInput } from '../editor/LengthInput.tsx';
 import { PlanDrawing } from '../editor/PlanDrawing.tsx';
@@ -9,12 +9,14 @@ import type { Action } from '../model/store.ts';
 import { EMPTY_SITE, uid, type Point, type Project, type SurfaceMaterial } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import { useIrrigationTool } from './IrrigationLayer.tsx';
+import { AreaExtras, CalibratePanel, deleteV2, existsV2, hitV2, LandscapeLayers, LotExtras, moveV2Vertex, SiteExtras, SiteUnderlayImage, TraversePanel, V2Inspector, v2Points, type V2Sel } from './LandscapeV2.tsx';
 
 // Site plan: lot outline + setbacks, hardscape / bed areas and plants, drawn around
 // the house in the floor plan's own coordinates.
 
-type SiteTool = 'select' | 'lot' | 'area' | 'plant' | 'irrigation';
-type SiteSel = { kind: 'lot' } | { kind: 'area'; id: string } | { kind: 'plant'; id: string };
+type SiteTool = 'select' | 'lot' | 'area' | 'plant' | 'easement' | 'wall' | 'grade' | 'calibrate' | 'image' | 'irrigation';
+type SiteSel = { kind: 'lot' } | { kind: 'area'; id: string } | { kind: 'plant'; id: string } | V2Sel;
+const isV2 = (s: SiteSel | null): s is V2Sel => !!s && (s.kind === 'easement' || s.kind === 'wall' || s.kind === 'grade');
 interface View {
   scale: number;
   ox: number;
@@ -23,7 +25,10 @@ interface View {
 type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
   | { kind: 'plant'; id: string; grab: Point }
-  | { kind: 'vertex'; target: 'lot' | string; index: number };
+  | { kind: 'vertex'; target: 'lot' | string; index: number }
+  | { kind: 'v2vertex'; sel: V2Sel; index: number }
+  | { kind: 'grade'; id: string; grab: Point }
+  | { kind: 'image'; start: Point; origin: Point };
 
 const TOOLS: { id: SiteTool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Select', key: 'v', icon: '↖' },
@@ -31,7 +36,11 @@ const TOOLS: { id: SiteTool; label: string; key: string; icon: string }[] = [
   { id: 'area', label: 'Area', key: 'a', icon: '▨' },
   { id: 'plant', label: 'Plant', key: 'p', icon: '✿' },
   { id: 'irrigation', label: 'Irrigation', key: 'i', icon: '≋' },
+  { id: 'easement', label: 'Easement', key: 'e', icon: '▤' },
+  { id: 'wall', label: 'Ret. wall', key: 'w', icon: '▬' },
+  { id: 'grade', label: 'Grade', key: 'g', icon: '⌖' },
 ];
+const DRAWS: ReadonlySet<SiteTool> = new Set(['lot', 'area', 'easement', 'wall']);
 const MATERIALS = Object.keys(MATERIAL_LABEL) as SurfaceMaterial[];
 const FORMS = Object.keys(FORM_LABEL) as PlantForm[];
 const GRID = 12;
@@ -48,6 +57,8 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
   const [cursor, setCursor] = useState<Point | null>(null);
   const [shift, setShift] = useState(false);
   const [view, setView] = useState<View>({ scale: 0.4, ox: 60, oy: 60 });
+  const [calPts, setCalPts] = useState<Point[]>([]);
+  const [traverse, setTraverse] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
   const viewRef = useRef(view);
@@ -104,7 +115,10 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
     return () => svg.removeEventListener('wheel', onWheel);
   }, []);
 
-  useEffect(() => setDraft([]), [tool]);
+  useEffect(() => {
+    setDraft([]);
+    setCalPts([]);
+  }, [tool]);
 
   // Snap to lot / area / house corners, else a 1 ft grid (orthogonal to the last point unless Shift).
   const corners = useMemo(() => [...(site.lot ?? []), ...site.areas.flatMap((a) => a.points), ...footprint(project).flat()], [site, project]);
@@ -118,7 +132,19 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
   };
 
   function closeDraft(pts = draft) {
+    if (tool === 'wall' && pts.length >= 2) {
+      const id = uid('w');
+      dispatch({ type: 'setSite', patch: { retainingWalls: [...(site.retainingWalls ?? []), { id, points: pts, height: 24 }] } });
+      setSel({ kind: 'wall', id });
+      setDraft([]);
+      return;
+    }
     if (pts.length < 3) return;
+    if (tool === 'easement') {
+      const id = uid('e');
+      dispatch({ type: 'setSite', patch: { easements: [...(site.easements ?? []), { id, points: pts }] } });
+      setSel({ kind: 'easement', id });
+    }
     if (tool === 'lot') {
       dispatch({ type: 'setSite', patch: { lot: pts, setbacks: pts.map(() => 0) } });
       setSel({ kind: 'lot' });
@@ -143,7 +169,8 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
       } else if (e.key === 'Enter') closeDraft();
       else if ((e.key === 'Delete' || e.key === 'Backspace') && draft.length) setDraft(draft.slice(0, -1));
       else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
-        dispatch({ type: 'delete', ids: [sel.kind === 'lot' ? 'lot' : sel.id] });
+        if (isV2(sel)) dispatch({ type: 'setSite', patch: deleteV2(site, sel) });
+        else dispatch({ type: 'delete', ids: sel.kind === 'lot' ? ['lot'] : [sel.id, ...bedPlants(sel)] });
         setSel(null);
       } else if (e.key === 'f') fit();
       else {
@@ -165,11 +192,18 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
   // Drop a stale selection after undo / delete.
   useEffect(() => {
     if (!sel) return;
-    const ok = sel.kind === 'lot' ? !!site.lot : sel.kind === 'area' ? site.areas.some((a) => a.id === sel.id) : site.plants.some((p) => p.id === sel.id);
+    const ok = isV2(sel) ? existsV2(site, sel) : sel.kind === 'lot' ? !!site.lot : sel.kind === 'area' ? site.areas.some((a) => a.id === sel.id) : site.plants.some((p) => p.id === sel.id);
     if (!ok) setSel(null);
   }, [site, sel]);
 
+  /** Deleting a bed takes the plants that were filled into it. */
+  function bedPlants(sel: SiteSel): string[] {
+    return sel.kind === 'area' ? site.plants.filter((p) => p.bed === sel.id).map((p) => p.id) : [];
+  }
+
   function hit(p: Point): SiteSel | null {
+    const v2 = hitV2(site, p, 8 / viewRef.current.scale);
+    if (v2 && v2.kind !== 'easement') return v2;
     const plants = site.plants
       .map((x) => ({ x, r: ((PLANT_BY_ID.get(x.species)?.spread ?? 3) * 12) / 2 }))
       .filter(({ x, r }) => dist(x.at, p) <= Math.max(r, 8 / viewRef.current.scale))
@@ -177,6 +211,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
     if (plants.length) return { kind: 'plant', id: plants[0].x.id };
     const area = [...site.areas].reverse().find((a) => pointInPolygon(p, a.points));
     if (area) return { kind: 'area', id: area.id };
+    if (v2) return v2;
     if (site.lot && pointInPolygon(p, site.lot)) return { kind: 'lot' };
     return null;
   }
@@ -186,6 +221,10 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
     if (sel?.kind === 'area') {
       const a = site.areas.find((x) => x.id === sel.id);
       if (a) return { target: a.id, pts: a.points };
+    }
+    if (isV2(sel)) {
+      const pts = v2Points(site, sel);
+      if (pts) return { target: sel.id, pts };
     }
     return null;
   }
@@ -201,10 +240,26 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
       if (!irr.onDown(raw)) drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
       return;
     }
-    if (tool === 'lot' || tool === 'area') {
+    if (DRAWS.has(tool)) {
       const p = snap(raw, draft.at(-1));
-      if (draft.length >= 3 && dist(p, draft[0]) <= SNAP_PX / view.scale) closeDraft();
+      if (tool !== 'wall' && draft.length >= 3 && dist(p, draft[0]) <= SNAP_PX / view.scale) closeDraft();
       else setDraft([...draft, p]);
+      return;
+    }
+    if (tool === 'grade') {
+      const id = uid('g');
+      const elev = site.grades?.at(-1)?.elev ?? 1200;
+      dispatch({ type: 'setSite', patch: { grades: [...(site.grades ?? []), { id, at: snapToGrid(raw, 6), elev }] } });
+      setSel({ kind: 'grade', id });
+      return;
+    }
+    if (tool === 'calibrate') {
+      setCalPts(calPts.length >= 2 ? [raw] : [...calPts, raw]);
+      return;
+    }
+    if (tool === 'image' && site.underlay) {
+      dispatch({ type: 'checkpoint' });
+      drag.current = { kind: 'image', start: raw, origin: { x: site.underlay.x, y: site.underlay.y } };
       return;
     }
     if (tool === 'plant') {
@@ -218,7 +273,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
     const vi = sp ? sp.pts.findIndex((v) => dist(v, raw) <= SNAP_PX / view.scale) : -1;
     if (sp && vi >= 0) {
       dispatch({ type: 'checkpoint' });
-      drag.current = { kind: 'vertex', target: sp.target, index: vi };
+      drag.current = isV2(sel) ? { kind: 'v2vertex', sel, index: vi } : { kind: 'vertex', target: sp.target, index: vi };
       return;
     }
     const h = hit(raw);
@@ -227,6 +282,10 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
       const pl = site.plants.find((x) => x.id === h.id)!;
       dispatch({ type: 'checkpoint' });
       drag.current = { kind: 'plant', id: h.id, grab: { x: raw.x - pl.at.x, y: raw.y - pl.at.y } };
+    } else if (h?.kind === 'grade') {
+      const g = site.grades!.find((x) => x.id === h.id)!;
+      dispatch({ type: 'checkpoint' });
+      drag.current = { kind: 'grade', id: h.id, grab: { x: raw.x - g.at.x, y: raw.y - g.at.y } };
     } else if (!h) drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, view };
   }
 
@@ -235,11 +294,17 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
     if (tool === 'irrigation' && irr.onMove(raw)) return;
     const d = drag.current;
     if (!d) {
-      setCursor(tool === 'lot' || tool === 'area' ? snap(raw, draft.at(-1)) : raw);
+      setCursor(DRAWS.has(tool) ? snap(raw, draft.at(-1)) : raw);
       return;
     }
     if (d.kind === 'pan') setView({ ...d.view, ox: d.view.ox + e.clientX - d.sx, oy: d.view.oy + e.clientY - d.sy });
     else if (d.kind === 'plant') dispatch({ type: 'updatePlant', id: d.id, patch: { at: snapToGrid({ x: raw.x - d.grab.x, y: raw.y - d.grab.y }, 6) }, transient: true });
+    else if (d.kind === 'grade') {
+      const at = snapToGrid({ x: raw.x - d.grab.x, y: raw.y - d.grab.y }, 6);
+      dispatch({ type: 'setSite', patch: { grades: (site.grades ?? []).map((g) => (g.id === d.id ? { ...g, at } : g)) }, transient: true });
+    } else if (d.kind === 'image') {
+      if (site.underlay) dispatch({ type: 'setSite', patch: { underlay: { ...site.underlay, x: d.origin.x + raw.x - d.start.x, y: d.origin.y + raw.y - d.start.y } }, transient: true });
+    } else if (d.kind === 'v2vertex') dispatch({ type: 'setSite', patch: moveV2Vertex(site, d.sel, d.index, snap(raw)), transient: true });
     else {
       const p = snap(raw);
       if (d.target === 'lot' && site.lot) dispatch({ type: 'setSite', patch: { lot: site.lot.map((v, i) => (i === d.index ? p : v)) }, transient: true });
@@ -274,7 +339,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
         <svg
           ref={svgRef}
           className="plan site"
-          style={{ cursor: tool === 'select' ? 'default' : 'crosshair' }}
+          style={{ cursor: tool === 'select' ? 'default' : tool === 'image' ? 'move' : 'crosshair' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={() => {
@@ -287,6 +352,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
           onContextMenu={(e) => e.preventDefault()}
         >
           <g transform={`translate(${view.ox} ${view.oy}) scale(${s})`}>
+            <SiteUnderlayImage u={site.underlay} />
             {site.lot && <polygon className={`lot ${sel?.kind === 'lot' ? 'selected' : ''}`} points={poly(site.lot)} strokeWidth={px(2)} />}
             {summary.buildable.length > 0 && <polygon className="envelope" points={poly(summary.buildable)} strokeWidth={px(1.5)} strokeDasharray={`${px(8)} ${px(5)}`} />}
             {site.lot &&
@@ -314,6 +380,7 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
                 </g>
               );
             })}
+            <LandscapeLayers project={project} px={px} sel={isV2(sel) ? sel : null} />
             <PlanDrawing project={project} px={px} wallDims={false} overallDims={false} outlets={false} />
             {site.plants.map((p) => {
               const spc = PLANT_BY_ID.get(p.species);
@@ -332,6 +399,14 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
               );
             })}
             {irr.svg(px)}
+            {calPts.length > 0 && (
+              <g className="preview">
+                {calPts.length === 2 && <line x1={calPts[0].x} y1={calPts[0].y} x2={calPts[1].x} y2={calPts[1].y} strokeWidth={px(2)} />}
+                {calPts.map((c, i) => (
+                  <circle key={i} cx={c.x} cy={c.y} r={px(4)} className="cal-point" />
+                ))}
+              </g>
+            )}
             {sp?.pts.map((v, i) => <rect key={i} className="handle" x={v.x - px(4)} y={v.y - px(4)} width={px(8)} height={px(8)} strokeWidth={px(1.5)} />)}
             {draft.length > 0 && (
               <g className="preview">
@@ -348,14 +423,52 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
         <div className="hint">
           {tool === 'irrigation'
             ? irr.hint
-            : tool === 'lot' || tool === 'area'
+            : tool === 'lot' || tool === 'area' || tool === 'easement'
             ? 'Click corners · click the first corner, double-click or Enter to close · Shift = any angle · Esc cancels'
-            : tool === 'plant'
+            : tool === 'wall'
+              ? 'Click along the face of the wall · double-click or Enter to finish · Esc cancels'
+              : tool === 'grade'
+                ? 'Click to drop a spot grade — one by the foundation and one ~10 ft out on the same side'
+                : tool === 'calibrate'
+                  ? 'Click both ends of a known length on the underlay'
+                  : tool === 'image'
+                    ? 'Drag to move the underlay · V when done'
+                    : tool === 'plant'
               ? `Click to plant ${PLANT_BY_ID.get(species)?.name} — circles show mature spread`
               : 'Click to select · drag plants or outline corners · drag empty space to pan · ⌘-scroll to zoom'}
         </div>
       </div>
-      {tool === 'irrigation' ? irr.panel : <SiteInspector
+      {tool === 'irrigation' ? irr.panel : traverse ? (
+        <TraversePanel
+          project={project}
+          dispatch={dispatch}
+          onDone={() => {
+            setTraverse(false);
+            requestAnimationFrame(fit);
+          }}
+        />
+      ) : tool === 'calibrate' ? (
+        <CalibratePanel
+          project={project}
+          dispatch={dispatch}
+          points={calPts}
+          onDone={() => {
+            setTool('select');
+            requestAnimationFrame(fit);
+          }}
+        />
+      ) : isV2(sel) ? (
+        <V2Inspector
+          project={project}
+          dispatch={dispatch}
+          sel={sel}
+          onDelete={() => {
+            dispatch({ type: 'setSite', patch: deleteV2(site, sel) });
+            setSel(null);
+          }}
+        />
+      ) : (
+      <SiteInspector
         project={project}
         dispatch={dispatch}
         sel={sel}
@@ -366,7 +479,15 @@ export function SiteView({ project, dispatch }: { project: Project; dispatch: Di
         species={species}
         setSpecies={setSpecies}
         onLotCreated={() => requestAnimationFrame(fit)}
-      />}
+        onTraverse={() => setTraverse(true)}
+        onCalibrate={() => setTool('calibrate')}
+        onMoveImage={() => setTool('image')}
+        centre={() => {
+          const r = svgRef.current!.getBoundingClientRect();
+          return toWorld(r.left + r.width / 2, r.top + r.height / 2);
+        }}
+      />
+      )}
     </main>
   );
 }
@@ -382,16 +503,20 @@ interface InspectorProps {
   species: string;
   setSpecies(id: string): void;
   onLotCreated(): void;
+  onTraverse(): void;
+  onCalibrate(): void;
+  onMoveImage(): void;
+  centre(): Point;
 }
 
-function SpeciesSelect({ value, onChange }: { value: string; onChange(id: string): void }) {
+function SpeciesSelect({ value, onChange, region }: { value: string; onChange(id: string): void; region?: NativeRegion }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}>
       {FORMS.map((f) => (
         <optgroup key={f} label={FORM_LABEL[f]}>
           {PLANTS.filter((p) => p.form === f).map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {isNative(p, region) ? `★ ${p.name}` : p.name}
             </option>
           ))}
         </optgroup>
@@ -400,7 +525,7 @@ function SpeciesSelect({ value, onChange }: { value: string; onChange(id: string
   );
 }
 
-function SpeciesFacts({ id }: { id: string }) {
+function SpeciesFacts({ id, region }: { id: string; region?: NativeRegion }) {
   const p = PLANT_BY_ID.get(id);
   if (!p) return null;
   return (
@@ -409,6 +534,7 @@ function SpeciesFacts({ id }: { id: string }) {
       <Stat label="Zones" value={`${p.zones[0]}–${p.zones[1]}`} />
       <Stat label="Sun" value={p.sun.join(' / ')} />
       <Stat label="Water" value={p.water} />
+      <Stat label="Native" value={!p.native.length ? 'not listed' : region ? (isNative(p, region) ? `yes — ${REGION_LABEL[region]}` : 'not to this region') : `${p.native.length} US region${p.native.length > 1 ? 's' : ''}`} />
     </div>
   );
 }
@@ -456,7 +582,7 @@ function LotCreator({ project, dispatch, onCreated }: { project: Project; dispat
   );
 }
 
-function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMaterial, species, setSpecies, onLotCreated }: InspectorProps) {
+function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMaterial, species, setSpecies, onLotCreated, onTraverse, onCalibrate, onMoveImage, centre }: InspectorProps) {
   const site = project.site ?? EMPTY_SITE;
   const summary = siteSummary(project);
   const del = (id: string) => {
@@ -473,9 +599,9 @@ function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMate
         <h3>{sp?.name ?? 'Plant'}</h3>
         {sp && <div className="muted small">{sp.botanical}</div>}
         <Field label="Species">
-          <SpeciesSelect value={pl.species} onChange={(id) => dispatch({ type: 'updatePlant', id: pl.id, patch: { species: id } })} />
+          <SpeciesSelect value={pl.species} region={site.region} onChange={(id) => dispatch({ type: 'updatePlant', id: pl.id, patch: { species: id } })} />
         </Field>
-        <SpeciesFacts id={pl.species} />
+        <SpeciesFacts id={pl.species} region={site.region} />
         <small className="muted">Typical landscape sizes; cultivar, climate and pruning change them.</small>
         <button className="danger" onClick={() => del(pl.id)}>
           Delete plant
@@ -527,8 +653,15 @@ function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMate
             ))}
           </tbody>
         </table>
+        <AreaExtras project={project} dispatch={dispatch} area={a} species={species} />
         <small className="muted">Drag the square handles to reshape. Totals roll into the Estimate tab.</small>
-        <button className="danger" onClick={() => del(a.id)}>
+        <button
+          className="danger"
+          onClick={() => {
+            dispatch({ type: 'delete', ids: [a.id, ...site.plants.filter((p) => p.bed === a.id).map((p) => p.id)] });
+            setSel(null);
+          }}
+        >
           Delete area
         </button>
       </aside>
@@ -554,6 +687,7 @@ function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMate
           </Field>
         ))}
         <small className="muted">Edge numbers are shown on the plan. The dashed line is the buildable envelope; setbacks come from your local zoning, not the IRC.</small>
+        <LotExtras project={project} dispatch={dispatch} onTraverse={onTraverse} />
         <button className="danger" onClick={() => del('lot')}>
           Delete lot
         </button>
@@ -581,9 +715,9 @@ function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMate
         <>
           <h3>New plant</h3>
           <Field label="Species">
-            <SpeciesSelect value={species} onChange={setSpecies} />
+            <SpeciesSelect value={species} region={site.region} onChange={setSpecies} />
           </Field>
-          <SpeciesFacts id={species} />
+          <SpeciesFacts id={species} region={site.region} />
         </>
       )}
       <h3>Site</h3>
@@ -606,6 +740,7 @@ function SiteInspector({ project, dispatch, sel, setSel, tool, material, setMate
         </select>
       </Field>
       {!site.lot && <LotCreator project={project} dispatch={dispatch} onCreated={onLotCreated} />}
+      <SiteExtras project={project} dispatch={dispatch} centre={centre} onCalibrate={onCalibrate} onMoveImage={onMoveImage} onTraverse={onTraverse} />
       {MATERIALS.some((m) => summary.hardscape[m] > 0) && (
         <>
           <h4>Surfaces</h4>

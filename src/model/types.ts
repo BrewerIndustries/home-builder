@@ -5,6 +5,7 @@
 // y grows down (screen convention), origin is arbitrary.
 
 import type { Irrigation } from './irrigation.ts';
+import type { NativeRegion } from '../data/plants.ts';
 
 export interface Point {
   x: number;
@@ -336,6 +337,10 @@ export interface SiteArea {
   /** Installed depth of the main material (concrete slab, gravel, mulch). Pavers use their own base build-up. */
   depth: number;
   label?: string;
+  /** Topsoil spread under this area before planting / sod, inches (Landscape v2). */
+  topsoil?: number;
+  /** Bed / lawn edging around this area's perimeter (Landscape v2). */
+  edging?: boolean;
 }
 
 export interface Plant {
@@ -343,6 +348,8 @@ export interface Plant {
   /** Key into the plant library (src/data/plants.ts). */
   species: string;
   at: Point;
+  /** Set when the plant came from auto-filling this bed (area id); a re-fill replaces them. */
+  bed?: string;
 }
 
 export interface Site {
@@ -352,10 +359,50 @@ export interface Site {
   setbacks: number[];
   /** USDA hardiness zone, e.g. 8 for 8a/8b. */
   zone?: number;
+  // Landscape v2 — all optional so older saves load unchanged (see src/calc/landscape.ts).
+  /** Region for the plant library's native flag. */
+  region?: NativeRegion;
+  /** Survey calls the lot was built from (kept for re-editing). */
+  traverse?: TraverseLeg[];
+  /** Plat / aerial picture under the site plan. */
+  underlay?: Underlay;
+  easements?: Easement[];
+  retainingWalls?: RetainingWall[];
+  /** Spot elevations for the foundation-drainage check. */
+  grades?: SpotGrade[];
   areas: SiteArea[];
   plants: Plant[];
   /** Sprinkler / drip layout (src/model/irrigation.ts). */
   irrigation?: Irrigation;
+}
+
+/** One survey call: a quadrant bearing ("N 45°30' E") and a distance in inches. */
+export interface TraverseLeg {
+  bearing: string;
+  distance: number;
+}
+
+/** An easement: a strip along a lot edge (`edge` + `width`) or a drawn area (`points`). */
+export interface Easement {
+  id: string;
+  label?: string;
+  edge?: number;
+  width?: number;
+  points?: Point[];
+}
+
+/** A segmental-block retaining wall along a polyline; `height` is exposed height, inches. */
+export interface RetainingWall {
+  id: string;
+  points: Point[];
+  height: number;
+}
+
+/** A spot elevation, inches (any datum, as long as all spots share it). */
+export interface SpotGrade {
+  id: string;
+  at: Point;
+  elev: number;
 }
 
 /** A traced-over picture of an existing floorplan, placed in plan space. */
