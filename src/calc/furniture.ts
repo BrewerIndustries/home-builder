@@ -60,6 +60,7 @@ export const FURNITURE: Record<FurnitureKind, FurnitureSpec> = {
   stairs: { label: 'Stairs', w: 36, d: 120, h: 0, fixture: false },
   'closet-rod': { label: 'Closet rod + shelf', w: 48, d: 12, h: 1, fixture: false },
   linen: { label: 'Linen cabinet / shelving unit', w: 24, d: 18, h: 84, fixture: false },
+  'attic-access': { label: 'Attic access (ceiling hatch)', w: 22.5, d: 30, h: 0, fixture: false },
 };
 
 export const FURNITURE_KINDS = Object.keys(FURNITURE) as FurnitureKind[];
@@ -438,6 +439,7 @@ export function furnitureLines(project: Project): MaterialLine[] {
   if (rodFt) lines.push({ category: 'Lumber', item: 'Closet rod + shelf (allowance)', qty: rodFt, unit: 'lf', basis: 'rod-and-shelf run (double hang counts twice), rounded up to whole feet' });
   if (shelfFt) lines.push({ category: 'Lumber', item: 'Closet shelf (allowance)', qty: shelfFt, unit: 'lf', basis: 'shelf-only run, rounded up to whole feet' });
   add('Linen cabinet / shelving unit (allowance)', count('linen'), 'from the plan');
+  if (count('attic-access')) lines.push({ category: 'Lumber', item: 'Attic access hatch (allowance)', qty: count('attic-access'), unit: 'ea', basis: 'framed ceiling opening, trim and insulated hatch cover, one per attic access on the plan (M1305.1.3)' });
   // Stair handrails and guards, by the sloped foot of run.
   const rails = project.furniture.filter((f) => f.kind === 'stairs').map((f) => stairRailing(project, f));
   const railFt = Math.ceil(rails.reduce((t, r) => t + r.handrail, 0) / 12);
@@ -571,7 +573,7 @@ export function doorSwingChecks(project: Project): CodeCheck[] {
   const out: CodeCheck[] = [];
   // Closet rods hang above the floor: a door swings under them.
   const things: [string, Point[]][] = [
-    ...project.furniture.filter((f) => f.kind !== 'closet-rod').map((f): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}`, furnitureCorners(f)]),
+    ...project.furniture.filter((f) => f.kind !== 'closet-rod' && f.kind !== 'attic-access').map((f): [string, Point[]] => [`the ${FURNITURE[f.kind].label.toLowerCase()}`, furnitureCorners(f)]),
     ...project.counters.map((c): [string, Point[]] => [c.island ? 'an island' : 'a counter', counterCorners(c)]),
   ];
   // A fixture's R307.1 clear space has to stay clear of a door standing open in it too.

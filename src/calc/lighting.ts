@@ -8,7 +8,8 @@ import { formatFtIn } from '../model/units.ts';
 import { outerSides } from './faces.ts';
 import { foundationOf } from './foundation.ts';
 import { roofOf } from './roof.ts';
-import { isStairs, landingAt, landingPoint, nearestSwitchWall, needsTwoSwitches, risersOf, stairFoot, stairLights, stairSwitchWall, STAIR_SWITCH_REACH } from './stairs.ts';
+import { isStairs, landingAt, landingPoint, nearestSwitchWall, needsTwoSwitches, risersOf, stairFoot, stairLights, stairSwitchWall, stairTarget, STAIR_SWITCH_REACH } from './stairs.ts';
+import { isMultiStorey, storeyView } from '../model/storeys.ts';
 
 // Lighting outlets, wall switches and smoke / CO alarms.
 //   E3903.2  a wall-switched lighting outlet in every habitable room and bathroom
@@ -345,7 +346,7 @@ export function autoLighting(project: Project): { fixtures: Fixture[]; switches:
     const mean = { x: pts.reduce((t, q) => t + q.x, 0) / pts.length, y: pts.reduce((t, q) => t + q.y, 0) / pts.length };
     place(room, inRegion(project, room, mean) ? mean : pts[0], co ? 'smoke-co' : 'smoke');
   }
-  // At least one per storey (this plan is one storey).
+  // At least one per storey (Auto lights runs on the floor being edited).
   if (!alarms.length && project.rooms.length) {
     const pick = [...project.rooms].sort((a, b) => Number(CIRCULATION.has(b.type)) - Number(CIRCULATION.has(a.type)) || exclusiveArea(project, b) - exclusiveArea(project, a))[0];
     const c = roomCenter(project, pick);
@@ -401,6 +402,9 @@ export function switchWays(project: Project): Map<string, 1 | 3 | 4> {
   const byLight = new Map<string, string[]>();
   for (const s of project.switches) for (const c of s.controls) byLight.set(c, [...(byLight.get(c) ?? []), s.id]);
   const out = new Map<string, 1 | 3 | 4>();
+  // Ids switchable on this floor (only looked at when there are other floors).
+  const multi = isMultiStorey(project);
+  const local = new Set(multi ? [...project.fixtures, ...project.outlets].map((x) => x.id) : []);
   for (const s of project.switches) {
     let ways: 1 | 3 | 4 = 1;
     for (const c of s.controls) {
@@ -411,6 +415,8 @@ export function switchWays(project: Project): Map<string, 1 | 3 | 4> {
       if (w > ways) ways = w;
     }
     if (ways === 1 && stairPartner(project).has(s.id)) ways = 3;
+    // A switch on this floor for a light on another (a stairway's, E3903.3) pairs with one there.
+    if (ways === 1 && multi && s.controls.some((c) => !local.has(c))) ways = 3;
     if (landingSwitches(project).has(s.id)) ways = 4;
     out.set(s.id, ways);
   }
@@ -445,6 +451,26 @@ export function stairPartner(project: Project): Set<string> {
   return out;
 }
 
+/** Switches on the storey a stair arrives at (when the project has it) controlling that stair's light: the other level's switch, placed. */
+export function remoteStairSwitches(project: Project, st: Furniture): WallSwitch[] | null {
+  const target = stairTarget(project, st);
+  if (!target) return null;
+  const lights = new Set(stairLights(project, st, lightsRoom).map((f) => f.id));
+  return storeyView(project, target.id).switches.filter((s) => s.controls.some((c) => lights.has(c)));
+}
+
+/** Stairs needing a switch at each level whose other-level switch isn't on a real storey: that 3-way is only counted. */
+export function unplacedStairPartners(project: Project): number {
+  let n = 0;
+  for (const st of project.furniture.filter(needsTwoSwitches)) {
+    const lights = new Set(stairLights(project, st, lightsRoom).map((f) => f.id));
+    const foot = stairFoot(st);
+    if (!project.switches.some((s) => s.controls.some((c) => lights.has(c)) && switchNear(project, s, foot))) continue;
+    if (!remoteStairSwitches(project, st)?.length) n++;
+  }
+  return n;
+}
+
 function switchNear(project: Project, s: WallSwitch, p: Point): boolean {
   const w = project.walls.find((x) => x.id === s.wallId);
   return !!w && dist(pointAlong(w, s.offset), p) <= STAIR_SWITCH_REACH + w.thickness;
@@ -467,7 +493,7 @@ export function lightingLines(project: Project): MaterialLine[] {
   const ways = [...switchWays(project).values()];
   add('Single-pole switch, 15A', ways.filter((w) => w === 1).length, 'from the plan');
   add('3-way switch, 15A', ways.filter((w) => w === 3).length, 'two per light switched from two places');
-  add('3-way switch, 15A, at the other floor level', stairPartner(project).size, 'pairs with the switch by each stair foot (E3903.3, six or more risers)');
+  add('3-way switch, 15A, at the other floor level', unplacedStairPartners(project), 'pairs with the switch by each stair foot (E3903.3, six or more risers)');
   for (const [where, use] of equipmentSpaces(project)) {
     if (use && use !== 'none') add(`Attic / crawlspace light + switch (${where})`, 1, `${use} space: a light at the equipment, switched at the access (E3903.4)`);
   }
@@ -535,7 +561,21 @@ export function lightingChecks(project: Project): CodeCheck[] {
     if (!needsTwoSwitches(st) || !lights.length) continue;
     const foot = stairFoot(st);
     const here = sw.find((s) => switchNear(project, s, foot));
-    out.push({
+    const target = stairTarget(project, st);
+    const there = remoteStairSwitches(project, st);
+    if (target && there) {
+      // Both floors are drawn: the other level's switch has to be on that storey's plan.
+      out.push({
+        rule: 'Stairway switched at each floor level (6+ risers)',
+        section: 'E3903.3',
+        status: here && there.length ? 'pass' : 'fail',
+        message:
+          here && there.length
+            ? `${label}: 3-way by the foot here and on the ${target.name.toLowerCase()}`
+            : `${label}: ${here ? '' : `needs a switch within ${formatFtIn(STAIR_SWITCH_REACH)} of the foot on this floor`}${!here && !there.length ? ', and ' : ''}${there.length ? '' : `needs a switch at the ${st.down ? 'bottom' : 'top'} on the ${target.name.toLowerCase()} (Auto lights places it)`}`,
+        targetId: st.id,
+      });
+    } else out.push({
       rule: 'Stairway switched at each floor level (6+ risers)',
       section: 'E3903.3',
       status: here ? 'pass' : 'fail',
@@ -575,13 +615,13 @@ export function lightingChecks(project: Project): CodeCheck[] {
             : `${where} (${use}): light at the equipment, switched at the access — counted in the estimate`,
     });
     // M1305.1.3 — getting to equipment in an attic.
-    if (where === 'attic' && use === 'equipment') {
+    if (where === 'attic' && use === 'equipment' && !project.furniture.some((f) => f.kind === 'attic-access')) {
       out.push({
         rule: 'Attic equipment access',
         section: 'M1305.1.3',
         status: 'info',
         message:
-          'not placed on the plan — allow an opening at least 20" × 30" (and big enough for the largest piece), a passageway at least 30" high and 22" wide no more than 20 ft long, and a level 30" × 30" service space at the control side',
+          'not placed on the plan (put an Attic access hatch on the top floor with the Fixture tool) — allow an opening at least 20" × 30" (and big enough for the largest piece), a passageway at least 30" high and 22" wide no more than 20 ft long, and a level 30" × 30" service space at the control side',
       });
     }
   }

@@ -7,6 +7,8 @@ import { followDims } from '../calc/faces.ts';
 import { applyGroupOp, pasteClip, type Clip, type GroupOp, type SelItem } from './selection.ts';
 import { assemblyThickness } from './assembly.ts';
 import { inheritPhase } from './phase.ts';
+import { storeyReducer, type StoreyOp } from './storeys.ts';
+import { placeStairSwitches } from '../calc/house.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -85,7 +87,11 @@ export type Action =
   | { type: 'updateCounter'; id: string; patch: Partial<Omit<Counter, 'id'>>; transient?: boolean }
   | { type: 'setElectrical'; patch: Partial<ElectricalSettings> }
   | { type: 'setUnderlay'; underlay: Underlay | undefined }
-  | { type: 'updateUnderlay'; patch: Partial<Underlay>; transient?: boolean };
+  | { type: 'updateUnderlay'; patch: Partial<Underlay>; transient?: boolean }
+  /** Storeys v1: switch, add, remove or edit a storey (see model/storeys.ts). */
+  | { type: 'storey'; op: StoreyOp }
+  /** Place each stair's switch on the storey it arrives at (E3903.3). */
+  | { type: 'stairSwitches' };
 
 const HISTORY_LIMIT = 200;
 
@@ -111,6 +117,12 @@ export function historyReducer(h: History, action: Action): History {
       if (action.project === h.present) return h;
       const next = syncThickness(migrate(action.project));
       return action.transient ? { ...h, present: next } : push(h, next);
+    }
+    case 'storey':
+    case 'stairSwitches': {
+      // Whole-plan swaps: nothing follows walls across them.
+      const next = action.type === 'storey' ? storeyReducer(h.present, action.op) : placeStairSwitches(h.present);
+      return next === h.present ? h : push(h, syncThickness(next));
     }
   }
   const reduced = projectReducer(h.present, action);

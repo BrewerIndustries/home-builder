@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Dispatch, type Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Dispatch, type ReactNode, type Ref } from 'react';
+import { StoreyGhost } from './StoreyGhost.tsx';
 import {
   clampOpeningOffset,
   dist,
@@ -90,6 +91,8 @@ interface Props {
   onRoomCreated?(): void;
   onMessage?(msg: string): void;
   ref?: Ref<PlanCanvasHandle>;
+  /** Drawn over the canvas's top-left corner (the floor switcher). */
+  overlay?: ReactNode;
 }
 
 /** The last drag, so a typed value can set it exactly: a wall's move, an end's length, or a swing's angle. */
@@ -108,7 +111,7 @@ type LastEdit =
 const SNAP_PX = 10;
 const GRID = 6;
 
-export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitureKind, selection, setSelection, onRoomCreated, onMessage, ref }: Props) {
+export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitureKind, selection, setSelection, onRoomCreated, onMessage, ref, overlay }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState<View>({ scale: 1.2, ox: 80, oy: 80 });
   const [cursor, setCursor] = useState<{ p: Point; snapped: 'endpoint' | 'grid' | null } | null>(null);
@@ -1150,6 +1153,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             />
           )}
 
+          <StoreyGhost project={project} px={px} />
           <PlanDrawing project={project} selection={selection} px={px} wallDims={s * 12 > 4} overallDims={s * 12 > 2} />
           {ghost && <OpeningGlyph wall={ghost.wall} o={ghost.opening} selected={false} ghost px={px} />}
           {furnitureGhost && <FurnitureGlyph f={furnitureGhost} selected={false} ghost px={px} />}
@@ -1210,6 +1214,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           {cursor?.snapped === 'endpoint' && <circle cx={cursor.p.x} cy={cursor.p.y} r={px(7)} className="snap" strokeWidth={px(2)} />}
         </g>
       </svg>
+      {overlay}
 
       {(moveText || entry) && (
         <div className="length-entry">

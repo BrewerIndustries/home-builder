@@ -52,6 +52,7 @@ import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { FixtureOptions } from './FixtureOptions.tsx';
 import { RoofExtras } from './RoofExtras.tsx';
 import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
+import { AtticAccessFields, StairOpeningField, StairShapeFields } from './StairStoreyFields.tsx';
 import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { CabinetPanel } from './CabinetPanel.tsx';
@@ -697,6 +698,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                 <option value="down">Down from this floor</option>
               </select>
             </Field>
+            <StairShapeFields f={f} up={up} />
             {(() => {
               const g = stairGeometry(project, f);
               return (
@@ -734,11 +736,13 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                       </label>
                     );
                   })()}
+                  <StairOpeningField project={project} f={f} up={up} />
                 </>
               );
             })()}
           </>
         )}
+        {f.kind === 'attic-access' && <AtticAccessFields f={f} up={up} />}
         {f.kind === 'closet-rod' && (
           <Field label="Hang" hint="Double hang: two rods, one above the other, each under its own shelf">
             <select value={f.closet ?? 'single'} onChange={(e) => up({ closet: e.target.value === 'single' ? undefined : (e.target.value as 'double' | 'shelf') })}>

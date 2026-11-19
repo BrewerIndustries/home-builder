@@ -5,7 +5,10 @@ import { PdfImport } from './editor/PdfImport.tsx';
 import { openPdf } from './model/imaging.ts';
 import { autoOutlets } from './calc/electrical.ts';
 import { autoLighting, isLight } from './calc/lighting.ts';
-import { ircChecks } from './calc/irc.ts';
+import { houseChecks } from './calc/house.ts';
+import { activeStoreyId } from './model/storeys.ts';
+import { StoreyBar } from './editor/StoreyBar.tsx';
+import { HouseFramingView, HousePrint } from './views/StoreyViews.tsx';
 import { siteChecks } from './calc/site.ts';
 import type { Hit } from './editor/hitTest.ts';
 import { Inspector } from './editor/Inspector.tsx';
@@ -16,8 +19,7 @@ import type { DimMode, FurnitureKind, WallKind } from './model/types.ts';
 import { FURNITURE, FURNITURE_KINDS } from './calc/furniture.ts';
 import { SiteView } from './site/SiteView.tsx';
 import { SitePrintSheet } from './site/SitePrint.tsx';
-import { PrintSheet } from './views/PrintSheet.tsx';
-import { CodeView, FramingView, MaterialsView } from './views/Reports.tsx';
+import { CodeView, MaterialsView } from './views/Reports.tsx';
 import { ElectricalView } from './views/Electrical.tsx';
 import { PhaseBar } from './editor/PhaseBar.tsx';
 import { PlanAltsDialog } from './editor/PlanAlts.tsx';
@@ -152,7 +154,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selection, tab, tool]);
 
-  const fails = useMemo(() => [...ircChecks(project), ...siteChecks(project)].filter((c) => c.status === 'fail').length, [project]);
+  const fails = useMemo(() => [...houseChecks(project), ...siteChecks(project)].filter((c) => c.status === 'fail').length, [project]);
 
   async function onImportProject(file: File | undefined) {
     if (!file) return;
@@ -200,6 +202,8 @@ export function App() {
     }
     const { fixtures, switches } = autoLighting(project);
     dispatch({ type: 'replaceAutoLighting', fixtures, switches });
+    // Stairs between storeys: their switch at the other end goes on that storey's plan.
+    dispatch({ type: 'stairSwitches' });
     const lights = fixtures.filter((f) => isLight(f.kind)).length;
     flash(`Placed ${lights} lights, ${switches.length} switches and ${fixtures.length - lights} alarms. Drag to adjust.`);
   }
@@ -294,7 +298,7 @@ export function App() {
       )}
       {notice && <div className="toast">{notice}</div>}
 
-      {tab === 'plan' && <PrintSheet project={shown} />}
+      {tab === 'plan' && <HousePrint project={shown} />}
       {tab === 'site' && <SitePrintSheet project={project} />}
       {tab === 'plan' ? (
         <main className="workspace">
@@ -379,6 +383,7 @@ export function App() {
             setSelection={setSelection}
             onRoomCreated={() => wallKind === 'exterior' && setWallKind('interior')}
             onMessage={flash}
+            overlay={<StoreyBar project={project} dispatch={dispatch} onSwitch={() => setSelection(null)} />}
           />
           <Inspector project={project} dispatch={dispatch} selection={selection} setSelection={setSelection} setTool={setTool} />
         </main>
@@ -392,13 +397,14 @@ export function App() {
         </main>
       ) : (
         <main className="report-page">
-          {tab === 'framing' && <FramingView project={project} dispatch={dispatch} />}
+          {tab === 'framing' && <HouseFramingView project={project} dispatch={dispatch} />}
           {tab === 'materials' && <MaterialsView project={project} dispatch={dispatch} />}
           {tab === 'electrical' && <ElectricalView project={project} dispatch={dispatch} />}
           {tab === 'code' && (
             <CodeView
               project={project}
-              onSelect={(h) => {
+              onSelect={(h, storey) => {
+                if (storey && storey !== activeStoreyId(project)) dispatch({ type: 'storey', op: { op: 'switch', id: storey } });
                 setSelection(h);
                 setTool('select');
                 setTab('plan');

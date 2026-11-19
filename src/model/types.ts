@@ -189,7 +189,7 @@ export type FurnitureKind =
   | 'toilet' | 'bidet' | 'lavatory' | 'tub' | 'tub-shower' | 'shower' | 'kitchen-sink' | 'laundry-sink'
   | 'washer' | 'dryer' | 'water-heater' | 'furnace' | 'air-handler' | 'range' | 'fridge'
   | 'bed' | 'sofa' | 'chair' | 'table' | 'desk' | 'dresser'
-  | 'stairs' | 'closet-rod' | 'corner-shower' | 'neo-shower' | 'linen';
+  | 'stairs' | 'closet-rod' | 'corner-shower' | 'neo-shower' | 'linen' | 'attic-access';
 
 /**
  * A plan symbol: a plumbing fixture or appliance (priced and code-checked) or a
@@ -230,6 +230,16 @@ export interface Furniture {
   note?: string;
   /** Closet rod + shelf: one rod under a shelf (default), two rods hung one above the other, or a shelf alone. */
   closet?: 'single' | 'double' | 'shelf';
+  /** Stairs: length of the floor opening over the flight, measured along the walk line back from the top (the whole stair when unset). */
+  floorOpening?: number;
+  /** Stairs (Lighting v6): straight (default), or an L / U turning at the landing, toward the walker's left or right (right when unset). */
+  shape?: 'straight' | 'L' | 'U';
+  turn?: 'left' | 'right';
+  /** L / U stairs: the width of each flight (36" when unset), and the U's landing depth in the direction of travel (the flight width when unset). */
+  flight?: number;
+  landingDepth?: number;
+  /** Attic access: length of the passageway from the opening to the equipment it serves, if any (M1305.1.3). */
+  passage?: number;
 }
 
 export interface Counter {
@@ -524,6 +534,33 @@ export interface Project {
   options?: DesignOptions;
   /** Named, dated snapshots of the plan (see versions.ts). */
   versions?: PlanVersion[];
+  /** Storeys v1: every storey, the active one's plan data living in the top-level arrays above (see model/storeys.ts). Unset = one storey. */
+  storeys?: Storey[];
+  activeStorey?: string;
+}
+
+/** The plan data each storey has of its own. */
+export interface StoreyData {
+  walls: Wall[];
+  openings: Opening[];
+  rooms: Room[];
+  outlets: Outlet[];
+  fixtures: Fixture[];
+  switches: WallSwitch[];
+  counters: Counter[];
+  furniture: Furniture[];
+  dims?: UserDim[];
+  ordDims?: OrdinateDim[];
+  angleDims?: AngleDim[];
+}
+
+/** One storey. `level` 0 is the ground floor, 1 the next up, -1 a basement. The active storey's data is not kept here. */
+export interface Storey extends Partial<StoreyData> {
+  id: string;
+  name: string;
+  level: number;
+  /** Floor-to-floor height; unset = the wall height plus a floor (joists + subfloor). */
+  height?: number;
 }
 
 export type RoofType = 'gable' | 'hip' | 'shed' | 'none';

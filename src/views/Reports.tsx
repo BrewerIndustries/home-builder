@@ -1,15 +1,17 @@
 import { useMemo, useState, type Dispatch } from 'react';
 import { CutList } from './CutList.tsx';
 import { framingTakeoff, studCount } from '../calc/framing.ts';
-import { NOT_CHECKED, ircChecks, type CheckStatus } from '../calc/irc.ts';
+import { NOT_CHECKED, type CheckStatus } from '../calc/irc.ts';
 import { RoofSummary } from './RoofSummary.tsx';
 import { foundationCalc, foundationVolumes } from '../calc/foundation.ts';
 import { foundationWallHeight } from '../calc/foundationV2.ts';
 import { FloorFraming } from './FloorFraming.tsx';
 import { siteChecks } from '../calc/site.ts';
-import { studStock, wallAreas } from '../calc/materials.ts';
+import { studStock } from '../calc/materials.ts';
 import { phasedMaterials } from '../calc/phasing.ts';
 import { isPhased } from '../model/phase.ts';
+import { houseChecks, houseFloorArea, houseMaterials } from '../calc/house.ts';
+import { storeyView } from '../model/storeys.ts';
 import { DEFAULT_PRICING, estimate, money } from '../calc/pricing.ts';
 import type { Hit } from '../editor/hitTest.ts';
 import { Stat } from '../editor/Inspector.tsx';
@@ -136,7 +138,7 @@ function FoundationSummary({ project }: { project: Project }) {
 }
 
 export function MaterialsView({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
-  const est = useMemo(() => estimate(phasedMaterials(project), project.pricing ?? DEFAULT_PRICING), [project]);
+  const est = useMemo(() => estimate(houseMaterials(project, phasedMaterials), project.pricing ?? DEFAULT_PRICING), [project]);
   if (!project.walls.length) return <Empty />;
   const pricing = project.pricing ?? DEFAULT_PRICING;
   const setPricing = (patch: Partial<Pricing>) => dispatch({ type: 'setPricing', pricing: { ...pricing, ...patch } });
@@ -147,7 +149,7 @@ export function MaterialsView({ project, dispatch }: { project: Project; dispatc
     else prices[item] = n;
     setPricing({ prices });
   };
-  const floor = wallAreas(project).floor;
+  const floor = houseFloorArea(project);
   const groups = est.byCategory;
   const csv = () => {
     const esc = (s: string | number) => `"${String(s).replace(/"/g, '""')}"`;
@@ -262,19 +264,21 @@ const STATUS: Record<CheckStatus, { label: string; cls: string }> = {
   pass: { label: 'Passes', cls: 'st-pass' },
 };
 
-export function CodeView({ project, onSelect }: { project: Project; onSelect(h: Hit): void }) {
-  const checks = useMemo(() => ircChecks(project), [project]);
+export function CodeView({ project, onSelect }: { project: Project; onSelect(h: Hit, storey?: string): void }) {
+  // Every storey's checks; each says which storey it's on.
+  const checks = useMemo(() => houseChecks(project), [project]);
   const site = useMemo(() => siteChecks(project), [project]);
   if (!project.walls.length) return <Empty />;
   const order: CheckStatus[] = ['fail', 'warn', 'info', 'pass'];
-  const kindOf = (id?: string): Hit | null => {
+  const kindOf = (id?: string, storey?: string): Hit | null => {
     if (!id) return null;
-    if (project.rooms.some((r) => r.id === id)) return { kind: 'room', id };
-    if (project.openings.some((o) => o.id === id)) return { kind: 'opening', id };
-    if (project.walls.some((w) => w.id === id)) return { kind: 'wall', id };
-    if (project.counters.some((c) => c.id === id)) return { kind: 'counter', id };
-    if (project.outlets.some((o) => o.id === id)) return { kind: 'outlet', id };
-    if (project.furniture.some((f) => f.id === id)) return { kind: 'furniture', id };
+    const q = storey ? storeyView(project, storey) : project;
+    if (q.rooms.some((r) => r.id === id)) return { kind: 'room', id };
+    if (q.openings.some((o) => o.id === id)) return { kind: 'opening', id };
+    if (q.walls.some((w) => w.id === id)) return { kind: 'wall', id };
+    if (q.counters.some((c) => c.id === id)) return { kind: 'counter', id };
+    if (q.outlets.some((o) => o.id === id)) return { kind: 'outlet', id };
+    if (q.furniture.some((f) => f.id === id)) return { kind: 'furniture', id };
     return null;
   };
   return (
@@ -297,7 +301,7 @@ export function CodeView({ project, onSelect }: { project: Project; onSelect(h: 
           checks
             .filter((c) => c.status === s)
             .map((c, i) => {
-              const hit = kindOf(c.targetId);
+              const hit = kindOf(c.targetId, 'storey' in c ? c.storey : undefined);
               return (
                 <li key={`${s}${i}`} className={STATUS[s].cls}>
                   <span className="st">{STATUS[s].label}</span>
@@ -308,7 +312,7 @@ export function CodeView({ project, onSelect }: { project: Project; onSelect(h: 
                     <div className="muted">{c.message}</div>
                   </div>
                   {hit && (
-                    <button className="link" onClick={() => onSelect(hit)}>
+                    <button className="link" onClick={() => onSelect(hit, 'storey' in c ? c.storey : undefined)}>
                       Show
                     </button>
                   )}
