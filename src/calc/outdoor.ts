@@ -1,6 +1,7 @@
-import { openingSpan, wallLength, wallNormal } from '../model/geometry.ts';
-import { uid, type FrontSide, type Outlet, type Point, type Project, type Wall } from '../model/types.ts';
+import { openingSpan, pointAlong, pointInPolygon, wallLength, wallNormal } from '../model/geometry.ts';
+import { uid, type FrontSide, type Opening, type Outlet, type Point, type Project, type SiteArea, type Wall } from '../model/types.ts';
 import { outerSides } from './faces.ts';
+import { foundationOf } from './foundation.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { formatFtIn } from '../model/units.ts';
@@ -10,12 +11,78 @@ import { formatFtIn } from '../model/units.ts';
 // not more than 6'-6" above it; GFCI protected (E3902). An outdoor receptacle is
 // any receptacle on the outside face of an exterior wall. "Front" is the plan
 // direction the Project panel says faces the street (bottom of the plan unless
-// set). Grade isn't modelled, so heights are checked from the floor.
+// set).
+//
+// v2: heights are checked above GRADE — the floor's height above the outside
+// ground comes from the foundation (slab: thickened edge less its depth below
+// grade; crawlspace: footing + stem less the footing depth, plus sill, joists and
+// subfloor) unless typed in the Project panel. Decks, balconies and porches
+// (NEC 210.52(E)(3)) are site areas drawn as Deck, or labelled porch / balcony /
+// deck / stoop, that a door opens onto: each needs a receptacle reached from its
+// walking surface, not more than 6'-6" above it. The walking surface is taken as
+// the floor level (decks are framed to sit just below the door threshold).
 
 export const OUTDOOR_HEIGHT = 18;
 export const OUTDOOR_MAX_HEIGHT = 78;
 const BESIDE_DOOR = 18;
 const END_CLEAR = 12;
+
+const JOIST_DEPTH = { '2x8': 7.25, '2x10': 9.25, '2x12': 11.25 } as const;
+
+/** Finished floor above the outside grade, and where the figure came from. */
+export function floorAboveGrade(project: Project): { height: number; from: 'set' | 'foundation' | 'unknown' } {
+  const set = project.electrical?.floorAboveGrade;
+  if (set !== undefined) return { height: set, from: 'set' };
+  const f = foundationOf(project);
+  if (f.type === 'slab') return { height: Math.max(0, f.edgeDepth - f.footingDepth), from: 'foundation' };
+  if (f.type === 'crawl') return { height: Math.max(0, f.footingThickness + f.stemHeight - f.footingDepth) + 1.5 + JOIST_DEPTH[f.joistSize] + 0.75, from: 'foundation' };
+  return { height: 0, from: 'unknown' };
+}
+
+const DECK_LABEL = /porch|balcon|deck|stoop|veranda|lanai/i;
+
+/** Site areas that are a deck, balcony or porch. */
+export const isDeck = (a: SiteArea) => a.material === 'decking' || ((a.material === 'concrete' || a.material === 'pavers') && DECK_LABEL.test(a.label ?? ''));
+
+/** A point just outside a wall's outer face. */
+function outside(w: Wall, side: 1 | -1, t: number, out = 12): Point {
+  const n = wallNormal(w);
+  const c = pointAlong(w, t);
+  const d = (w.thickness / 2 + out) * side;
+  return { x: c.x + n.x * d, y: c.y + n.y * d };
+}
+
+export interface DeckArea {
+  area: SiteArea;
+  /** Exterior doors that open onto it. */
+  doors: { door: Opening; wall: Wall; side: 1 | -1 }[];
+}
+
+/** Decks, balconies and porches reached by a door from inside. */
+export function deckAreas(project: Project): DeckArea[] {
+  const areas = (project.site?.areas ?? []).filter(isDeck);
+  if (!areas.length) return [];
+  const walls = outdoorWalls(project);
+  return areas
+    .map((area) => ({
+      area,
+      doors: walls.flatMap(({ wall, side }) =>
+        project.openings.filter((o) => o.wallId === wall.id && o.kind === 'door' && pointInPolygon(outside(wall, side, o.offset), area.points)).map((door) => ({ door, wall, side })),
+      ),
+    }))
+    .filter((d) => d.doors.length > 0);
+}
+
+/** Outdoor receptacles reached from a deck's walking surface. */
+export function deckOutlets(project: Project, d: DeckArea): Outlet[] {
+  const walls = new Map(project.walls.map((w) => [w.id, w]));
+  return outdoorOutlets(project)
+    .map((f) => f.outlet)
+    .filter((o) => {
+      const w = walls.get(o.wallId);
+      return !!w && pointInPolygon(outside(w, o.side, o.offset), d.area.points);
+    });
+}
 
 const FRONT_DIR: Record<FrontSide, Point> = { bottom: { x: 0, y: 1 }, top: { x: 0, y: -1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 
@@ -79,6 +146,21 @@ export function autoOutdoor(project: Project): Outlet[] {
       break;
     }
   }
+  // Decks, balconies and porches: one beside a door onto each, unless one already lands there.
+  for (const d of deckAreas(project)) {
+    if (deckOutlets({ ...project, outlets: [...project.outlets.filter((o) => !o.auto), ...out] }, d).length) continue;
+    for (const { door, wall, side } of d.doors) {
+      const len = wallLength(wall);
+      const spans = project.openings.filter((o) => o.wallId === wall.id).map(openingSpan);
+      const s = openingSpan(door);
+      const t = [s.end + BESIDE_DOOR, s.start - BESIDE_DOOR, s.end + 6, s.start - 6].find(
+        (x) => x >= END_CLEAR && x <= len - END_CLEAR && spans.every((o) => x < o.start - 3 || x > o.end + 3) && pointInPolygon(outside(wall, side, x), d.area.points),
+      );
+      if (t === undefined) continue;
+      out.push({ id: uid('e'), wallId: wall.id, offset: Math.round(t), side, kind: 'gfci', height: OUTDOOR_HEIGHT, auto: true });
+      break;
+    }
+  }
   return out;
 }
 
@@ -101,10 +183,34 @@ export function outdoorChecks(project: Project): CodeCheck[] {
       targetId: wall?.wall.id,
     });
   }
+  const onDeck = new Set<string>();
+  for (const d of deckAreas(project)) {
+    const here = deckOutlets(project, d);
+    for (const o of here) onDeck.add(o.id);
+    const name = d.area.label || (d.area.material === 'decking' ? 'deck' : 'porch');
+    out.push({
+      rule: 'Deck, balcony or porch receptacle',
+      section: 'NEC 210.52(E)(3)',
+      status: here.length ? 'pass' : 'fail',
+      message: here.length ? `${here.length} reached from the ${name}` : `the ${name} a door opens onto needs a receptacle reached from its walking surface (on the wall beside the door)`,
+      targetId: d.doors[0].door.id,
+    });
+  }
+  const grade = floorAboveGrade(project);
+  const gradeNote =
+    grade.from === 'set'
+      ? `the floor is ${formatFtIn(grade.height)} above grade (Project panel)`
+      : grade.from === 'foundation'
+        ? `the floor is ${formatFtIn(grade.height)} above grade (from the foundation)`
+        : 'no foundation, so the floor is taken at grade';
   for (const { outlet } of found) {
     const at = formatFtIn(outlet.height);
-    if (outlet.height > OUTDOOR_MAX_HEIGHT)
-      out.push({ rule: 'Outdoor receptacle height', section: 'E3901.7', status: 'warn', message: `one at ${at} above the floor; it must be within 6'-6" of grade`, targetId: outlet.id });
+    if (onDeck.has(outlet.id)) {
+      if (outlet.height > OUTDOOR_MAX_HEIGHT)
+        out.push({ rule: 'Deck receptacle height', section: 'NEC 210.52(E)(3)', status: 'warn', message: `one at ${at} above the deck (taken at floor level); keep it within 6'-6" of the walking surface`, targetId: outlet.id });
+    } else if (outlet.height + grade.height > OUTDOOR_MAX_HEIGHT) {
+      out.push({ rule: 'Outdoor receptacle height', section: 'E3901.7', status: 'warn', message: `one at ${at} above the floor is ${formatFtIn(outlet.height + grade.height)} above grade — ${gradeNote}; it must be within 6'-6" of grade`, targetId: outlet.id });
+    }
     if (outlet.kind !== 'gfci') out.push({ rule: 'GFCI protection', section: 'E3902', status: 'warn', message: `an outdoor receptacle at ${at} isn't marked GFCI`, targetId: outlet.id });
   }
   return out;

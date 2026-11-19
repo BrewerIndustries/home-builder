@@ -113,6 +113,32 @@ export interface ElectricalSettings {
   /** How the attic and crawlspace are used: storage or equipment needs a light (E3903.4). Unset = not answered. */
   attic?: SpaceUse;
   crawl?: SpaceUse;
+  /** Branch circuits (see circuits.ts / loadCalc.ts): appliance nameplates by furniture or cutout id, hand-assigned circuits by device id, per-circuit overrides by circuit key. */
+  appliances?: Record<string, ApplianceSetting>;
+  circuitOf?: Record<string, string>;
+  circuits?: Record<string, CircuitSetting>;
+  /** A/C or heat-pump nameplate load, VA — set to add a cooling circuit and weigh cooling against heating. */
+  coolingVA?: number;
+  /** Finished floor above the outside grade; worked out from the foundation when unset. */
+  floorAboveGrade?: number;
+  /** Load calculation used for the service size; standard when unset. */
+  loadMethod?: 'standard' | 'optional';
+}
+
+/** An appliance's nameplate and fuel. Unset VA = a typical figure, flagged as such. */
+export interface ApplianceSetting {
+  va?: number;
+  gas?: boolean;
+  /** Sinks: a food-waste disposer under it. Ranges: a microwave-hood over it. */
+  disposal?: boolean;
+  microwave?: boolean;
+}
+
+export interface CircuitSetting {
+  amps?: number;
+  label?: string;
+  afci?: boolean;
+  gfci?: boolean;
 }
 
 export type SpaceUse = 'none' | 'storage' | 'equipment';
