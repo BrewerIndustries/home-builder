@@ -5,6 +5,7 @@ import { formatFtIn } from '../model/units.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { childRooms } from './regions.ts';
+import { landscapeChecks, landscapeLines } from './landscape.ts';
 
 // Site plan: lot, setbacks, coverage, hardscape / planting takeoffs and plant checks.
 // Site shares the floor plan's coordinate space, so the house sits where it was drawn.
@@ -164,6 +165,7 @@ export function siteLines(project: Project, waste: number): MaterialLine[] {
     const sp = PLANT_BY_ID.get(id);
     if (sp) add(`${sp.name} (${sp.form})`, n, 'ea', sp.botanical);
   }
+  lines.push(...landscapeLines(project));
   return lines;
 }
 
@@ -228,6 +230,7 @@ export function siteChecks(project: Project): CodeCheck[] {
       }
     }
   }
+  checks.push(...landscapeChecks(project));
   return checks;
 }
 

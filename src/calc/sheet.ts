@@ -18,3 +18,13 @@ export const DIM_ROOM = { lead: 0.9, trail: 0.3 };
 export function pickScale(planW: number, planH: number) {
   return SCALES.find((s) => planW / s.denom + DIM_ROOM.lead + DIM_ROOM.trail <= SHEET.w && planH / s.denom + DIM_ROOM.lead + DIM_ROOM.trail <= SHEET.h) ?? SCALES.at(-1)!;
 }
+
+/** Engineering scales for the site sheet (plan inches per paper inch), largest first. */
+export const SITE_SCALES: { label: string; denom: number }[] = [10, 20, 30, 40, 50, 60, 100, 200].map((ft) => ({ label: `1" = ${ft}'`, denom: ft * 12 }));
+/** Paper inches kept clear around the site drawing. */
+export const SITE_MARGIN = 0.3;
+
+export function pickSiteScale(planW: number, planH: number) {
+  const m = 2 * SITE_MARGIN;
+  return SITE_SCALES.find((s) => planW / s.denom + m <= SHEET.w && planH / s.denom + m <= SHEET.h) ?? SITE_SCALES.at(-1)!;
+}
