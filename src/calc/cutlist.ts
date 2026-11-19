@@ -12,7 +12,7 @@
 // cut down to the shortest stock length that still holds its pieces. Allowance:
 // a 1/8" saw kerf per cut.
 
-import { frameWall, type MemberKind } from './framing.ts';
+import { frameWall, type MemberKind, type WallFraming } from './framing.ts';
 import type { Project } from '../model/types.ts';
 
 /** Stock lengths, inches (8' to 16' in 2' steps; 20' for a long header). */
@@ -52,16 +52,45 @@ export interface CutListGroup {
 
 const NAMES: Partial<Record<MemberKind, string>> = { jack: 'jack', cripple: 'cripple', sill: 'sill' };
 
+/** R602.3.2: end joints in the top plate and the cap plate over it offset at least 24". */
+export const PLATE_JOINT_OFFSET = 24;
+
+/**
+ * Plate piece lengths along a wall: the bottom and cap plates in equal pieces no
+ * longer than the longest stock; the top plate with its joints at least 24" from
+ * the cap plate's (shifted 24" either way, or one more piece if that won't fit).
+ */
+export function platePieces(length: number, longest = STOCK[STOCK.length - 1]): { bottom: number[]; top: number[]; cap: number[] } {
+  const n = Math.ceil(length / longest - 1e-9);
+  const even = (k: number) => Array.from({ length: k }, () => length / k);
+  const cap = even(n);
+  if (n === 1) return { bottom: cap, top: cap, cap };
+  const capJoints = cap.slice(0, -1).map((_, i) => (length / n) * (i + 1));
+  const joints = (pieces: number[]) => pieces.slice(0, -1).map((_, i) => pieces.slice(0, i + 1).reduce((t, x) => t + x, 0));
+  const ok = (pieces: number[]) =>
+    pieces.every((x) => x <= longest + 1e-9 && x > 0) && joints(pieces).every((j) => capJoints.every((c) => Math.abs(j - c) >= PLATE_JOINT_OFFSET - 1e-9));
+  const s = PLATE_JOINT_OFFSET;
+  const options = [
+    [length / n + s, ...even(n).slice(2), length / n - s],
+    [length / n - s, ...even(n).slice(2), length / n + s],
+  ];
+  // One more piece: keep shifting the even split until every joint clears the cap's.
+  for (let k = n + 1; k <= n + 3; k++) for (const shift of [0, s, -s]) {
+    const p = even(k);
+    options.push([p[0] + shift, ...p.slice(1, -1), p[p.length - 1] - shift]);
+  }
+  return { bottom: cap, top: options.find(ok) ?? even(n + 1), cap };
+}
+
 /** Every piece cut from stock, by wall (W1, W2… in plan order). */
-export function cutPieces(project: Project): Piece[] {
+export function cutPieces(project: Project, walls: WallFraming[] = project.walls.map((w) => frameWall(w, project))): Piece[] {
   const out: Piece[] = [];
-  project.walls.forEach((w, i) => {
-    const f = frameWall(w, project);
+  walls.forEach((f, i) => {
     const tag = `W${i + 1}`;
-    // Three plates (bottom, top, cap), each split into equal pieces no longer than the longest stock.
-    const n = Math.ceil(f.length / STOCK[STOCK.length - 1] - 1e-9);
-    for (const plate of ['bottom plate', 'top plate', 'cap plate']) {
-      for (let k = 0; k < n; k++) out.push({ size: f.studSize, length: f.length / n, label: `${tag} ${plate}${n > 1 ? ` ${k + 1}/${n}` : ''}` });
+    // Three plates: bottom, top and cap, the top plate's joints offset from the cap's.
+    const plates = platePieces(f.length);
+    for (const [plate, pieces] of [['bottom plate', plates.bottom], ['top plate', plates.top], ['cap plate', plates.cap]] as const) {
+      pieces.forEach((len, k) => out.push({ size: f.studSize, length: len, label: `${tag} ${plate}${pieces.length > 1 ? ` ${k + 1}/${pieces.length}` : ''}` }));
     }
     for (const m of f.members) {
       const name = NAMES[m.kind];
@@ -99,9 +128,9 @@ export function packBoards(pieces: Piece[], stock: number[] = STOCK, kerf = KERF
 }
 
 /** The cut list for the whole house, grouped by lumber size. */
-export function cutList(project: Project): CutListGroup[] {
+export function cutList(project: Project, walls?: WallFraming[]): CutListGroup[] {
   const bySize = new Map<string, Piece[]>();
-  for (const p of cutPieces(project)) bySize.set(p.size, [...(bySize.get(p.size) ?? []), p]);
+  for (const p of cutPieces(project, walls)) bySize.set(p.size, [...(bySize.get(p.size) ?? []), p]);
   return [...bySize.entries()]
     .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
     .map(([size, pieces]) => {

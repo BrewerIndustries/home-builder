@@ -16,7 +16,7 @@ import type { Pricing, Project } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { MEMBER_LEGEND, WallElevation } from './WallElevation.tsx';
 
-export function FramingView({ project }: { project: Project }) {
+export function FramingView({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
   const t = useMemo(() => framingTakeoff(project), [project]);
   const [picked, setPicked] = useState<string | 'all'>('');
   if (!project.walls.length) return <Empty />;
@@ -102,7 +102,7 @@ export function FramingView({ project }: { project: Project }) {
           </tfoot>
         </table>
       </div>
-      <CutList project={project} />
+      <CutList project={project} dispatch={dispatch} />
       <RoofSummary project={project} />
       <FoundationSummary project={project} />
       <FloorFraming project={project} />
@@ -111,7 +111,7 @@ export function FramingView({ project }: { project: Project }) {
 }
 
 /** Plates, jacks, cripples, sills and header plies packed onto stock lengths, with the waste. */
-function CutList({ project }: { project: Project }) {
+function CutList({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
   const groups = useMemo(() => cutList(project), [project]);
   const [open, setOpen] = useState<string | null>(null);
   if (!groups.length) return null;
@@ -125,9 +125,17 @@ function CutList({ project }: { project: Project }) {
       </div>
       <p className="muted">
         Plates, jacks, cripples, flat sills and header plies packed onto 8'–16' stock (first-fit, 1/8" kerf per cut), each board then cut down to the shortest length
-        that holds it. Plates over 16' are split into equal pieces — offset the top and cap plate joints on site (R602.3.2). Full-height studs are bought at length
-        and LVL headers by length, so they aren't here.
+        that holds it. Plates over 16' are split into pieces. Full-height studs are bought at length
+        and LVL headers by length, so they aren't here. The top plate's joints sit at least 24" from the cap plate's (R602.3.2).
       </p>
+      <label className="link-row">
+        <input
+          type="checkbox"
+          checked={!!project.framing.cutListEstimate}
+          onChange={(e) => dispatch({ type: 'setFraming', patch: { cutListEstimate: e.target.checked || undefined } })}
+        />{' '}
+        Price these boards in the Estimate (instead of plate and header LF plus the waste factor)
+      </label>
       <div className="table-wrap">
         <table>
           <thead>

@@ -24,7 +24,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Floor joist layout + subfloor sheet layout (crawlspace floors: joists over girders, piers, staggered T&G sheets; framing plan on the Framing tab)
 - [ ] Floor v2: joist hangers / cantilevers, openings for stairs, I-joists, floor insulation, framed floors on upper storeys
 - [x] Cut lists optimised to stock lengths, with waste report (Framing tab: plates / jacks / cripples / sills / header plies, FFD onto 8'–16' with 1/8" kerf, boards per stock, waste %, keepable offcuts, per-board diagram, CSV)
-- [ ] Cut lists v2: feed the optimised board counts into the Estimate instead of plate LF + waste; reuse kept offcuts for cripples / blocking; full-height studs from long stock when there's no precut; top / cap plate joints offset 24" (R602.3.2) and laid on studs; roof and floor members in the cut list
+- [x] Cut lists v2: optional "price these boards" — the Estimate uses the cut list's boards by stock length instead of plate / header LF + waste (jacks and cripples move off the stud count); top plate joints offset ≥ 24" from the cap plate's (R602.3.2)
+- [ ] Cut lists v3: plate joints landed on studs; roof (rafters, ridge, fascia) and floor (rim, blocking) members in the cut list; kept offcuts listed as blocking stock; a printable cut sheet
 - [ ] Layered wall assemblies (drywall / stud / sheathing / siding) instead of the +1" finish rule
 - [ ] Wall bracing (R602.10)
 - [ ] Multiple floors (ghosted floor below) + stairs tool checked against R311.7

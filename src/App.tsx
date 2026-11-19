@@ -360,7 +360,7 @@ export function App() {
         </main>
       ) : (
         <main className="report-page">
-          {tab === 'framing' && <FramingView project={project} />}
+          {tab === 'framing' && <FramingView project={project} dispatch={dispatch} />}
           {tab === 'materials' && <MaterialsView project={project} dispatch={dispatch} />}
           {tab === 'code' && (
             <CodeView

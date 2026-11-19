@@ -11,7 +11,8 @@ test('plates longer than 16\' split into equal pieces; short walls give one piec
   const pieces = cutPieces(p);
   const w1 = pieces.filter((x) => x.label.startsWith('W1 '));
   assert.equal(w1.length, 6);
-  assert.ok(w1.every((x) => x.length === 120));
+  // Bottom and cap in equal halves; the top plate's joint offset 24" (R602.3.2).
+  assert.deepEqual(w1.map((x) => x.length), [120, 120, 144, 96, 120, 120]);
   assert.deepEqual(w1.map((x) => x.label).slice(0, 2), ['W1 bottom plate 1/2', 'W1 bottom plate 2/2']);
   assert.deepEqual(pieces.filter((x) => x.label.startsWith('W2 ')).map((x) => x.length), [120, 120, 120]);
 });

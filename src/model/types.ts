@@ -230,6 +230,8 @@ export interface FramingSettings {
   wallHeight: number;
   /** Waste factor applied to lumber and sheet goods (0.1 = 10%). */
   waste: number;
+  /** Price plates, jacks, cripples, sills and header plies from the cut list's boards instead of LF + waste. */
+  cutListEstimate?: boolean;
 }
 
 export type LumberSize = '2x4' | '2x6' | '2x8';

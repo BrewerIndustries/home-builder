@@ -1,4 +1,5 @@
 import { polygonArea, wallLength } from '../model/geometry.ts';
+import { cutList } from './cutlist.ts';
 import { studFor, type LumberSize, type Point, type Project } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { exclusiveArea, totalFloorArea } from './regions.ts';
@@ -94,12 +95,15 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   const wastePct = `+${Math.round(project.framing.waste * 100)}% waste`;
   const lines: MaterialLine[] = [];
 
+  // From the cut list: plates, jacks, cripples, sills and header plies come off packed boards.
+  const fromCutList = !!project.framing.cutListEstimate;
+
   // Studs, grouped by size and stock length.
   const studs = new Map<string, { size: LumberSize; stock: string; n: number }>();
   for (const f of takeoff.walls) {
     const stock = studStock(f.studLength);
     const key = `${f.studSize}|${stock}`;
-    const n = f.common + f.corner + f.king + f.jack + f.cripple;
+    const n = f.common + f.corner + f.king + (fromCutList ? 0 : f.jack + f.cripple);
     const cur = studs.get(key) ?? { size: f.studSize, stock, n: 0 };
     cur.n += n;
     studs.set(key, cur);
@@ -110,11 +114,25 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
       item: `${s.size} stud, ${s.stock}`,
       qty: Math.ceil(s.n * waste),
       unit: 'ea',
-      basis: `${s.n} studs (commons, corners, kings, jacks, cripples) ${wastePct}`,
+      basis: `${s.n} studs (${fromCutList ? 'commons, corners, kings — jacks and cripples are in the cut list' : 'commons, corners, kings, jacks, cripples'}) ${wastePct}`,
     });
   }
 
-  for (const [size, t] of Object.entries(takeoff.totals.byStudSize)) {
+  if (fromCutList) {
+    for (const g of cutList(project, takeoff.walls)) {
+      for (const s of g.byStock) {
+        lines.push({
+          category: 'Lumber',
+          item: `${g.size} board, ${s.stock / 12}'`,
+          qty: s.n,
+          unit: 'ea',
+          basis: `cut list: ${g.pieces} ${g.size} pieces (plates, jacks, cripples, sills, header plies) on ${g.boards.length} boards, ${g.wastePct.toFixed(1)}% offcut waste`,
+        });
+      }
+    }
+  }
+
+  for (const [size, t] of Object.entries(fromCutList ? {} : takeoff.totals.byStudSize)) {
     if (!t) continue;
     lines.push({
       category: 'Lumber',
@@ -126,6 +144,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   }
 
   for (const [size, len] of Object.entries(takeoff.totals.headerLength) as [HeaderSize, number][]) {
+    if (fromCutList && size !== 'LVL') continue;
     if (size === 'LVL') {
       lines.push({ category: 'Lumber', item: 'LVL header (engineered)', qty: Math.ceil(len / 12), unit: 'LF', basis: 'needs a span check before ordering' });
       continue;
