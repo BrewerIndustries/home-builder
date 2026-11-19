@@ -16,8 +16,7 @@
 // cut down to the shortest stock length that still holds its pieces. Allowance:
 // a 1/8" saw kerf per cut. Offcuts of KEEP_OFFCUT or more are listed as blocking stock.
 
-import { floorLayout } from './floor.ts';
-import { foundationOf } from './foundation.ts';
+import { floorSpec, storeyFloorLayout } from './floor.ts';
 import { frameWall, PLATE_THICKNESS, type MemberKind, type WallFraming } from './framing.ts';
 import { roofCutMembers } from './roof.ts';
 import type { Project } from '../model/types.ts';
@@ -260,11 +259,12 @@ export function roofCutPieces(project: Project): Piece[] {
   return out.filter((p) => p.length > 0.01);
 }
 
-/** Floor members cut from stock (crawlspace floors): rim board by edge, blocking over the girders. */
+/** Floor members cut from stock (framed floors): rim board by edge, blocking over the girders, headers at floor openings. I-joist floors buy rim board by the foot. */
 export function floorCutPieces(project: Project): Piece[] {
-  const L = floorLayout(project);
+  const L = storeyFloorLayout(project);
   if (!L) return [];
-  const f = foundationOf(project);
+  const f = floorSpec(project);
+  if (f.ijoist) return [];
   const out: Piece[] = [];
   let edge = 0;
   for (const pts of L.outline) {
@@ -276,9 +276,15 @@ export function floorCutPieces(project: Project): Piece[] {
   }
   // A solid block in each joist bay along each girder line.
   const block = f.joistSpacing - PLATE_THICKNESS;
-  L.girders.forEach((g, i) => {
-    const n = Math.max(1, Math.round(Math.hypot(g.b.x - g.a.x, g.b.y - g.a.y) / f.joistSpacing));
-    for (let k = 0; k < n; k++) out.push({ size: f.joistSize, length: block, label: `girder ${i + 1} block` });
+  if (!f.flushGirders) {
+    L.girders.forEach((g, i) => {
+      const n = Math.max(1, Math.round(Math.hypot(g.b.x - g.a.x, g.b.y - g.a.y) / f.joistSpacing));
+      for (let k = 0; k < n; k++) out.push({ size: f.joistSize, length: block, label: `girder ${i + 1} block` });
+    });
+  }
+  // Doubled headers round floor openings.
+  L.headers.forEach((h, i) => {
+    for (let k = 0; k < 2; k++) out.push({ size: f.joistSize, length: Math.hypot(h.b.x - h.a.x, h.b.y - h.a.y), label: `opening header ${i + 1}` });
   });
   return out.filter((p) => p.length > 0.01);
 }

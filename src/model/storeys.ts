@@ -1,6 +1,6 @@
 import { HEADER_DEPTH } from '../calc/framing.ts';
 import { assemblyThickness } from './assembly.ts';
-import { DEFAULT_FOUNDATION, uid, type Project, type Storey, type StoreyData, type Wall } from './types.ts';
+import { DEFAULT_FOUNDATION, uid, type FloorFrame, type Project, type Storey, type StoreyData, type Wall } from './types.ts';
 
 // Storeys v1. A project is one storey until a second is added. The ACTIVE
 // storey's plan data lives in the project's top-level arrays (walls, rooms …),
@@ -33,8 +33,10 @@ export function activeStoreyId(p: Project): string {
 
 export const activeStorey = (p: Project): Storey => storeyList(p).find((s) => s.id === activeStoreyId(p))!;
 
-/** Depth of a framed floor: the foundation's joist size plus the subfloor. */
+/** Depth of a framed floor: the foundation's joist size (or I-joist depth) plus the subfloor. */
 export function floorDepth(p: Project): number {
+  const fl = p.foundation?.floor;
+  if (fl?.joistType === 'ijoist' && fl.iJoistDepth) return fl.iJoistDepth + SUBFLOOR;
   return HEADER_DEPTH[p.foundation?.joistSize ?? DEFAULT_FOUNDATION.joistSize] + SUBFLOOR;
 }
 
@@ -66,7 +68,7 @@ function dataOf(s: Storey): StoreyData {
 
 /** Just the storey's own settings, no plan data. */
 function meta(s: Storey): Storey {
-  return { id: s.id, name: s.name, level: s.level, ...(s.height !== undefined && { height: s.height }) };
+  return { id: s.id, name: s.name, level: s.level, ...(s.height !== undefined && { height: s.height }), ...(s.floor && { floor: s.floor }) };
 }
 
 /** Make `id` the active storey: the current one's data goes into `storeys`, the target's comes out. */
@@ -146,8 +148,10 @@ export function removeStorey(p: Project, id: string): Project {
   return { ...q, storeys: shifted };
 }
 
-/** Rename a storey or set its floor-to-floor height (undefined = estimated). */
-export function updateStorey(p: Project, id: string, patch: { name?: string; height?: number | undefined }): Project {
+export type StoreyPatch = { name?: string; height?: number | undefined; floor?: FloorFrame };
+
+/** Rename a storey, set its floor-to-floor height (undefined = estimated) or its framed floor. */
+export function updateStorey(p: Project, id: string, patch: StoreyPatch): Project {
   const q = withStoreys(p);
   return { ...q, storeys: q.storeys!.map((s) => (s.id === id ? { ...s, ...patch, ...('height' in patch && patch.height === undefined && { height: undefined }) } : s)) };
 }
@@ -156,7 +160,7 @@ export type StoreyOp =
   | { op: 'switch'; id: string }
   | { op: 'add'; dir: 1 | -1; id?: string }
   | { op: 'remove'; id: string }
-  | { op: 'update'; id: string; patch: { name?: string; height?: number | undefined } };
+  | { op: 'update'; id: string; patch: StoreyPatch };
 
 export function storeyReducer(p: Project, a: StoreyOp): Project {
   switch (a.op) {

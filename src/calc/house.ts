@@ -1,16 +1,17 @@
 import { pointInPolygon, wallLength } from '../model/geometry.ts';
 import { activeStoreyId, isLowestStorey, isMultiStorey, isTopStorey, setStoreyData, storeyElevation, storeyList, storeyView, storeyViews } from '../model/storeys.ts';
-import { uid, type Furniture, type Point, type Project, type Storey, type Wall, type WallSwitch } from '../model/types.ts';
+import { uid, type Point, type Project, type Storey, type Wall, type WallSwitch } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { attach } from './electrical.ts';
-import { floorLines } from './floor.ts';
+import { upperFloorLines } from './floor.ts';
+import { floorOpenings, type FloorOpening } from './floorOpenings.ts';
 import { foundationOf } from './foundation.ts';
 import { ircChecks, type CodeCheck } from './irc.ts';
 import { detectsSmoke, lightsRoom, SWITCH_HEIGHT } from './lighting.ts';
 import { materialsList, wallAreas, type MaterialLine } from './materials.ts';
 import { buildScene, type Scene3D, type V3 } from './model3d.ts';
 import { roofOf } from './roof.ts';
-import { FLOOR_GUARD, floorOpeningPolygons, isStairs, openingGuardLength, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
+import { FLOOR_GUARD, openingGuardLength, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
 
 // The whole house across its storeys (Storeys v1). Each storey is a Project view
 // (model/storeys.ts) and the per-plan calcs run on each one; the parts the house
@@ -32,29 +33,7 @@ export function roleView(p: Project, id: string = activeStoreyId(p)): Project {
   };
 }
 
-export interface FloorOpening {
-  /** The stair it's over, and the storey that stair is drawn on. */
-  stair: Furniture;
-  from: string;
-  /** One polygon per flight or landing it spans. */
-  polys: Point[][];
-}
-
-/** Openings in a storey's floor: under stairs coming up from the storey below, and over its own stairs going down. */
-export function floorOpenings(p: Project, id: string = activeStoreyId(p)): FloorOpening[] {
-  const out: FloorOpening[] = [];
-  const list = storeyList(p);
-  const i = list.findIndex((s) => s.id === id);
-  if (i < 0) return out;
-  const own = storeyView(p, id);
-  for (const f of own.furniture.filter((x) => isStairs(x) && x.down)) out.push({ stair: f, from: id, polys: floorOpeningPolygons(f) });
-  const below = list[i - 1];
-  if (below) {
-    const v = storeyView(p, below.id);
-    for (const f of v.furniture.filter((x) => isStairs(x) && !x.down)) out.push({ stair: f, from: below.id, polys: floorOpeningPolygons(f) });
-  }
-  return out;
-}
+export { floorOpenings, type FloorOpening } from './floorOpenings.ts';
 
 /** Guard round a floor opening over a stair coming up from below (R312.1.1, 36" round an opening): its open edges, less the end you step off at the top. */
 export function openingGuard(upper: Project, o: FloorOpening): number {
@@ -133,10 +112,8 @@ export function houseMaterials(p: Project, list: (p: Project) => MaterialLine[] 
   for (const { storey } of storeyViews(p)) {
     const v = roleView(p, storey.id);
     const lines = list(v);
-    if (!isLowestStorey(p, storey.id) && v.walls.length) {
-      // A framed floor under this storey, bearing on the walls below (no girders or piers).
-      lines.push(...floorLines({ ...v, foundation: { ...foundationOf(v), type: 'crawl', girders: 0 } }, p.framing.waste));
-    }
+    // Floor v2: the framed floor under this storey, joists bearing on the walls below (calc/floor.ts).
+    if (!isLowestStorey(p, storey.id) && v.walls.length) lines.push(...upperFloorLines(v, p.framing.waste));
     const guard = floorOpenings(p, storey.id).filter((o) => o.from !== storey.id).reduce((t, o) => t + openingGuard(v, o), 0);
     if (guard > 0) lines.push({ category: 'Lumber', item: 'Stair guard / balustrade (allowance)', qty: Math.ceil(guard / 12), unit: 'lf', basis: 'open edges round the stair opening in the floor (R312.1)' });
     parts.push({ name: storey.name, lines });
