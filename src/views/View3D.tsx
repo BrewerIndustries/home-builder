@@ -23,6 +23,7 @@ function palette(dark: boolean) {
     counter: dark ? 0x8a7a62 : 0xd8ccb6,
     fixture: dark ? 0xe8edf2 : 0xfdfdfd,
     furniture: dark ? 0x6f7f96 : 0x9fb0c6,
+    door: dark ? 0x9c7a55 : 0xb88f62,
   };
 }
 
@@ -129,7 +130,7 @@ export default function View3D({ project }: { project: Project }) {
         cy = (y0 + y1) / 2;
         sy = y1 - y0;
       }
-      const color = b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : b.kind === 'fixture' ? c.fixture : b.kind === 'furniture' ? c.furniture : c.beam;
+      const color = b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : b.kind === 'fixture' ? c.fixture : b.kind === 'furniture' ? c.furniture : b.kind === 'door' ? c.door : c.beam;
       const m = new THREE.Mesh(
         new THREE.BoxGeometry(sx, sy, sz),
         b.kind === 'glass' ? mat(color, { transparent: true, opacity: 0.35, roughness: 0.1 }) : mat(color),

@@ -1,5 +1,6 @@
 import { samePoint, projectOnWall, wallLength } from '../model/geometry.ts';
-import { studFor, type LumberSize, type Opening, type Project, type Wall } from '../model/types.ts';
+import { barnBlocking } from './barn.ts';
+import { STUD_DEPTH, studFor, type LumberSize, type Opening, type Project, type Wall } from '../model/types.ts';
 
 // Wall framing takeoff, derived from the plan. Conventional platform framing:
 // single bottom plate, double top plate, studs on a fixed layout from wall.a,
@@ -36,7 +37,7 @@ export interface HeaderPiece {
   length: number;
 }
 
-export type MemberKind = 'plate' | 'common' | 'corner' | 'king' | 'jack' | 'cripple' | 'header' | 'sill';
+export type MemberKind = 'plate' | 'common' | 'corner' | 'king' | 'jack' | 'cripple' | 'header' | 'sill' | 'blocking';
 
 /**
  * One framing member in wall elevation: x along the wall from wall.a, y up from the
@@ -192,6 +193,9 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
     const headerLen = ro.width + 2 * T * jacksPerSide;
     headers.push({ openingId: o.id, size, plies: 2, length: headerLen });
     members.push({ kind: 'header', x: start - T * jacksPerSide, y: roTop, w: headerLen, h: HEADER_DEPTH[size] });
+    // A barn door's track needs solid blocking over its slide (see barn.ts).
+    const blocking = barnBlocking(o, length, roTop, STUD_DEPTH[studSize], [start - T * jacksPerSide, start - T * jacksPerSide + headerLen], height - 2 * T);
+    if (blocking) members.push(blocking);
 
     const headerTop = roTop + HEADER_DEPTH[size];
     const plateUnderside = height - 2 * T;
