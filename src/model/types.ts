@@ -166,6 +166,11 @@ export interface Furniture {
   handrailHeight?: number;
   /** Lavatory: a double vanity (two basins, each its own lavatory). */
   basins?: 2;
+  /** Double vanity: the two basin centres, local x (left, right); a quarter of the width either side of centre when unset. */
+  basinAt?: [number, number];
+  /** Shower (stall): curbless walk-in — no curb, no door, one side open; that side is the front unless `entry` says left or right. */
+  walkIn?: boolean;
+  entry?: 'left' | 'right';
   /** Corner and neo-angle showers: door on the front-right instead of the front-left. */
   mirror?: boolean;
   /** Stairs: guards along any side not against a wall (on unless false). */

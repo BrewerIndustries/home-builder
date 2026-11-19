@@ -2,6 +2,7 @@ import { pointAlong, polygonArea, wallDir, wallLength } from '../model/geometry.
 import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { FURNITURE, isFixture } from './furniture.ts';
+import { doorLeafBoxes } from './doors3d.ts';
 import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
@@ -14,7 +15,7 @@ export type V3 = [number, number, number];
 
 /** Axis-aligned-in-wall-space box: a wall piece or a coffer beam. */
 export interface Box {
-  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture';
+  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door';
   /** Centre. */
   c: V3;
   /** Size along the wall, height, thickness. */
@@ -195,7 +196,7 @@ export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[
 }
 
 export function buildScene(project: Project): Scene3D {
-  const boxes = wallBoxes(project);
+  const boxes = [...wallBoxes(project), ...doorLeafBoxes(project)];
   const flats: FlatSurface[] = [];
   const faces: Face[] = [];
   // Floors: outermost rooms only (nested rooms sit on the same slab).
@@ -246,7 +247,8 @@ export function buildScene(project: Project): Scene3D {
     }
   }
   for (const f of project.furniture) {
-    const h = FURNITURE[f.kind].h;
+    // A curbless walk-in shower's floor is flush: just a sliver to show it.
+    const h = f.kind === 'shower' && f.walkIn ? 0.5 : FURNITURE[f.kind].h;
     if (!h) continue; // stairs: plan only
     if (f.kind === 'closet-rod') {
       // A shelf at 5' 6" (a double hang: shelves at 7' and 3' 6", a rod under each).

@@ -13,6 +13,7 @@ const FILL: Record<MemberKind, string> = {
   cripple: 'var(--m-cripple)',
   header: 'var(--m-header)',
   sill: 'var(--m-plate)',
+  blocking: 'var(--m-blocking)',
 };
 
 export const MEMBER_LEGEND: { kind: MemberKind; label: string }[] = [
@@ -23,6 +24,7 @@ export const MEMBER_LEGEND: { kind: MemberKind; label: string }[] = [
   { kind: 'cripple', label: 'Cripple' },
   { kind: 'header', label: 'Header' },
   { kind: 'plate', label: 'Plate / sill' },
+  { kind: 'blocking', label: 'Barn door blocking' },
 ];
 
 export function WallElevation({ f, label }: { f: WallFraming; label: string }) {

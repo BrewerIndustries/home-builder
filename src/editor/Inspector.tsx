@@ -46,6 +46,7 @@ import {
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { AngleInput, LengthInput } from './LengthInput.tsx';
+import { FixtureOptions } from './FixtureOptions.tsx';
 import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
 import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
@@ -665,10 +666,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </Field>
         {f.kind === 'lavatory' && (
           <label className="link-row">
-            <input type="checkbox" checked={f.basins === 2} onChange={(e) => up(e.target.checked ? { basins: 2, w: Math.max(f.w, 60) } : { basins: undefined })} /> Double vanity — two basins, each
+            <input type="checkbox" checked={f.basins === 2} onChange={(e) => up(e.target.checked ? { basins: 2, w: Math.max(f.w, 60) } : { basins: undefined, basinAt: undefined })} /> Double vanity — two basins, each
             checked for its own receptacle (E3901.6)
           </label>
         )}
+        <FixtureOptions f={f} up={up} />
         {(f.kind === 'corner-shower' || f.kind === 'neo-shower') && (
           <button onClick={() => up({ mirror: f.mirror ? undefined : true })}>Mirror — door on the {f.mirror ? 'left' : 'right'}</button>
         )}

@@ -81,9 +81,40 @@ export const NEO_CUT = 14;
 export const MIRRORABLE: ReadonlySet<FurnitureKind> = new Set(['corner-shower', 'neo-shower']);
 /** Lavatory basins: one, or two on a double vanity. */
 export const basinCount = (f: Furniture) => (f.kind === 'lavatory' ? (f.basins ?? 1) : 0);
-/** A double vanity's basin halves, local x from–to; a single vanity is one span. */
-export const basinSpans = (f: Furniture): [number, number][] => (basinCount(f) === 2 ? [[-f.w / 2, 0], [0, f.w / 2]] : [[-f.w / 2, f.w / 2]]);
+/** Half a double vanity's basin bowl across (as drawn): 9" or less, so two fit side by side. */
+export const basinHalfWidth = (f: Furniture) => Math.min(f.w * 0.16, 9);
+/**
+ * A double vanity's basin centres, local x (left, right): where the user put
+ * them (`basinAt`), kept on the top and a bowl apart, else a quarter of the width
+ * either side of centre.
+ */
+export function basinCentres(f: Furniture): [number, number] {
+  if (!f.basinAt) return [-f.w / 4, f.w / 4];
+  const r = basinHalfWidth(f);
+  const lim = Math.max(0, f.w / 2 - r);
+  const clamp = (x: number) => Math.max(-lim, Math.min(lim, x));
+  let [a, b] = [clamp(Math.min(...f.basinAt)), clamp(Math.max(...f.basinAt))];
+  if (b - a < 2 * r) {
+    const mid = Math.max(-lim + r, Math.min(lim - r, (a + b) / 2));
+    [a, b] = [mid - r, mid + r];
+  }
+  return [a, b];
+}
+/**
+ * What E3901.6's reach is measured to, local x from–to: a single vanity's whole
+ * top; a double vanity's halves (split at the middle) as drawn by default, or, once
+ * the basins have been placed, each basin's own bowl.
+ */
+export function basinSpans(f: Furniture): [number, number][] {
+  if (basinCount(f) !== 2) return [[-f.w / 2, f.w / 2]];
+  if (!f.basinAt) return [[-f.w / 2, 0], [0, f.w / 2]];
+  const r = basinHalfWidth(f);
+  return basinCentres(f).map((c): [number, number] => [c - r, c + r]);
+}
 export const showerArea = (f: Furniture) => f.w * f.d - (f.kind === 'neo-shower' ? (Math.min(NEO_CUT, f.w, f.d) ** 2) / 2 : 0);
+
+/** A curbless walk-in shower, by name in checks. */
+export const WALK_IN_LABEL = 'curbless walk-in shower';
 
 /** Fixed fixtures and appliances (not furniture, which moves): checked, and solid to clearances. */
 export const isFixture = (f: Furniture) => FURNITURE[f.kind].fixture;
@@ -222,6 +253,10 @@ export function clearZones(f: Furniture): [string, Point[]][] {
     case 'tub-shower':
       return [['21" clear in front', localRect(f, -hw, hd, hw, hd + 21)]];
     case 'shower':
+      // A walk-in's opening is its open side: the front, or the left or right side.
+      if (f.walkIn && f.entry === 'left') return [['24" clear in front of the open side', localRect(f, -hw - 24, -hd, -hw, hd)]];
+      if (f.walkIn && f.entry === 'right') return [['24" clear in front of the open side', localRect(f, hw, -hd, hw + 24, hd)]];
+      return [[f.walkIn ? '24" clear in front of the open side' : '24" clear in front of the opening', localRect(f, -hw, hd, hw, hd + 24)]];
     case 'corner-shower':
       return [['24" clear in front of the opening', localRect(f, -hw, hd, hw, hd + 24)]];
     case 'neo-shower': {
@@ -314,7 +349,7 @@ export function furnitureChecks(project: Project): CodeCheck[] {
     });
   }
   for (const f of fixtures) {
-    const label = FURNITURE[f.kind].label.toLowerCase();
+    const label = f.walkIn && f.kind === 'shower' ? WALK_IN_LABEL : FURNITURE[f.kind].label.toLowerCase();
     const where = furnitureRoom(project, f)?.name;
     const name = where ? `${where}: ${label}` : label;
     const zones = clearZones(f);
@@ -381,7 +416,9 @@ export function furnitureLines(project: Project): MaterialLine[] {
   add('Double vanity + 2 faucets (allowance)', doubles, 'double vanities on the plan (two basins each)');
   add('Bathtub + valve (allowance)', count('tub'), 'tubs on the plan');
   add('Tub / shower combo + valve + surround (allowance)', count('tub-shower'), 'tub / shower combos on the plan');
-  add('Shower pan + valve + door (allowance)', count('shower') + count('corner-shower'), 'showers on the plan (stall and corner entry)');
+  const walkIns = project.furniture.filter((f) => f.kind === 'shower' && f.walkIn).length;
+  add('Shower pan + valve + door (allowance)', count('shower') - walkIns + count('corner-shower'), 'showers on the plan (stall and corner entry)');
+  add('Curbless walk-in shower + linear drain + glass panel (allowance)', walkIns, 'curbless walk-in showers on the plan: recessed / sloped floor, waterproofing, valve, fixed glass, no curb or door');
   add('Neo-angle shower base + valve + glass (allowance)', count('neo-shower'), 'neo-angle showers on the plan');
   add('Bidet (allowance)', count('bidet'), 'bidets on the plan');
   add('Kitchen sink + faucet (allowance)', count('kitchen-sink'), 'free-standing sink bases on the plan');
@@ -467,7 +504,7 @@ export function followFurniture(prev: Project, next: Project): Project {
 }
 
 /** A door's frame on the plan: hinge-end jamb, free-end jamb (both on the face it opens toward), the way it opens, and along the wall from hinge to free end. */
-function doorFrame(project: Project, o: Opening) {
+export function doorFrame(project: Project, o: Opening) {
   const wall = project.walls.find((w) => w.id === o.wallId);
   if (!wall) return null;
   const d = wallDir(wall);

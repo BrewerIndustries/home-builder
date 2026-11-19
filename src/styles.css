@@ -30,6 +30,7 @@
   --m-cripple: #b9d39a;
   --m-header: #a77b4f;
   --m-plate: #cfae80;
+  --m-blocking: #7c5cbf;
   --pass: #15803d;
   --fail: #c2372e;
   --warn: #b45309;
@@ -72,6 +73,7 @@
     --m-cripple: #5d7d3b;
     --m-header: #c08a55;
     --m-plate: #7d6440;
+    --m-blocking: #a58be0;
     --pass: #4ade80;
     --fail: #f87171;
     --warn: #fbbf24;
@@ -1045,6 +1047,7 @@ tfoot td {
 .m-cripple { background: var(--m-cripple); }
 .m-header { background: var(--m-header); }
 .m-plate { background: var(--m-plate); }
+.m-blocking { background: var(--m-blocking); }
 .elevation-wrap {
   background: var(--panel);
   border: 1px solid var(--border);

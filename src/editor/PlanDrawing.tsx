@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { exclusiveArea } from '../calc/regions.ts';
-import { isFixture } from '../calc/furniture.ts';
+import { basinCentres, basinHalfWidth, isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { cabinetLayout, cornerUppers, counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
@@ -699,9 +699,9 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       body = (
         <>
           {rect(l, t, r, b)}
-          {(f.basins === 2 ? [-w / 4, w / 4] : [0]).map((cx) => (
-            <g key={cx}>
-              <ellipse cx={cx} cy={1} rx={Math.min(w * (f.basins === 2 ? 0.16 : 0.32), 9)} ry={d * 0.3} strokeWidth={sw} />
+          {(f.basins === 2 ? basinCentres(f) : [0]).map((cx, i) => (
+            <g key={i}>
+              <ellipse cx={cx} cy={1} rx={f.basins === 2 ? basinHalfWidth(f) : Math.min(w * 0.32, 9)} ry={d * 0.3} strokeWidth={sw} />
               <circle cx={cx} cy={t + 2.5} r={1} strokeWidth={sw} />
             </g>
           ))}
@@ -769,7 +769,21 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       );
       break;
     case 'shower':
-      body = (
+      body = f.walkIn ? (
+        // Curbless walk-in: no curb or door — the open side dashed, a linear drain across the back.
+        <>
+          <rect x={l} y={t} width={w} height={d} stroke="none" />
+          {(() => {
+            const open = f.entry === 'left' ? 3 : f.entry === 'right' ? 1 : 2;
+            const corners = [[l, t], [r, t], [r, b], [l, b]];
+            return corners.map(([x1, y1], i) => {
+              const [x2, y2] = corners[(i + 1) % 4];
+              return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={i === open ? px(0.8) : sw} strokeDasharray={i === open ? `${px(3)} ${px(2)}` : undefined} />;
+            });
+          })()}
+          <line x1={l + 3} y1={t + 3} x2={r - 3} y2={t + 3} strokeWidth={px(1.6)} />
+        </>
+      ) : (
         <>
           {rect(l, t, r, b)}
           <line x1={l} y1={t} x2={r} y2={b} strokeWidth={sw} />
