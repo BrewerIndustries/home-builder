@@ -1,9 +1,10 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
+import { DEFAULT_FRAMING, type WallAssemblies, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
 import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
 import { followDims } from '../calc/faces.ts';
+import { assemblyThickness } from './assembly.ts';
 
 // A plain reducer over Project with undo/redo. Drags dispatch one `checkpoint`
 // on pointer-down and then `transient` edits, so a whole drag is one undo step.
@@ -44,6 +45,8 @@ export type Action =
   | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>>; transient?: boolean }
   | { type: 'delete'; ids: string[] }
   | { type: 'setFraming'; patch: Partial<FramingSettings> }
+  /** Default wall layers per kind (walls with their own assembly keep it). */
+  | { type: 'setAssemblies'; assemblies: WallAssemblies }
   | { type: 'setRoof'; patch: Partial<Roof> }
   | { type: 'setFoundation'; patch: Partial<Foundation> }
   | { type: 'setPricing'; pricing: Pricing }
@@ -115,6 +118,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'setDimMode':
       return { ...p, dimMode: action.mode };
+
+    case 'setAssemblies':
+      return { ...p, assemblies: action.assemblies };
 
     case 'setDimOffset': {
       const rest = Object.fromEntries(Object.entries(p.dimOffsets ?? {}).filter(([k]) => k !== action.id));
@@ -366,11 +372,11 @@ export function migrate(p: Project): Project {
   };
 }
 
-/** Wall thickness follows its effective stud size; only allocate when something changed. */
+/** Wall thickness follows its layers (and stud size); only allocate when something changed. */
 export function syncThickness(p: Project): Project {
   let changed = false;
   const walls = p.walls.map((w) => {
-    const t = finishedThickness(studFor(w, p.framing));
+    const t = assemblyThickness(p, w);
     if (t === w.thickness) return w;
     changed = true;
     return { ...w, thickness: t };

@@ -1,5 +1,6 @@
 import { migrate } from './store.ts';
-import { emptyProject, type Project, type Underlay } from './types.ts';
+import { type Project, type Underlay } from './types.ts';
+import { newProject } from './assembly.ts';
 
 const KEY = 'home-builder:project';
 
@@ -10,7 +11,7 @@ export function loadSaved(): Project {
   } catch {
     // Private window, blocked storage or a corrupt save — start fresh.
   }
-  return emptyProject();
+  return newProject();
 }
 
 /** Returns an error message if the browser refused the save (usually quota). */

@@ -9,6 +9,7 @@ import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, User
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { outletPosition } from './outletGeometry.ts';
+import { NarrowestLine } from './NarrowestLine.tsx';
 
 // The plan as a picture: rooms, walls, openings, outlets and dimensions, in plan
 // inches. Shared by the interactive canvas and the to-scale print sheet. `px`
@@ -42,6 +43,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
                 {l.text}
               </text>
             ))}
+            <NarrowestLine project={project} room={r} selected={sel} px={px} />
           </g>
         );
       })}

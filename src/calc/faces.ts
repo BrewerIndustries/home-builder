@@ -2,13 +2,14 @@ import { pointAlong, pointInPolygon, polygonArea, projectOnWall, wallDir, wallLe
 import type { DimAnchor, DimMode, Point, Project, Room, Wall } from '../model/types.ts';
 import { wallFaces } from './enclosure.ts';
 import { projectReducer } from '../model/store.ts';
+import { framingThickness } from '../model/assembly.ts';
 
 // Wall faces for inside / outside dimensions. Each side of a wall is a strip
 // `thickness / 2` off the centreline; it ends where it meets the next wall's
 // face (mitred at corners, pulled back at Ts) and is cut into pieces wherever
 // another wall tees in on that side. A free end runs to the drawn (square) end.
-// Faces are the finished surfaces (drywall, sheathing) unless the project asks
-// for framing faces, which sit 1/2" inside them (see finishedThickness).
+// Faces are the finished surfaces (the outermost layers of the wall's assembly)
+// unless the project asks for framing faces: the stud depth alone (see assembly.ts).
 // Inches throughout; `side` is relative to wallNormal.
 
 const TOL = 0.5;
@@ -34,9 +35,9 @@ interface Ray {
 }
 
 /** Walls leaving `p` (other than `self`), as rays: ends at p give one, walls running through p give two. */
-/** Half the wall's thickness to the faces being measured: finished, or the framing 1/2" in. */
+/** Half the wall's thickness to the faces being measured: finished (all its layers), or the studs alone. */
 export function faceHalf(project: Project, w: Wall): number {
-  return (project.dimFaces === 'framing' ? Math.max(1, w.thickness - 1) : w.thickness) / 2;
+  return (project.dimFaces === 'framing' ? Math.min(w.thickness, framingThickness(project, w)) : w.thickness) / 2;
 }
 
 function raysAt(project: Project, self: Wall, p: Point): Ray[] {

@@ -3,6 +3,7 @@ import type { Point, Project, Room } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { FURNITURE, isFixture } from './furniture.ts';
 import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
+import { cofferBeams, trayOutline } from './roomShape.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
 import { counterDir, counterHeight, cornerUppers, counterLength, counterPoint, FRIDGE_HEIGHT, seatingDepth, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
@@ -103,8 +104,8 @@ function convex(pts: Point[]): boolean {
  * (whole pieces where convex, else triangles), plus the wall above the low line
  * along every edge it rises over.
  */
-function slopedCeiling(pts: Point[], type: 'vaulted' | 'cathedral', low: number, high: number): Face[] {
-  const frame = slopeFrame(pts);
+function slopedCeiling(pts: Point[], type: 'vaulted' | 'cathedral', low: number, high: number, edge?: number): Face[] {
+  const frame = slopeFrame(pts, edge);
   if (!frame || !frame.span) return [];
   const { dir, d0, span } = frame;
   const along = (p: Point) => (p.x * dir.x + p.y * dir.y - d0) / span;
@@ -146,7 +147,6 @@ export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[
   if (children.length || c.type === 'flat') {
     return { flats: [flat(low, room.points, children.map((r) => r.points))], faces: [], boxes: [] };
   }
-  const { x0, x1, y0, y1 } = bbox(room.points);
   const faces: Face[] = [];
   const boxes: Box[] = [];
   const flats: FlatSurface[] = [];
@@ -154,22 +154,21 @@ export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[
   switch (c.type) {
     case 'vaulted':
     case 'cathedral':
-      faces.push(...slopedCeiling(room.points, c.type, low, info.high));
+      faces.push(...slopedCeiling(room.points, c.type, low, info.high, c.slopeEdge));
       break;
     case 'tray': {
+      // The raised centre follows the room's outline, inset all round.
       const depth = c.trayDepth ?? 12;
-      const inset = Math.min(c.trayInset ?? 24, Math.min(x1 - x0, y1 - y0) / 2 - 6);
-      const inner = [
-        { x: x0 + inset, y: y0 + inset },
-        { x: x1 - inset, y: y0 + inset },
-        { x: x1 - inset, y: y1 - inset },
-        { x: x0 + inset, y: y1 - inset },
-      ];
+      const inner = trayOutline(room.points, c.trayInset ?? 24);
+      if (!inner) {
+        flats.push(flat(low, room.points));
+        break;
+      }
       flats.push(flat(low, room.points, [inner]));
       flats.push(flat(low + depth, inner));
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < inner.length; i++) {
         const a = inner[i];
-        const b = inner[(i + 1) % 4];
+        const b = inner[(i + 1) % inner.length];
         faces.push({ kind: 'ceiling', pts: [[a.x, low, a.y], [b.x, low, b.y], [b.x, low + depth, b.y], [a.x, low + depth, a.y]] });
       }
       break;
@@ -178,15 +177,10 @@ export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[
       const spacing = Math.max(24, c.cofferSpacing ?? 48);
       const depth = c.cofferDepth ?? 8;
       flats.push(flat(low, room.points));
-      const W = x1 - x0;
-      const H = y1 - y0;
-      for (let i = 1; i < Math.ceil(W / spacing); i++) {
-        const x = x0 + (W * i) / Math.ceil(W / spacing);
-        boxes.push({ kind: 'beam', c: [x, low - depth / 2, (y0 + y1) / 2], size: [5.5, depth, H], rotY: 0 });
-      }
-      for (let i = 1; i < Math.ceil(H / spacing); i++) {
-        const y = y0 + (H * i) / Math.ceil(H / spacing);
-        boxes.push({ kind: 'beam', c: [(x0 + x1) / 2, low - depth / 2, y], size: [W, depth, 5.5], rotY: 0 });
+      // Beam grid square to the longest edge, each beam clipped to the real outline.
+      for (const { a, b } of cofferBeams(room.points, spacing)) {
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        boxes.push({ kind: 'beam', c: [(a.x + b.x) / 2, low - depth / 2, (a.y + b.y) / 2], size: [len, depth, 5.5], rotY: -Math.atan2(b.y - a.y, b.x - a.x) });
       }
       break;
     }

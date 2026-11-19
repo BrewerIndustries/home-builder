@@ -3,6 +3,7 @@ import { HABITABLE, studFor, type Opening, type Point, type Project, type Room, 
 import { formatFtIn } from '../model/units.ts';
 import { areaWithHeadroom, ceilingInfo } from './ceilings.ts';
 import { narrowest } from './outline.ts';
+import { clearNarrowest } from './roomShape.ts';
 import { counterGaps, roomOutletCount, roomRuns, spacingGaps } from './electrical.ts';
 import { counterLength, freeSpaces, ISLAND_MIN_LONG, ISLAND_MIN_SHORT, peninsulaJoin, roomCounters } from './counters.ts';
 import { exclusiveArea } from './regions.ts';
@@ -122,13 +123,15 @@ export function ircChecks(project: Project): CodeCheck[] {
         message: counted < area - 0.05 ? `${label}: ${sqft(counted)} with 5 ft headroom or more (of ${sqft(area)})` : `${label}: ${sqft(area)}`,
         targetId: room.id,
       });
-      const narrow = narrowest(room.points);
+      // Measured between finished wall faces (the clear outline), not wall lines.
+      const narrow = clearNarrowest(project, room);
+      const drawn = narrowest(room.points);
       if (narrow) {
         add({
           rule: 'Minimum habitable room dimension (7 ft)',
           section: 'R304.2',
           status: narrow.width >= 84 - 0.5 ? 'pass' : 'fail',
-          message: `${label}: narrowest ${formatFtIn(narrow.width)} across`,
+          message: `${label}: narrowest ${formatFtIn(narrow.width)} clear between finished faces${drawn && drawn.width - narrow.width > 0.05 ? ` (${formatFtIn(drawn.width)} on the wall lines)` : ''}`,
           targetId: room.id,
         });
       }

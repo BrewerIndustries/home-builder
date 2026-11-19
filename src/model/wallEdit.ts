@@ -329,7 +329,11 @@ function transformRoom(p: Project, roomId: string, m: RoomMap): Project {
     // Rooms wholly inside move with it (a mirror reverses their winding: put it back); a neighbour just stretches.
     if (r.id === room.id || r.points.every(inside)) {
       const pts = r.points.map(m.point);
-      return { ...r, points: m.flip ? [...pts].reverse() : pts, ...(r.pivot ? { pivot: m.point(r.pivot) } : {}) };
+      // Reversing the points renumbers the edges: a picked slope edge i becomes n - 2 - i.
+      const n = pts.length;
+      const edge = r.ceiling?.slopeEdge;
+      const ceiling = m.flip && r.ceiling && edge !== undefined ? { ...r.ceiling, slopeEdge: (((n - 2 - edge) % n) + n) % n } : r.ceiling;
+      return { ...r, points: m.flip ? [...pts].reverse() : pts, ...(ceiling ? { ceiling } : {}), ...(r.pivot ? { pivot: m.point(r.pivot) } : {}) };
     }
     return { ...r, points: r.points.map(moveIf) };
   };

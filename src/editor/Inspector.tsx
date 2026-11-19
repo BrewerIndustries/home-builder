@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
-import { narrowest } from '../calc/outline.ts';
+import { clearNarrowest } from '../calc/roomShape.ts';
 import { BED_SIZES, FURNITURE, FURNITURE_KINDS, furnitureChecks, furnitureRoom, placeFurniture } from '../calc/furniture.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
 import { frameWall, studCount } from '../calc/framing.ts';
@@ -13,6 +13,8 @@ import { dist, wallLength } from '../model/geometry.ts';
 import { isLight, roomAt, switchRoom, switchWays, VEHICLE_DOOR } from '../calc/lighting.ts';
 import { roomOutletCount } from '../calc/electrical.ts';
 import { outletPosition } from './outletGeometry.ts';
+import { ProjectLayersPanel, WallLayersPanel } from './AssemblyEditor.tsx';
+import { SlopeEdgeSelect } from './SlopeEdgeSelect.tsx';
 import type { Action } from '../model/store.ts';
 import {
   LUMBER_SIZES,
@@ -167,6 +169,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Wall height" hint="Plate to plate. 97-1/8&quot; = standard 8' wall">
           <LengthInput value={w.height} min={24} onChange={(v) => dispatch({ type: 'updateWall', id: w.id, patch: { height: v } })} />
         </Field>
+        <WallLayersPanel project={project} wall={w} dispatch={dispatch} />
         <div className="stat-grid">
           <Stat label="Studs" value={studCount(f)} />
           <Stat label="Stud cut" value={formatFtIn(f.studLength)} />
@@ -776,7 +779,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     if (!r) return null;
     const c: Ceiling = r.ceiling ?? { type: 'flat' };
     const info = ceilingInfo(project, r);
-    const narrow = narrowest(r.points);
+    const narrow = clearNarrowest(project, r);
     const setCeiling = (patch: Partial<Ceiling>) => dispatch({ type: 'updateRoom', id: r.id, patch: { ceiling: { ...c, ...patch } } });
     return (
       <aside className="inspector">
@@ -834,7 +837,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </Field>
         <div className="stat-grid">
           <Stat label="Floor" value={formatSqFt(exclusiveArea(project, r))} />
-          {narrow && <Stat label="Narrowest" value={formatFtIn(narrow.width)} />}
+          {narrow && <Stat label="Narrowest (clear)" value={formatFtIn(narrow.width)} />}
           <Stat label="Ceiling surface" value={formatSqFt(info.surface)} />
         </div>
         <h4>Ceiling</h4>
@@ -853,6 +856,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         {(c.type === 'vaulted' || c.type === 'cathedral') && (
           <Field label={c.type === 'vaulted' ? 'High side height' : 'Ridge height'}>
             <LengthInput value={info.high} min={info.low} onChange={(v) => setCeiling({ peak: v })} />
+          </Field>
+        )}
+        {(c.type === 'vaulted' || c.type === 'cathedral') && (
+          <Field label={c.type === 'vaulted' ? 'Low side along' : 'Ridge parallel to'} hint="Which edge of the room the slope runs from; the ceiling rises square to it">
+            <SlopeEdgeSelect points={r.points} value={c.slopeEdge} onChange={(slopeEdge) => setCeiling({ slopeEdge })} />
           </Field>
         )}
         {c.type === 'tray' && (
@@ -949,7 +957,9 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </p>
       )}
 
-      <Field label="Dimension faces" hint="What inside / outside dimensions measure to: the drywall and sheathing, or the studs 1/2&quot; inside them">
+      <ProjectLayersPanel project={project} dispatch={dispatch} />
+
+      <Field label="Dimension faces" hint="What inside / outside dimensions measure to: the finished faces (outermost layers), or the studs alone">
         <select value={project.dimFaces ?? 'finished'} onChange={(e) => dispatch({ type: 'setDimFaces', faces: e.target.value as 'finished' | 'framing' })}>
           <option value="finished">Finished faces</option>
           <option value="framing">Framing (stud) faces</option>
