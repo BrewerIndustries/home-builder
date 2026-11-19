@@ -126,6 +126,12 @@ const SAMPLE: [RegExp, number][] = [
   [/^Drip edge/, 9],
   [/^2x6 fascia/, 16],
   [/^Vented soffit/, 3],
+  [/^Ridge vent/, 18],
+  [/^Roof louver vent/, 25],
+  [/^Edge intake vent/, 20],
+  [/^Valley truss set/, 400],
+  [/^Ice & water shield/, 110],
+  [/^Step flashing/, 45],
   [/^Pavers$/, 4.5],
   [/^Paver base gravel/, 45],
   [/^Bedding sand/, 40],
@@ -174,7 +180,7 @@ export function samplePrice(item: string): number {
   for (const [re, price] of SAMPLE) if (re.test(item)) return price;
   const cab = cabinetPrice(item);
   if (cab) return cab;
-  const stock = item.match(/^(2x\d+) (?:stud|board|rafter|ceiling joist|ridge board|hip rafter|floor joist|rim joist|girder ply \(3-ply built-up\)|blocking over girders), (\d+)'/);
+  const stock = item.match(/^(2x\d+) (?:stud|board|rafter|ceiling joist|ridge board|hip rafter|valley rafter|dormer rafter|dormer wall stud|dormer plate|floor joist|rim joist|girder ply \(3-ply built-up\)|blocking over girders), (\d+)'/);
   if (stock) return Math.round(PER_FOOT[stock[1]] * Number(stock[2]) * 100) / 100;
   return 0;
 }

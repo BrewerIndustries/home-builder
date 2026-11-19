@@ -28,3 +28,12 @@ export function pickSiteScale(planW: number, planH: number) {
   const m = 2 * SITE_MARGIN;
   return SITE_SCALES.find((s) => planW / s.denom + m <= SHEET.w && planH / s.denom + m <= SHEET.h) ?? SITE_SCALES.at(-1)!;
 }
+
+/** Bounding box of plan points, grown by `pad` all round (the roof plan sheet's extent). */
+export function pointBounds(pts: { x: number; y: number }[], pad = 0): { x: number; y: number; w: number; h: number } {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x = Math.min(...xs) - pad;
+  const y = Math.min(...ys) - pad;
+  return { x, y, w: Math.max(...xs) + pad - x, h: Math.max(...ys) + pad - y };
+}

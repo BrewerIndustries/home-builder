@@ -409,6 +409,15 @@ export function ircChecks(project: Project): CodeCheck[] {
             ? `${p}/12 is allowed for shingles only with double underlayment (2/12 up to 4/12)`
             : `${p}/12 meets the shingle minimum`,
     });
+    const v = roof.vent;
+    add({
+      rule: 'Attic ventilation',
+      section: 'R806.2',
+      status: roof.roof.vent300 ? 'warn' : 'pass',
+      message: `${Math.round(v.atticArea / 144)} sq ft attic needs ${Math.round(v.required)} sq in of net free vent area (1/${v.ratio}), split high and low — the estimate's vents are sized to it at typical ratings`
+        + (roof.roof.vent300 ? '; 1/300 holds only when the R806.2 exception conditions are met — confirm them' : ''),
+    });
+    for (const n of roof.notes) add({ rule: 'Roof', section: 'R801', status: 'warn', message: n });
   }
 
   for (const c of foundationChecks(project)) add(c);
@@ -435,5 +444,5 @@ export const NOT_CHECKED = [
   'Energy efficiency (Chapter 11)',
   'Footing size for soil bearing and storeys (Table R403.1), foundation reinforcement and floor framing (Chapter 5)',
   'Rafter, ceiling joist and truss sizing (R802 span tables) — the Roof takeoff counts members, it does not size them',
-  'Attic ventilation (R806) and roof uplift connections (R802.11)',
+  'Attic vent placement, baffles and clearances (R806 — only the vent area is worked out) and roof uplift connections (R802.11)',
 ];

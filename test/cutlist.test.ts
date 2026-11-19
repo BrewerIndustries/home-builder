@@ -6,13 +6,15 @@ import { box, door, project, wall, window_ } from './helpers.ts';
 
 const ft = (n: number) => `${n}"`;
 
-test('plates longer than 16\' split into equal pieces; short walls give one piece each', () => {
+test('plates longer than 16\' split into pieces; short walls give one piece each', () => {
   const p = project([wall(0, 0, 240, 0), wall(240, 0, 240, 120)]);
   const pieces = cutPieces(p);
   const w1 = pieces.filter((x) => x.label.startsWith('W1 '));
   assert.equal(w1.length, 6);
-  // Bottom and cap in equal halves; the top plate's joint offset 24" (R602.3.2).
-  assert.deepEqual(w1.map((x) => x.length), [120, 120, 144, 96, 120, 120]);
+  // Cut lists v3: joints land on studs (16" o.c.), so the even 120 / 120 split
+  // moves to the stud at 112"; the top plate's joint sits on the stud at 144",
+  // 32" clear of the cap's (R602.3.2 wants ≥ 24").
+  assert.deepEqual(w1.map((x) => x.length), [112, 128, 144, 96, 112, 128]);
   assert.deepEqual(w1.map((x) => x.label).slice(0, 2), ['W1 bottom plate 1/2', 'W1 bottom plate 2/2']);
   assert.deepEqual(pieces.filter((x) => x.label.startsWith('W2 ')).map((x) => x.length), [120, 120, 120]);
 });
@@ -66,7 +68,7 @@ test('the cut list groups by size, counts boards per stock length and reports wa
     for (const b of g.boards) assert.ok(b.cuts.reduce((t, c) => t + c.length, 0) + KERF * (b.cuts.length - 1) <= b.stock + 1e-9);
   }
   const csv = cutListCsv(groups, ft);
-  assert.match(csv.split('\n')[0], /^Size,Board,Stock,Cut,Length,Offcut$/);
+  assert.match(csv.split('\n')[0], /^Section,Size,Board,Stock,Cut,Length,Offcut$/); // v3: Section column first
   assert.equal(csv.trim().split('\n').length - 1, cutPieces(p).length);
   assert.equal(cutList(project([])).length, 0);
 });

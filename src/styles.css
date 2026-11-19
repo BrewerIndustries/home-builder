@@ -1424,3 +1424,18 @@ table.schedule th {
 /* Dimension tool kinds: Linear / Angle / Ordinate, floating at the bottom of the plan. */
 .dim-kinds { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: var(--panel); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); }
 .dim-kinds button { padding: 4px 12px; }
+.cut-list .section-row th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding-top: 10px; }
+.cut-list .kept-offcuts { font-size: 13px; padding-left: 1.4em; }
+
+/* Printable cut sheet: "Print cut sheet" sets body.print-cut-sheet, which prints only this page. */
+@media print {
+  body:not(.print-cut-sheet) .cut-sheet { display: none !important; }
+  body.print-cut-sheet > #root { display: none !important; }
+  .cut-sheet { display: flex; flex-direction: column; gap: 8pt; }
+  .cut-sheet table.schedule { font-size: 8pt; }
+  .cut-sheet tr { break-inside: avoid; }
+  .roof-sheet { break-before: page; }
+}
+
+/* Roof v2: dormer rows in the project panel */
+.dormer-fields { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px; }

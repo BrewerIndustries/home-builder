@@ -3,6 +3,7 @@ import { PlanDrawing } from '../editor/PlanDrawing.tsx';
 import type { DimMode, Project } from '../model/types.ts';
 import { DIM_ROOM, pickScale } from '../calc/sheet.ts';
 import { fixtureSchedule } from '../calc/furniture.ts';
+import { RoofPlanSheet } from './RoofPlanSheet.tsx';
 
 // A to-scale floor plan sheet for printing / Save as PDF: US Letter landscape,
 // largest standard architectural scale that fits, title block and scale bar.
@@ -72,6 +73,7 @@ export function PrintSheet({ project }: { project: Project }) {
           <div className="tb-note">Design drawing — not for construction without code / engineering review.</div>
         </div>
       </div>
+      <RoofPlanSheet project={project} />
       {schedule.length > 0 && (
         <div className="print-only schedule-page">
           <div className="tb-name">{project.name} — fixture schedule</div>
