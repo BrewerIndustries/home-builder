@@ -23,7 +23,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Foundation v2: interior bearing footings / piers, basement walls, footing sizing from soil + storeys (Table R403.1, needs verified values), foundation in 3D
 - [x] Floor joist layout + subfloor sheet layout (crawlspace floors: joists over girders, piers, staggered T&G sheets; framing plan on the Framing tab)
 - [ ] Floor v2: joist hangers / cantilevers, openings for stairs, I-joists, floor insulation, framed floors on upper storeys
-- [ ] Cut lists optimised to stock lengths, with waste report
+- [x] Cut lists optimised to stock lengths, with waste report (Framing tab: plates / jacks / cripples / sills / header plies, FFD onto 8'–16' with 1/8" kerf, boards per stock, waste %, keepable offcuts, per-board diagram, CSV)
+- [ ] Cut lists v2: feed the optimised board counts into the Estimate instead of plate LF + waste; reuse kept offcuts for cripples / blocking; full-height studs from long stock when there's no precut; top / cap plate joints offset 24" (R602.3.2) and laid on studs; roof and floor members in the cut list
 - [ ] Layered wall assemblies (drywall / stud / sheathing / siding) instead of the +1" finish rule
 - [ ] Wall bracing (R602.10)
 - [ ] Multiple floors (ghosted floor below) + stairs tool checked against R311.7
