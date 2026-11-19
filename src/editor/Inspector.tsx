@@ -58,6 +58,8 @@ import { CabinetPanel } from './CabinetPanel.tsx';
 import { BAR_HEIGHT, BAR_LEDGE, cornerCabinets, cornerUppers, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, kneeSpaceFor, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
 import { DimStyleFields, OrdinatePanel } from './DimPanels.tsx';
+import { BearingFootingField, foundationTypePatch, FoundationV2Fields } from './FoundationV2Fields.tsx';
+import { DEFAULT_BASEMENT_HEIGHT } from '../calc/foundationV2.ts';
 
 interface Props {
   project: Project;
@@ -174,6 +176,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Wall height" hint="Plate to plate. 97-1/8&quot; = standard 8' wall">
           <LengthInput value={w.height} min={24} onChange={(v) => dispatch({ type: 'updateWall', id: w.id, patch: { height: v } })} />
         </Field>
+        <BearingFootingField project={project} wall={w} dispatch={dispatch} />
         <WallLayersPanel project={project} wall={w} dispatch={dispatch} />
         <div className="stat-grid">
           <Stat label="Studs" value={studCount(f)} />
@@ -1065,9 +1068,10 @@ function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Founda
     <>
       <h4>Foundation</h4>
       <Field label="Type">
-        <select value={f.type} onChange={(e) => set({ type: e.target.value as Foundation['type'], footingDepth: e.target.value === 'crawl' ? Math.max(f.footingDepth, 24) : f.footingDepth })}>
+        <select value={f.type} onChange={(e) => set(foundationTypePatch(f, e.target.value as Foundation['type']))}>
           <option value="slab">Slab on grade (thickened edge)</option>
           <option value="crawl">Crawlspace (footing + stem wall)</option>
+          <option value="basement">Basement (footing + full-height wall)</option>
           <option value="none">None / not in this estimate</option>
         </select>
       </Field>
@@ -1084,7 +1088,7 @@ function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Founda
           </Field>
         </div>
       )}
-      {f.type === 'crawl' && (
+      {(f.type === 'crawl' || f.type === 'basement') && (
         <>
           <div className="row">
             <Field label="Footing width">
@@ -1095,10 +1099,16 @@ function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Founda
             </Field>
           </div>
           <div className="row">
-            <Field label="Stem height">
-              <LengthInput value={f.stemHeight} min={1} onChange={(v) => set({ stemHeight: v })} />
-            </Field>
-            <Field label="Stem">
+            {f.type === 'basement' ? (
+              <Field label="Wall height">
+                <LengthInput value={f.v2?.basementHeight ?? DEFAULT_BASEMENT_HEIGHT} min={1} onChange={(v) => set({ v2: { ...f.v2, basementHeight: v } })} />
+              </Field>
+            ) : (
+              <Field label="Stem height">
+                <LengthInput value={f.stemHeight} min={1} onChange={(v) => set({ stemHeight: v })} />
+              </Field>
+            )}
+            <Field label={f.type === 'basement' ? 'Wall' : 'Stem'}>
               <select value={f.stemMaterial} onChange={(e) => set({ stemMaterial: e.target.value as Foundation['stemMaterial'], stemThickness: e.target.value === 'cmu' ? 7.625 : 8 })}>
                 <option value="poured">Poured 8"</option>
                 <option value="cmu">8" block</option>
@@ -1174,6 +1184,7 @@ function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Founda
           </Field>
         </div>
       )}
+      <FoundationV2Fields f={f} set={set} />
     </>
   );
 }

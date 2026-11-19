@@ -2,6 +2,7 @@ import { openingSpan, pointAlong, pointInPolygon, wallLength, wallNormal } from 
 import { uid, type FrontSide, type Opening, type Outlet, type Point, type Project, type SiteArea, type Wall } from '../model/types.ts';
 import { outerSides } from './faces.ts';
 import { foundationOf } from './foundation.ts';
+import { foundationWallHeight } from './foundationV2.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { formatFtIn } from '../model/units.ts';
@@ -35,7 +36,7 @@ export function floorAboveGrade(project: Project): { height: number; from: 'set'
   if (set !== undefined) return { height: set, from: 'set' };
   const f = foundationOf(project);
   if (f.type === 'slab') return { height: Math.max(0, f.edgeDepth - f.footingDepth), from: 'foundation' };
-  if (f.type === 'crawl') return { height: Math.max(0, f.footingThickness + f.stemHeight - f.footingDepth) + 1.5 + JOIST_DEPTH[f.joistSize] + 0.75, from: 'foundation' };
+  if (f.type === 'crawl' || f.type === 'basement') return { height: Math.max(0, f.footingThickness + foundationWallHeight(f) - f.footingDepth) + 1.5 + JOIST_DEPTH[f.joistSize] + 0.75, from: 'foundation' };
   return { height: 0, from: 'unknown' };
 }
 

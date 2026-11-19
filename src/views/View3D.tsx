@@ -40,6 +40,10 @@ function palette(dark: boolean) {
     grass: 0xc8b26a,
     groundcover: 0x5d9a8a,
     retaining: dark ? 0x8d8a84 : 0xa9a49a,
+    // Foundation (below the floor)
+    footing: dark ? 0x7d7b77 : 0xa8a6a0,
+    foundation: dark ? 0x9a9893 : 0xc4c2bc,
+    girder: dark ? 0x8a7a62 : 0xc9b08a,
   };
 }
 
@@ -50,6 +54,7 @@ export default function View3D({ project }: { project: Project }) {
   const [cutaway, setCutaway] = useState(false);
   const [showRoof, setShowRoof] = useState(true);
   const [showSite, setShowSite] = useState(true);
+  const [showFoundation, setShowFoundation] = useState(true);
   const scene3d = useMemo(() => buildScene(project), [project]);
   const site3d = useMemo(() => buildSiteScene(project), [project]);
   const fitted = useRef(false);
@@ -141,6 +146,8 @@ export default function View3D({ project }: { project: Project }) {
       let [, cy] = b.c;
       let [sx, sy, sz] = b.size;
       if (b.kind === 'beam' && !ceilings) return;
+      const below = b.kind === 'footing' || b.kind === 'foundation' || b.kind === 'girder';
+      if (below && !showFoundation) return;
       if (cutaway && b.kind !== 'beam') {
         const y0 = cy - sy / 2;
         const y1 = Math.min(cy + sy / 2, CUTAWAY);
@@ -148,7 +155,7 @@ export default function View3D({ project }: { project: Project }) {
         cy = (y0 + y1) / 2;
         sy = y1 - y0;
       }
-      const color = b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : b.kind === 'fixture' ? c.fixture : b.kind === 'furniture' ? c.furniture : b.kind === 'door' ? c.door : c.beam;
+      const color = below ? c[b.kind as 'footing' | 'foundation' | 'girder'] : b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : b.kind === 'fixture' ? c.fixture : b.kind === 'furniture' ? c.furniture : b.kind === 'door' ? c.door : c.beam;
       const m = new THREE.Mesh(
         new THREE.BoxGeometry(sx, sy, sz),
         b.kind === 'glass' ? mat(color, { transparent: true, opacity: 0.35, roughness: 0.1 }) : mat(color),
@@ -161,6 +168,7 @@ export default function View3D({ project }: { project: Project }) {
 
     for (const f of scene3d.flats) {
       if (f.kind === 'ceiling' && (!ceilings || cutaway)) continue;
+      if (f.y < 0 && !showFoundation) continue; // basement slab
       const shape = new THREE.Shape(f.outline.map((p) => new THREE.Vector2(p.x, p.y)));
       for (const h of f.holes) shape.holes.push(new THREE.Path(h.map((p) => new THREE.Vector2(p.x, p.y))));
       const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat(f.kind === 'floor' ? c.floor : c.ceiling));
@@ -212,7 +220,7 @@ export default function View3D({ project }: { project: Project }) {
       fitted.current = true;
       w.fit(scene3d.boxes.length ? scene3d : { ...scene3d, bounds: site3d.bounds! });
     }
-  }, [scene3d, site3d, ceilings, cutaway, showRoof, showSite]);
+  }, [scene3d, site3d, ceilings, cutaway, showRoof, showSite, showFoundation]);
 
   return (
     <div className="view3d">
@@ -226,6 +234,11 @@ export default function View3D({ project }: { project: Project }) {
         <label>
           <input type="checkbox" checked={cutaway} onChange={(e) => setCutaway(e.target.checked)} /> Cut walls at 4 ft
         </label>
+        {scene3d.boxes.some((b) => b.kind === 'footing' || b.kind === 'foundation') && (
+          <label title="Footings, stem / basement walls, girders and piers below the floor — orbit underneath to see them">
+            <input type="checkbox" checked={showFoundation} onChange={(e) => setShowFoundation(e.target.checked)} /> Foundation
+          </label>
+        )}
         {site3d.bounds && (
           <label>
             <input type="checkbox" checked={showSite} onChange={(e) => setShowSite(e.target.checked)} /> Site
