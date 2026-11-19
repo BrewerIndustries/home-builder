@@ -142,6 +142,54 @@ The checks cover the following:
 
 "Immediate vicinity" has no number in the code, so the app reports the distance and leaves the call to the inspector.
 
+### Added 2026-11-19 (multi-agent batch)
+
+- **Wall layers.** Each wall is a stack of layers (drywall, studs, sheathing, foam, siding), editable per wall and as project defaults (Project panel). Thickness, finished and framing faces, clear sizes and the estimate (drywall per face, sheathing and foam sheets, siding squares) all follow the layers. Older projects keep the old +1" rule through a legacy preset; use "Use the current presets" to switch. Layer thicknesses are common product sizes, not code values.
+- **Rooms v3.** R304.2 (7 ft minimum) is checked between finished faces, and the line that measures it is drawn on the selected room, in red when a habitable room is under 7 ft. Tray and coffered ceilings follow L, T and angled outlines. Vaulted and cathedral rooms can pick their low side or ridge edge.
+- **Wall edits v6.**
+  - Drag a box on empty canvas, or Shift-click, to pick several items. Drag any of them to move them all.
+  - The group has a turn handle, and a bottom panel to turn, mirror (about the centre or a picked line), align, distribute, copy, paste or delete.
+  - ⌘C / ⌘V copies a room with all its contents.
+  - Panning is now Space-drag, middle button or scroll.
+- **Dimensions v7.**
+  - The Dimension tool has Linear, Angle and Ordinate modes. Angle: click two walls. Ordinate: click an origin, then points; Esc finishes.
+  - Placed dimensions also pin to counters and rooms.
+  - Plan settings has Dimension text size and end style (ticks, arrows, dots) for the plan, print and PDF.
+- **Counters v6.**
+  - Wall cabinets are laid out by width (W3030-style labels) at 30", 36" or 42" tall.
+  - Drag a joint dot to resize the neighbouring cabinets (3" steps, 9"–36").
+  - Each base cabinet can be standard, drawer, trash pull-out or sink base, and new counters are priced cabinet by cabinet. Older runs stay per foot until changed.
+  - Islands can be two-level (36" work side plus a 42" bar ledge).
+- **Fixtures v7.** Curbless walk-in showers (open side, 24" clear, P2708.1 size). Barn doors get blocking in the framing elevation and the takeoff. The 3D view shows door leaves by operation. Double-vanity basins can be moved, and each is checked against E3901.6.
+- **Cut lists v3.**
+  - Plate joints land on full-height stud centres, with top-plate joints still at least 24" from the cap plate's.
+  - Roof members (rafters, ridge, hips, valleys, ceiling joists, dormer rafters, fascia) and floor members (rim, girder blocking) get their own sections. "Price these boards" still buys only the wall boards.
+  - Offcuts of 12" or more are listed as blocking stock, and "Print cut sheet" prints a board-by-board sheet.
+- **Roof v2.**
+  - L, T and U plans are roofed wing by wing, with valleys. Untick "Roof each wing" for one box roof.
+  - Gable and shed dormers each have their own takeoff.
+  - A roof-plan print page is added.
+  - Attic vent area follows R806.2: 1/150, or 1/300 when you tick the exception. It is priced as ridge vent, louvers or edge intake at typical product ratings.
+- **Electrical.**
+  - **Branch circuits.** Devices are grouped onto circuits automatically: two 20 A kitchen circuits, 20 A laundry and bath circuits, room-by-room general circuits, and a dedicated circuit per fixed appliance. Loads come from the nameplate figure you enter, or a flagged typical figure until you do. AFCI and GFCI are flagged per circuit.
+  - **Electrical tab.** A dwelling load calc (NEC 220 standard or optional method) with a recommended service size. Ranges and ovens are taken at nameplate, since Table 220.55 isn't applied.
+  - **Panel schedule.** Printable, with leg A/B balance.
+  - **Outdoor receptacles v2.** Height is checked above grade, and decks or porches that a door opens onto get a receptacle.
+- **Landscape v2.**
+  - The lot can be built from survey calls (bearings and distances, with closure shown).
+  - A plat or aerial underlay can be traced over.
+  - Easements can be edge strips or drawn shapes.
+  - Retaining walls, topsoil and edging go into the estimate.
+  - The Grade tool checks R401.3 (6" of fall in the first 10 ft).
+  - The plant library has 353 species with a regional native ★, and "Fill bed" plants a bed at mature spacing.
+  - The site shows in 3D and prints from the Site tab.
+- **Irrigation (Site → Irrigation, key I).**
+  - Zones cover lawn and bed areas, with spray, rotor and drip heads.
+  - Auto-layout spaces heads head-to-head.
+  - Coverage is sampled on a grid: red is dry, amber is reached by only one head.
+  - Pipe runs from the backflow device through the manifold to the heads. PVC is sized to keep water at 5 ft/s or less (a rule of thumb).
+  - Zone GPM is checked against the supply, and the parts list goes into the Estimate. Nozzle figures are typical and editable.
+
 ## Code layout
 
 ```

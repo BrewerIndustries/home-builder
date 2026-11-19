@@ -6,8 +6,10 @@ Ordered roughly by value. Competitor research behind these lives in
 ## Next up
 
 - [x] **Landscape module v1** — lot (rectangle or drawn), per-edge setbacks + envelope check, coverage / impervious %, hardscape areas with depth takeoff (pavers + base/sand/edging, concrete, gravel + fabric, mulch, sod, deck area), ~40-species plant library at mature spread with zone / foundation / crowding checks, landscape lines in the estimate.
-- [ ] **Landscape v2** — lot from survey bearings + plat/aerial underlay; easements; retaining wall block, topsoil, edging as lines; grade/drainage (R401.3 6"-in-10-ft); grow the plant library (~300 species, regional native flag); planting beds with auto-spaced fill; site in the 3D view and on the print sheet.
-- [ ] **Sprinkler / irrigation layout tool** — zones over lawn and bed areas, spray / rotor / drip heads with throw radius and head-to-head coverage, pipe runs from the valve manifold and backflow device, zone flow (GPM) against the water supply, parts list in the estimate.
+- [x] **Landscape v2** — lot from survey bearings + plat/aerial underlay; easements; retaining wall block, topsoil, edging as lines; grade/drainage (R401.3 6"-in-10-ft); grow the plant library (~300 species, regional native flag); planting beds with auto-spaced fill; site in the 3D view and on the print sheet.
+- [ ] Landscape v3: editable survey curves (arc calls), easement strips mitred at lot corners, retaining-wall block sizes from a product list, faster crowding check for big bed fills, finer native-range data
+- [x] **Sprinkler / irrigation layout tool** — zones over lawn and bed areas, spray / rotor / drip heads with throw radius and head-to-head coverage, pipe runs from the valve manifold and backflow device, zone flow (GPM) against the water supply, parts list in the estimate.
+- [ ] Irrigation v2: hand-edited pipe routes, valve-wire takeoff, pressure-loss sizing (not just velocity), drip zone coverage
 - [x] **Wall framing elevations** — dimensioned SVG per wall on the Framing tab.
 - [x] **Dimension strings + to-scale PDF export with a title block.**
 - [x] **Price catalog → priced estimate** — editable unit prices, markup, tax, CSV. (XLSX still open.)
@@ -18,15 +20,17 @@ Ordered roughly by value. Competitor research behind these lives in
 ## Structure & takeoff
 
 - [x] Roof model (gable / hip / shed): squares, sheathing, trim, rafter or truss counts; gable-end wall framing above the plate for vaulted rooms
-- [ ] Roof v2: per-wing roofs with valleys for L/T plans, dormers, roof on the print sheet, attic ventilation (R806)
+- [x] Roof v2: per-wing roofs with valleys for L/T plans, dormers, roof on the print sheet, attic ventilation (R806)
+- [ ] Roof v3: wings wider than the roof they join; dormer overhangs and windows in the estimate; hip / valley jack rafters counted individually; roof drawn in the plan editor
 - [x] Foundation / concrete takeoff: slab or crawlspace footing + stem wall, anchor bolts (R403.1.6), PT sill, vents (R408.1), min-size + frost-depth checks
 - [ ] Foundation v2: interior bearing footings / piers, basement walls, footing sizing from soil + storeys (Table R403.1, needs verified values), foundation in 3D
 - [x] Floor joist layout + subfloor sheet layout (crawlspace floors: joists over girders, piers, staggered T&G sheets; framing plan on the Framing tab)
 - [ ] Floor v2: joist hangers / cantilevers, openings for stairs, I-joists, floor insulation, framed floors on upper storeys
 - [x] Cut lists optimised to stock lengths, with waste report (Framing tab: plates / jacks / cripples / sills / header plies, FFD onto 8'–16' with 1/8" kerf, boards per stock, waste %, keepable offcuts, per-board diagram, CSV)
 - [x] Cut lists v2: optional "price these boards" — the Estimate uses the cut list's boards by stock length instead of plate / header LF + waste (jacks and cripples move off the stud count); top plate joints offset ≥ 24" from the cap plate's (R602.3.2)
-- [ ] Cut lists v3: plate joints landed on studs; roof (rafters, ridge, fascia) and floor (rim, blocking) members in the cut list; kept offcuts listed as blocking stock; a printable cut sheet
-- [ ] Layered wall assemblies (drywall / stud / sheathing / siding) instead of the +1" finish rule
+- [x] Cut lists v3: plate joints landed on studs; roof (rafters, ridge, fascia) and floor (rim, blocking) members in the cut list; kept offcuts listed as blocking stock; a printable cut sheet
+- [ ] Cut lists v4: price roof / floor members from the cut list too; barn-door blocking and dormer studs in the cut list
+- [x] Layered wall assemblies (drywall / stud / sheathing / foam / siding) per wall + project defaults; faces, clear sizes and estimate follow the layers; old projects keep the +1" rule via a legacy preset
 - [ ] Wall bracing (R602.10)
 - [ ] Multiple floors (ghosted floor below) + stairs tool checked against R311.7
 
@@ -45,29 +49,34 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Counters v3: L-shaped runs (shared corner), peninsulas (connecting-edge rule), appliance-in-corner warning, wall cabinets + range hood, NKBA landing areas
 - [x] Counters v4: draw an L in one drag; corner cabinets (lazy susan / blind) in the estimate; tall pantry / oven cabinets; island seating overhang and knee space; island / peninsula receptacle note even before any outlets are placed
 - [x] Counters v5: U in one drag (three walls, back wall = nearest the drag); 24" diagonal corner wall cabinet at L corners (uppers no longer double-count); clearance behind seated diners (NKBA 32" / 36" / 44"); bar-height (42") seating with 12" knee space; cabinet-by-cabinet base layout (9"–36" stock widths, sink base, fillers in the estimate)
-- [ ] Counters v6: wall cabinets laid out by width too (and 30" / 36" / 42" heights); drag a cabinet joint to resize neighbours; per-cabinet types (drawer base, trash pull-out) priced from the layout instead of LF; a two-level island (36" work side + 42" bar side)
+- [x] Counters v6: wall cabinets laid out by width too (and 30" / 36" / 42" heights); drag a cabinet joint to resize neighbours; per-cabinet types (drawer base, trash pull-out) priced from the layout instead of LF; a two-level island (36" work side + 42" bar side)
+- [ ] Counters v7: typed cabinet widths; per-cabinet types / widths kept through a room mirror; corner base cabinets in the joint drag
 - [x] Outdoor receptacles front + back (E3901.7): auto GFCI beside an exterior door, front-of-house setting, in-use covers in the estimate
-- [ ] Dedicated appliance circuits, AFCI; outdoor receptacles v2: decks / balconies / porches, height above real grade
-- [ ] Circuits, NEC 220 load calc, panel schedule
+- [x] Dedicated appliance circuits, AFCI; outdoor receptacles v2: decks / balconies / porches, height above real grade
+- [ ] Circuits v2: conductor sizing, voltage drop, box fill; loads for hand-placed 240 V receptacles; sloping grade for outdoor receptacle height; move the microwave / disposer to another circuit
+- [x] Circuits, NEC 220 load calc, panel schedule
 
 ## Editor
 
 - [x] Room from enclosed walls (click inside) and non-rectangular rooms
 - [x] Non-rectangular rooms v2: R304 min dimension and ceiling slopes on the real outline (not the bounding box); auto-name / auto-type rooms from size and doors
-- [ ] Non-rectangular rooms v3: R304.2 on clear (finished-face) dimensions; tray and coffered ceilings on the real outline; show the narrowest line on the plan; pick the slope direction per room
+- [x] Non-rectangular rooms v3: R304.2 on clear (finished-face) dimensions; tray and coffered ceilings on the real outline; show the narrowest line on the plan; pick the slope direction per room
+- [ ] Non-rectangular rooms v4: room auto-guess on clear sizes; pins to room corners kept when corners are added; under-7-ft line optional on the print sheet
 - [x] Drag a whole wall (move both ends together); split / join walls
 - [x] Wall edits v2: double-click to split at a point; dragged walls snap in line / flush with parallel walls and the grid; live move readout
 - [x] Wall edits v3: type an exact move distance while dragging; snap a dragged wall end to other walls' faces; rotate a wall about an end
 - [x] Wall edits v4: typed values for opening / counter / fixture drags; rotate a whole room (walls + contents) about its centre; free-angle snap parallel / square to other walls
 - [x] Wall edits v5: rotate about a picked point (draggable pivot, snaps to corners / wall ends / centre) and drag-to-rotate with a handle (15° steps, typed angle after); move a whole room (drag the selected room, arrow buttons, typed distance); mirror a room (left ↔ right, top ↔ bottom: door swings, device sides, symbol turns); typed values for outlet / switch / light drags; wall counters and backed furniture no longer re-seated onto the wrong wall after a room turn
-- [ ] Wall edits v6: select several items (box / Shift-click) and move, turn or mirror them together; copy / paste a room with its contents; align and distribute; mirror about a picked line
+- [x] Wall edits v6: select several items (box / Shift-click) and move, turn or mirror them together; copy / paste a room with its contents; align and distribute; mirror about a picked line
+- [ ] Wall edits v7: pick a pivot for group turns; doors / devices moved on their own inside a group; clipboard kept across tabs
 - [x] Inside / outside dimension modes (centreline / inside faces / outside face)
 - [x] Dimensions v2: type a length as inside / outside in the wall panel; opening chains on exterior walls; room clear sizes; finished vs framing faces
 - [x] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it
 - [x] Dimensions v4: partition strings at several heights through the plan (not just one each way); clear sizes for T / U rooms; user-placed dimensions (click two points); hide / show individual strings
 - [x] Dimensions v5: strings through angled partitions; keep inside strings clear of room labels automatically; placed dimensions that follow the walls they were snapped to; a running (ordinate) string option
 - [x] Dimensions v6: running opening chains (totals square to the wall); placed dimensions pin to door / window jambs and centres and fixture corners / centres and follow them; angle dimensions between walls (wall panel → arc + degrees, follow the walls, gone with either); per-string Chained / Running / As the plan
-- [ ] Dimensions v7: angle dimensions picked on the plan with the Dimension tool (click two walls); placed dimensions pinned to counters and rooms; ordinate (baseline) dimensions; a dimension style panel (text size, tick / arrow / dot ends)
+- [x] Dimensions v7: angle dimensions picked on the plan with the Dimension tool (click two walls); placed dimensions pinned to counters and rooms; ordinate (baseline) dimensions; a dimension style panel (text size, tick / arrow / dot ends)
+- [ ] Dimensions v8: ordinate dimensions along a sloped axis; text-size and end-style per dimension
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
 - [ ] Plan versions with change-order diffs
 - [x] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)
@@ -76,7 +85,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Fixtures v4: door swing vs. fixture clearance zones (not just bodies); double / pocket / bifold door swings; schedule sort by room; closet rod double-hang and shelf-only options; tub-shower combo
 - [x] Fixtures v5: pocket door framed over door + pocket (one header, no studs in the pocket, kit RO note); bypass doors; barn doors on a face track (slide-clear check on their face); corner-entry and neo-angle showers (P2708.1 on real area, 24" off the diagonal); linen cabinet / shelving unit; hardware + allowances priced
 - [x] Fixtures v6: mirror a corner / neo-angle shower (door and clear zone on the other corner); double vanity (two basins, E3901.6 per basin half, priced as one cabinet + 2 faucets, two rough-ins)
-- [ ] Fixtures v7: curbless / walk-in showers; a barn door's blocking in the framing elevation; 3D door leaves by operation; basin positions editable on a double vanity
+- [x] Fixtures v7: curbless / walk-in showers; a barn door's blocking in the framing elevation; 3D door leaves by operation; basin positions editable on a double vanity
+- [ ] Fixtures v8: walk-in opening width check; mirrored walk-ins / basin positions flip with a room mirror; barn-door blocking in the cut list
 - [ ] AI plan recognition: suggest walls / doors / windows from the underlay image (after PDF + perspective)
 
 ## Housekeeping
