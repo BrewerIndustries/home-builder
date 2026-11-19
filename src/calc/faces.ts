@@ -443,12 +443,49 @@ export function runningLabels(stops: number[], gap: number): number[] {
   return out;
 }
 
+/** How a dimension string reads: its own style if set, else the plan's. */
+export function stringStyle(project: Project, id: string): 'chain' | 'running' {
+  return project.dimStyles?.[id] ?? project.dimStyle ?? 'chain';
+}
+
+/** A fixture's or piece of furniture's point from its own frame (as furniturePoint; kept here to stay free of the fixture code). */
+function itemPoint(f: Project['furniture'][number], x: number, y: number): Point {
+  const r = (f.rot * Math.PI) / 180;
+  const [c, s] = [Math.cos(r), Math.sin(r)];
+  return { x: f.at.x + x * c - y * s, y: f.at.y + x * s + y * c };
+}
+
+/** Points a dimension can pick on doors, windows and fixtures: jambs (centreline and both faces), centres, corners. */
+export function dimSnapPoints(project: Project): { p: Point; at: DimAnchor }[] {
+  const out: { p: Point; at: DimAnchor }[] = [];
+  for (const o of project.openings) {
+    const w = project.walls.find((x) => x.id === o.wallId);
+    if (!w) continue;
+    const [d, n] = [wallDir(w), wallNormal(w)];
+    const c = pointAlong(w, o.offset);
+    for (const along of [-o.width / 2, 0, o.width / 2])
+      for (const perp of along ? [0, w.thickness / 2, -w.thickness / 2] : [0])
+        out.push({ p: { x: c.x + d.x * along + n.x * perp, y: c.y + d.y * along + n.y * perp }, at: { openingId: o.id, along, perp } });
+  }
+  for (const f of project.furniture) {
+    const [hw, hd] = [f.w / 2, f.d / 2];
+    for (const [x, y] of [[0, 0], [-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd], [0, hd], [0, -hd], [-hw, 0], [hw, 0]] as const) out.push({ p: itemPoint(f, x, y), at: { furnitureId: f.id, x, y } });
+  }
+  return out;
+}
+
 /**
- * Pin a placed dimension's point to the wall end it sits on (or just off, at a
- * face corner): the nearest end within a wall's thickness. None if no wall end
- * is that close.
+ * Pin a placed dimension's point to what it was snapped to: a door / window /
+ * fixture point within 1-1/2", else the wall end it sits on (or just off, at a
+ * face corner) within a wall's thickness. None if nothing is that close.
  */
 export function anchorFor(project: Project, p: Point): DimAnchor | undefined {
+  let item: { at: DimAnchor; d: number } | null = null;
+  for (const s of dimSnapPoints(project)) {
+    const d = Math.hypot(s.p.x - p.x, s.p.y - p.y);
+    if (d <= 1.5 && (!item || d < item.d - 1e-9)) item = { at: s.at, d };
+  }
+  if (item) return item.at;
   let best: { at: DimAnchor; d: number } | null = null;
   for (const w of project.walls) {
     const len = wallLength(w);
@@ -467,8 +504,35 @@ export function anchorFor(project: Project, p: Point): DimAnchor | undefined {
   return best?.at;
 }
 
-/** Where an anchored point is now; null if its wall is gone. */
+/** What a dimension end follows, in words; null if that's gone. */
+export function anchorTarget(project: Project, at: DimAnchor | undefined): string | null {
+  if (!at) return null;
+  if ('openingId' in at) {
+    const o = project.openings.find((x) => x.id === at.openingId);
+    return o ? `the ${o.kind}${at.along ? ` ${at.along < 0 ? 'start' : 'end'} jamb` : ' centre'}` : null;
+  }
+  if ('furnitureId' in at) {
+    const f = project.furniture.find((x) => x.id === at.furnitureId);
+    return f ? `the ${f.kind.replace('-', ' ')}` : null;
+  }
+  const i = project.walls.findIndex((w) => w.id === at.wallId);
+  return i >= 0 ? `W${i + 1}` : null;
+}
+
+/** Where an anchored point is now; null if what it's pinned to is gone. */
 export function anchorPoint(project: Project, at: DimAnchor): Point | null {
+  if ('openingId' in at) {
+    const o = project.openings.find((x) => x.id === at.openingId);
+    const w = o && project.walls.find((x) => x.id === o.wallId);
+    if (!o || !w) return null;
+    const [d, n] = [wallDir(w), wallNormal(w)];
+    const c = pointAlong(w, o.offset);
+    return { x: c.x + d.x * at.along + n.x * at.perp, y: c.y + d.y * at.along + n.y * at.perp };
+  }
+  if ('furnitureId' in at) {
+    const f = project.furniture.find((x) => x.id === at.furnitureId);
+    return f ? itemPoint(f, at.x, at.y) : null;
+  }
   const w = project.walls.find((x) => x.id === at.wallId);
   if (!w) return null;
   const len = wallLength(w);
@@ -496,4 +560,45 @@ export function followDims(_prev: Project, next: Project): Project {
     return { ...d, a, b, aAt, bAt };
   });
   return changed ? { ...next, dims } : next;
+}
+
+/**
+ * Where an angle dimension sits: the point where the two walls' lines cross, the
+ * direction of each wall away from it (toward its far end), and the angle
+ * between them (0–180°). Null if the walls are gone or parallel.
+ */
+export function angleBetween(project: Project, aId: string, bId: string): { at: Point; u: Point; v: Point; deg: number } | null {
+  const A = project.walls.find((w) => w.id === aId);
+  const B = project.walls.find((w) => w.id === bId);
+  if (!A || !B) return null;
+  const [dA, dB] = [wallDir(A), wallDir(B)];
+  const den = dA.x * dB.y - dA.y * dB.x;
+  if (Math.abs(den) < 1e-6) return null;
+  const t = ((B.a.x - A.a.x) * dB.y - (B.a.y - A.a.y) * dB.x) / den;
+  const at = { x: A.a.x + dA.x * t, y: A.a.y + dA.y * t };
+  const away = (w: Wall) => {
+    const far = Math.hypot(w.a.x - at.x, w.a.y - at.y) > Math.hypot(w.b.x - at.x, w.b.y - at.y) ? w.a : w.b;
+    const l = Math.hypot(far.x - at.x, far.y - at.y) || 1;
+    return { x: (far.x - at.x) / l, y: (far.y - at.y) / l };
+  };
+  const [u, v] = [away(A), away(B)];
+  const deg = (Math.acos(Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y))) * 180) / Math.PI;
+  return { at, u, v, deg };
+}
+
+/** Walls that meet a wall at one of its ends (sharing the point, or a T onto it) and aren't parallel to it: candidates for an angle dimension. */
+export function angleNeighbours(project: Project, wallId: string): Wall[] {
+  const w = project.walls.find((x) => x.id === wallId);
+  if (!w) return [];
+  const d = wallDir(w);
+  const touches = (p: Point, q: Wall) => {
+    const { along, perp } = projectOnWall(q, p);
+    return perp <= q.thickness / 2 + 0.5 && along >= -0.5 && along <= wallLength(q) + 0.5;
+  };
+  return project.walls.filter((q) => {
+    if (q.id === w.id) return false;
+    const e = wallDir(q);
+    if (Math.abs(d.x * e.y - d.y * e.x) < 0.02) return false;
+    return touches(w.a, q) || touches(w.b, q) || touches(q.a, w) || touches(q.b, w);
+  });
 }

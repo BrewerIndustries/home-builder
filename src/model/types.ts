@@ -292,14 +292,22 @@ export interface Underlay {
 /** Dimensions to wall centrelines, room-side faces, or the outside face of the exterior walls. */
 export type DimMode = 'centre' | 'inside' | 'outside';
 
-/** Where a placed dimension's point sits relative to a wall end it was snapped to: it follows that end. */
-export interface DimAnchor {
-  wallId: string;
-  end: 'a' | 'b';
-  /** Along the wall from that end toward the other. */
-  along: number;
-  /** Off the centreline along wallNormal. */
-  perp: number;
+/**
+ * Where a placed dimension's point sits relative to what it was snapped to, so
+ * it follows it: a wall end (along the wall from that end, off its centreline),
+ * a door or window (from its centre along its wall, off the centreline), or a
+ * fixture / piece of furniture (in its own frame: x across, y back to front).
+ */
+export type DimAnchor =
+  | { wallId: string; end: 'a' | 'b'; along: number; perp: number }
+  | { openingId: string; along: number; perp: number }
+  | { furnitureId: string; x: number; y: number };
+
+/** An angle dimension between two walls: an arc where their lines meet, marked in degrees. */
+export interface AngleDim {
+  id: string;
+  a: string;
+  b: string;
 }
 
 export interface UserDim {
@@ -327,6 +335,10 @@ export interface Project {
   dimFaces?: 'finished' | 'framing';
   /** How the plan's strings read: each piece between ticks (chained, the default) or running totals from the first tick. */
   dimStyle?: 'chain' | 'running';
+  /** Per-string overrides of dimStyle (string id → style); opening chains included. */
+  dimStyles?: Record<string, 'chain' | 'running'>;
+  /** Angle dimensions between walls. */
+  angleDims?: AngleDim[];
   /** Fixture schedule order: by kind (default) or a section per room. */
   scheduleBy?: 'kind' | 'room';
   /** Dimension strings dragged out from where they're drawn: id → extra inches outward. */

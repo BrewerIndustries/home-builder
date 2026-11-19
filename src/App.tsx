@@ -112,7 +112,7 @@ export function App() {
       if (mod) return;
       if ((e.key === 'Delete' || e.key === 'Backspace') && selection && tab === 'plan') {
         // A built-in dimension string can't be deleted, only hidden.
-        if (selection.kind === 'dim' && !selection.id.startsWith('dm_')) dispatch({ type: 'setDimHidden', id: selection.id, hidden: true });
+        if (selection.kind === 'dim' && !selection.id.startsWith('dm_') && !selection.id.startsWith('ang_')) dispatch({ type: 'setDimHidden', id: selection.id, hidden: true });
         else dispatch({ type: 'delete', ids: [selection.id] });
         setSelection(null);
         e.preventDefault();

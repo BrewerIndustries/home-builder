@@ -63,7 +63,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Dimensions v3: dimension strings across the whole plan through interior walls; clear sizes for L-shaped rooms; opening chains on interior walls; drag a dimension line to move it
 - [x] Dimensions v4: partition strings at several heights through the plan (not just one each way); clear sizes for T / U rooms; user-placed dimensions (click two points); hide / show individual strings
 - [x] Dimensions v5: strings through angled partitions; keep inside strings clear of room labels automatically; placed dimensions that follow the walls they were snapped to; a running (ordinate) string option
-- [ ] Dimensions v6: running style for opening chains; placed dimensions pinned to openings and fixtures (not just wall ends); angular dimensions between walls; per-string chained / running choice
+- [x] Dimensions v6: running opening chains (totals square to the wall); placed dimensions pin to door / window jambs and centres and fixture corners / centres and follow them; angle dimensions between walls (wall panel → arc + degrees, follow the walls, gone with either); per-string Chained / Running / As the plan
+- [ ] Dimensions v7: angle dimensions picked on the plan with the Dimension tool (click two walls); placed dimensions pinned to counters and rooms; ordinate (baseline) dimensions; a dimension style panel (text size, tick / arrow / dot ends)
 - [ ] Existing / demo / new phasing; design options ("plan B") with cost compare
 - [ ] Plan versions with change-order diffs
 - [x] Furniture / fixture symbols (also fixes bath basin + kitchen counter inputs)

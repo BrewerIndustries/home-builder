@@ -46,7 +46,7 @@ import {
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { AngleInput, LengthInput } from './LengthInput.tsx';
-import { centrelineForFace, faceSpans, outerSides } from '../calc/faces.ts';
+import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
 import { MAX_FLIGHT_RISE, stairGeometry } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { BAR_HEIGHT, cabinetLayout, cornerCabinets, cornerUppers, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, kneeSpaceFor, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
@@ -196,6 +196,28 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </button>
           ))}
         </div>
+        {angleNeighbours(project, w.id).length > 0 && (
+          <Field label="Angle dimension to" hint="An arc where the two walls meet, marked in degrees; it goes with either wall">
+            <div className="row wrap">
+              {angleNeighbours(project, w.id).map((o) => {
+                const a = angleBetween(project, w.id, o.id);
+                const id = uid('ang');
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => {
+                      dispatch({ type: 'addAngleDim', dim: { id, a: w.id, b: o.id } });
+                      setSelection({ kind: 'dim', id });
+                    }}
+                  >
+                    W{project.walls.indexOf(o) + 1}
+                    {a ? ` (${Math.round(a.deg * 10) / 10}°)` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        )}
         <button className="danger" onClick={() => del(w.id)}>
           Delete wall
         </button>
@@ -421,20 +443,50 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
   if (selection?.kind === 'dim') {
     const id = selection.id;
     const placed = project.dims?.find((d) => d.id === id);
+    const angle = project.angleDims?.find((d) => d.id === id);
     const offset = project.dimOffsets?.[id] ?? 0;
+    if (angle) {
+      const a = angleBetween(project, angle.a, angle.b);
+      const name = (wid: string) => `W${project.walls.findIndex((x) => x.id === wid) + 1}`;
+      return (
+        <aside className="inspector">
+          <h3>Angle {name(angle.a)} – {name(angle.b)}</h3>
+          <Field label="Measures" hint="Between the two walls, on the side where they meet">
+            <span>{a ? `${Math.round(a.deg * 10) / 10}°` : 'parallel'}</span>
+          </Field>
+          <p className="muted small">It follows the walls as they move or turn, and goes if either is deleted. Drag it to move the arc in or out.</p>
+          <button className="danger" onClick={() => del(id)}>
+            Delete angle dimension
+          </button>
+        </aside>
+      );
+    }
     return (
       <aside className="inspector">
         <h3>{dimName(project, id)}</h3>
+        {!placed && (
+          <Field label="Reads" hint="Chained: each piece between ticks. Running: an open-circle zero, then the total so far at each tick">
+            <select
+              value={project.dimStyles?.[id] ?? ''}
+              onChange={(e) => dispatch({ type: 'setStringStyle', id, style: (e.target.value || undefined) as 'chain' | 'running' | undefined })}
+            >
+              <option value="">As the plan ({stringStyle({ ...project, dimStyles: undefined }, id) === 'running' ? 'running' : 'chained'})</option>
+              <option value="chain">Chained</option>
+              <option value="running">Running</option>
+            </select>
+          </Field>
+        )}
         {placed && (
           <Field label="Measures" hint="Straight from the first point picked to the second">
             <span>{formatFtIn(dist(placed.a, placed.b))}</span>
           </Field>
         )}
         {placed && (
-          <Field label="Ends" hint="An end snapped to a wall end or face corner moves with that wall; others stay where they were put">
+          <Field label="Ends" hint="An end snapped to a wall end or face corner, a door or window jamb, or a fixture's corner or centre moves with it; others stay where they were put">
             <span>
               {[placed.aAt, placed.bAt]
-                .map((at) => (at && project.walls.some((w) => w.id === at.wallId) ? `follows W${project.walls.findIndex((w) => w.id === at.wallId) + 1}` : 'fixed'))
+                .map((at) => anchorTarget(project, at))
+                .map((t) => (t ? `follows ${t}` : 'fixed'))
                 .join(' · ')}
             </span>
           </Field>

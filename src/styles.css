@@ -1356,3 +1356,9 @@ table.schedule th {
 .room-grips .pivot {
   fill: none;
 }
+.dims .dim-dot {
+  fill: var(--muted);
+}
+.dims.selected .dim-dot {
+  fill: var(--accent);
+}

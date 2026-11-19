@@ -4,7 +4,7 @@ import { isFixture } from '../calc/furniture.ts';
 import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geometry.ts';
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { cabinetLayout, cornerUppers, counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
-import { openingChains, partitionStrings, runningLabels, type Keepout, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
+import { angleBetween, openingChains, partitionStrings, runningLabels, stringStyle, type Keepout, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
 import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, UserDim, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -131,13 +131,25 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
       {wallDims &&
         openingChains(project, project.dimMode ?? 'centre')
           .filter((c) => !hidden.has(`chain:${c.wall.id}`))
-          .map((c) => <OpeningChain key={c.wall.id} {...c} extra={project.dimOffsets?.[`chain:${c.wall.id}`] ?? 0} selected={selDim === `chain:${c.wall.id}`} px={px} />)}
+          .map((c) => (
+            <OpeningChain
+              key={c.wall.id}
+              {...c}
+              extra={project.dimOffsets?.[`chain:${c.wall.id}`] ?? 0}
+              selected={selDim === `chain:${c.wall.id}`}
+              running={stringStyle(project, `chain:${c.wall.id}`) === 'running'}
+              px={px}
+            />
+          ))}
       {overallDims && <OverallDimensions project={project} selected={selDim} keepout={labels.flatMap((l) => l.lines.map(labelBox))} px={px} />}
       {(project.dims ?? [])
         .filter((d) => !hidden.has(d.id))
         .map((d) => (
           <UserDimension key={d.id} d={d} offset={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} px={px} />
         ))}
+      {(project.angleDims ?? []).map((d) => (
+        <AngleDimension key={d.id} project={project} id={d.id} a={d.a} b={d.b} extra={project.dimOffsets?.[d.id] ?? 0} selected={selDim === d.id} px={px} />
+      ))}
       {marks.map((m, i) => (
         <text key={`mark${i}`} x={m.at.x} y={m.at.y} className="fixture-mark" fontSize={px(8)} strokeWidth={px(2.5)} textAnchor="middle" dominantBaseline="central">
           {m.text}
@@ -231,7 +243,7 @@ export function OverallDimensions({ project, selected = null, keepout = [], px }
   return (
     <g className="dims">
       {all.map((d) => (
-        <DimString key={d.id} {...d} selected={selected === d.id} running={project.dimStyle === 'running'} px={px} />
+        <DimString key={d.id} {...d} selected={selected === d.id} running={stringStyle(project, d.id) === 'running'} px={px} />
       ))}
     </g>
   );
@@ -272,8 +284,35 @@ function UserDimension({ d, offset, selected, px }: { d: UserDim; offset: number
   );
 }
 
-/** A dimension chain along one wall, outside it: end → each opening centre → end. */
-function OpeningChain({ wall, side, stops, extra, selected, px }: { wall: Wall; side: 1 | -1; stops: number[]; extra: number; selected: boolean; px(n: number): number }) {
+/** An angle between two walls: an arc across the corner where their lines meet, with the degrees at its middle. Drag it to change the radius. */
+function AngleDimension({ project, id, a, b, extra, selected, px }: { project: Project; id: string; a: string; b: string; extra: number; selected: boolean; px(n: number): number }) {
+  const g = angleBetween(project, a, b);
+  if (!g) return null;
+  const r = Math.max(px(12), 30 + extra);
+  const [p, q] = [{ x: g.at.x + g.u.x * r, y: g.at.y + g.u.y * r }, { x: g.at.x + g.v.x * r, y: g.at.y + g.v.y * r }];
+  // Sweep from u to v the short way round.
+  const sweep = g.u.x * g.v.y - g.u.y * g.v.x > 0 ? 1 : 0;
+  const mid = { x: g.u.x + g.v.x, y: g.u.y + g.v.y };
+  const ml = Math.hypot(mid.x, mid.y) || 1;
+  const m = { x: mid.x / ml, y: mid.y / ml };
+  const label = { x: g.at.x + m.x * (r + px(10)), y: g.at.y + m.y * (r + px(10)) };
+  const arc = `M ${p.x} ${p.y} A ${r} ${r} 0 0 ${sweep} ${q.x} ${q.y}`;
+  return (
+    <g className={`dims angle-dim${selected ? ' selected' : ''}`} data-dim={id} data-out={`${m.x},${m.y}`}>
+      <path d={arc} className="dim-hit" fill="none" strokeWidth={px(10)} />
+      <path d={arc} className="dim-line" fill="none" strokeWidth={px(1)} />
+      {[p, q].map((e, i) => (
+        <circle key={i} cx={e.x} cy={e.y} r={px(1.6)} className="dim-dot" />
+      ))}
+      <text x={label.x} y={label.y} className="dim" fontSize={px(11)} textAnchor="middle" dominantBaseline="middle">
+        {Math.round(g.deg * 10) / 10}°
+      </text>
+    </g>
+  );
+}
+
+/** A dimension chain along one wall, outside it: end → each opening centre → end; or running totals from the first end. */
+function OpeningChain({ wall, side, stops, extra, selected, running, px }: { wall: Wall; side: 1 | -1; stops: number[]; extra: number; selected: boolean; running?: boolean; px(n: number): number }) {
   const d = wallDir(wall);
   const n = wallNormal(wall);
   const off = (wall.thickness / 2 + px(24) + extra) * side;
@@ -288,11 +327,25 @@ function OpeningChain({ wall, side, stops, extra, selected, px }: { wall: Wall; 
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="dim-line" strokeWidth={px(0.8)} />
       {stops.map((s, i) => {
         const p = P(s);
-        // 45° tick, turned with the wall.
+        // Running: an open circle at the zero. Else a 45° tick, turned with the wall.
+        if (running && i === 0) return <circle key={i} cx={p.x} cy={p.y} r={px(2.5)} className="dim-line" fill="none" strokeWidth={px(1)} />;
         const u = { x: (d.x + n.x) * tick, y: (d.y + n.y) * tick };
         return <line key={i} x1={p.x - u.x} y1={p.y - u.y} x2={p.x + u.x} y2={p.y + u.y} className="dim-line" strokeWidth={px(1)} />;
       })}
-      {stops.slice(1).map((s, i) => {
+      {running &&
+        runningLabels(stops, px(11)).map((s) => {
+          // Written square to the wall, outward from the line, so close ticks don't collide.
+          const p = P(s, px(4));
+          const rot = angle - 90;
+          const tx = { x: Math.cos((rot * Math.PI) / 180), y: Math.sin((rot * Math.PI) / 180) };
+          const anchor = tx.x * n.x * side + tx.y * n.y * side > 0 ? 'start' : 'end';
+          return (
+            <text key={s} x={p.x} y={p.y} transform={`rotate(${rot} ${p.x} ${p.y})`} className="dim" fontSize={px(9)} textAnchor={anchor} dominantBaseline="middle">
+              {formatFtIn(s - stops[0])}
+            </text>
+          );
+        })}
+      {!running && stops.slice(1).map((s, i) => {
         const len = s - stops[i];
         if (len < px(28)) return null;
         const m = P((stops[i] + s) / 2, px(6));

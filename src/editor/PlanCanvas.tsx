@@ -24,7 +24,7 @@ import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind,
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
-import { anchorFor, faceSpans } from '../calc/faces.ts';
+import { anchorFor, dimSnapPoints, faceSpans } from '../calc/faces.ts';
 import { hitTest, type Hit } from './hitTest.ts';
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
@@ -230,10 +230,12 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 
   // The Dimension tool also snaps to wall face corners (where faces meet or end), not just centreline ends.
   const faceCorners = tool === 'dimension' ? faceSpans(project).flatMap((f) => [f.a, f.b]) : [];
+  // Door / window jambs and centres, fixture corners and centres: a placed dimension can pin to them too.
+  const itemPoints = tool === 'dimension' ? dimSnapPoints(project).map((x) => x.p) : [];
   const snapDim = (raw: Point, origin?: Point): { p: Point; snapped: 'endpoint' | 'grid' | null; note?: string } => {
     const tol = SNAP_PX / viewRef.current.scale;
     let best: Point | null = null;
-    for (const e of [...endpoints, ...faceCorners]) if (dist(e, raw) <= tol && (!best || dist(e, raw) < dist(best, raw))) best = e;
+    for (const e of [...endpoints, ...faceCorners, ...itemPoints]) if (dist(e, raw) <= tol && (!best || dist(e, raw) < dist(best, raw))) best = e;
     return best ? { p: { ...best }, snapped: 'endpoint' } : snap(raw, { origin });
   };
 

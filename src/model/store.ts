@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, finishedThickness, studFor, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
+import { DEFAULT_FRAMING, finishedThickness, studFor, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim } from './types.ts';
 import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
@@ -26,6 +26,9 @@ export type Action =
   | { type: 'setDimHidden'; id: string; hidden: boolean }
   | { type: 'showAllDims' }
   | { type: 'setDimStyle'; style: 'chain' | 'running' }
+  /** One string's own style; undefined goes back to the plan's. */
+  | { type: 'setStringStyle'; id: string; style: 'chain' | 'running' | undefined }
+  | { type: 'addAngleDim'; dim: AngleDim }
   | { type: 'setScheduleBy'; by: 'kind' | 'room' }
   | { type: 'addDim'; dim: UserDim; offset: number }
   | { type: 'addWalls'; walls: Wall[]; room?: Room }
@@ -127,6 +130,16 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'setScheduleBy':
       return { ...p, scheduleBy: action.by === 'kind' ? undefined : action.by };
+
+    case 'setStringStyle': {
+      const rest = Object.fromEntries(Object.entries(p.dimStyles ?? {}).filter(([k]) => k !== action.id));
+      const dimStyles = action.style ? { ...rest, [action.id]: action.style } : rest;
+      return { ...p, dimStyles: Object.keys(dimStyles).length ? dimStyles : undefined };
+    }
+
+    case 'addAngleDim':
+      if (p.angleDims?.some((d) => (d.a === action.dim.a && d.b === action.dim.b) || (d.a === action.dim.b && d.b === action.dim.a))) return p;
+      return { ...p, angleDims: [...(p.angleDims ?? []), action.dim] };
 
     case 'setDimStyle':
       return { ...p, dimStyle: action.style === 'chain' ? undefined : action.style };
@@ -238,6 +251,10 @@ export function projectReducer(p: Project, action: Action): Project {
         ...(p.dims?.some((d) => ids.has(d.id)) && {
           dims: p.dims.filter((d) => !ids.has(d.id)),
           dimOffsets: Object.fromEntries(Object.entries(p.dimOffsets ?? {}).filter(([k]) => !ids.has(k))),
+        }),
+        // An angle dimension goes with either of its walls.
+        ...(p.angleDims?.some((d) => ids.has(d.id) || ids.has(d.a) || ids.has(d.b)) && {
+          angleDims: p.angleDims.filter((d) => !ids.has(d.id) && !ids.has(d.a) && !ids.has(d.b)),
         }),
         site: p.site && {
           ...p.site,

@@ -63,7 +63,7 @@ test('a placed dimension snapped to wall ends follows them when the walls move',
   const d = h.present.dims![0];
   assert.ok(near([d.a.x, d.a.y, d.b.x, d.b.y], [-3.25, -3.25, 264, 0]));
   // Delete the wall a was pinned to: a stays where it was and lets go.
-  const gone = historyReducer(h, { type: 'delete', ids: [aAt.wallId] }).present.dims![0];
+  const gone = historyReducer(h, { type: 'delete', ids: [(aAt as { wallId: string }).wallId] }).present.dims![0];
   assert.ok(near([gone.a.x, gone.a.y], [-3.25, -3.25]));
   assert.equal(gone.aAt, undefined);
 });
