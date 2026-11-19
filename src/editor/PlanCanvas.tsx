@@ -18,7 +18,8 @@ import { coRequired, isLight, roomAt, SWITCH_HEIGHT } from '../calc/lighting.ts'
 import { enclosedArea, samePolygon } from '../calc/enclosure.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
 import { bearing, retarget, roomCentre, snapAngle, snapPivot, turnBetween, turnHandle, snapEndToWalls, snapWallMove, splitAt, swingEnd, wallDragPoints, wallSnapTargets, type WallSnapTarget } from '../model/wallEdit.ts';
-import { counterDir, newCounters } from '../calc/counters.ts';
+import { cabinetLayout, counterDir, newCounters, upperLayout } from '../calc/counters.ts';
+import { grabJoint, moveJoint, type CabinetJoint } from '../calc/cabinets.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
 import { finishedThickness, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
@@ -54,6 +55,8 @@ type Drag =
   | { kind: 'room'; start: Point; end: Point; raw: Point }
   | { kind: 'newCounter'; start: Point; end: Point }
   | { kind: 'counter'; id: string; start: Point; a: Point; b: Point; along: Point | null; started: boolean }
+  /** A cabinet joint on the selected counter: resizes the cabinets either side. */
+  | { kind: 'joint'; id: string; joint: CabinetJoint; from: Counter; started: boolean }
   | { kind: 'underlay'; start: Point; origin: Point }
   /** A dimension string dragged in or out; `out` is its outward unit direction. */
   | { kind: 'dim'; id: string; out: Point; start: Point; base: number; started: boolean };
@@ -474,6 +477,13 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             return;
           }
         }
+        // The selected counter's cabinet joints (the dots on the plan).
+        const selCounter = selection?.kind === 'counter' ? project.counters.find((c) => c.id === selection.id) : undefined;
+        const joint = selCounter && grabJoint(project, selCounter, raw, 8 / view.scale);
+        if (selCounter && joint) {
+          drag.current = { kind: 'joint', id: selCounter.id, joint, from: selCounter, started: false };
+          return;
+        }
         const hit = hitTest(project, raw, slop);
         setSelection(hit);
         if (hit?.kind === 'outlet' || hit?.kind === 'switch') {
@@ -701,6 +711,19 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       setCounterDraft(newCounters(project, d.start, d.end, ['draft', 'draft2', 'draft3']));
       return;
     }
+    if (d?.kind === 'joint') {
+      // Always from the counter as the drag found it, so each move sets the widths outright.
+      const c = d.from;
+      const dir = counterDir(c);
+      const patch = moveJoint(project, c, d.joint, (raw.x - c.a.x) * dir.x + (raw.y - c.a.y) * dir.y);
+      if (!patch && !d.started) return;
+      if (!d.started) dispatch({ type: 'checkpoint' });
+      d.started = true;
+      dispatch({ type: 'updateCounter', id: d.id, patch: patch ?? { cabinets: c.cabinets }, transient: true });
+      const slots = (d.joint.level === 'base' ? cabinetLayout : upperLayout)(project, { ...c, ...patch }).filter((k) => k.stretch === d.joint.stretch && (k.index === d.joint.index || k.index === d.joint.index + 1));
+      setMoveText(`${slots.map((k) => k.label).join(' | ')} · drag a joint to trade width between the cabinets either side`);
+      return;
+    }
     if (d?.kind === 'counter') {
       let dx = Math.round(raw.x - d.start.x);
       let dy = Math.round(raw.y - d.start.y);
@@ -850,7 +873,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     if (d?.kind === 'newCounter') {
       setCounterDraft([]);
       // One drag can make an L or a U: two or three counters, one undo step.
-      const counters = newCounters(project, d.start, d.end, [uid('ct'), uid('ct'), uid('ct')]);
+      // New runs are laid out and priced cabinet by cabinet (Counters v6); old projects keep their per-foot pricing.
+      const counters = newCounters(project, d.start, d.end, [uid('ct'), uid('ct'), uid('ct')]).map((c) => ({ ...c, cabinets: {} }));
       dispatch({ type: 'addCounters', counters });
       setSelection({ kind: 'counter', id: counters[0].id });
       return;

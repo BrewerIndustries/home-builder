@@ -6,7 +6,7 @@ import { doorLeafBoxes } from './doors3d.ts';
 import { clipHalfPlane, slopeFrame, triangulate } from './outline.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
-import { counterDir, counterHeight, cornerUppers, counterLength, counterPoint, FRIDGE_HEIGHT, seatingDepth, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, UPPER_TOP, upperSpans } from './counters.ts';
+import { counterDir, counterHeight, cornerUppers, counterLength, counterPoint, FRIDGE_HEIGHT, raisedDepth, seatingDepth, seatingHeight, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, upperSpans, upperTop } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
 // Axes: plan x → X, plan y → Z, height → Y (up). Inches throughout.
@@ -224,13 +224,20 @@ export function buildScene(project: Project): Scene3D {
     const mid = counterPoint(c, len / 2, base / 2);
     const h = counterHeight(c);
     boxes.push({ kind: 'counter', c: [mid.x, h / 2, mid.y], size: [len, h, base], rotY: -Math.atan2(d.y, d.x) });
+    // Two-level: a riser on the cabinets' front edge carries the 42" bar ledge out over the seating.
+    const ledge = raisedDepth(c) - knee;
+    if (ledge > 0) {
+      const riser = counterPoint(c, len / 2, base - ledge / 2);
+      boxes.push({ kind: 'counter', c: [riser.x, (h + seatingHeight(c)) / 2, riser.y], size: [len, seatingHeight(c) - h, ledge], rotY: -Math.atan2(d.y, d.x) });
+    }
     if (knee > 0) {
       const top = counterPoint(c, len / 2, base + knee / 2);
-      boxes.push({ kind: 'counter', c: [top.x, h - 0.75, top.y], size: [len, 1.5, knee], rotY: -Math.atan2(d.y, d.x) });
+      boxes.push({ kind: 'counter', c: [top.x, seatingHeight(c) - 0.75, top.y], size: [len, 1.5, knee], rotY: -Math.atan2(d.y, d.x) });
     }
+    const upTop = upperTop(c);
     for (const [s, e] of upperSpans(project, c)) {
       const at = counterPoint(c, (s + e) / 2, UPPER_DEPTH / 2);
-      boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + UPPER_TOP) / 2, at.y], size: [e - s, UPPER_TOP - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
+      boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + upTop) / 2, at.y], size: [e - s, upTop - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
     }
     for (const k of c.cutouts.filter((x) => x.kind === 'fridge' || x.kind === 'pantry' || x.kind === 'oven')) {
       const h = k.kind === 'fridge' ? FRIDGE_HEIGHT : TALL_HEIGHT;
@@ -243,7 +250,8 @@ export function buildScene(project: Project): Scene3D {
     for (const [c, t] of [[u.a, u.ta], [u.b, u.tb]] as const) {
       const d = counterDir(c);
       const at = counterPoint(c, t === 0 ? 12 : t - 12, UPPER_DEPTH / 2);
-      boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + UPPER_TOP) / 2, at.y], size: [24, UPPER_TOP - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
+      const top = upperTop(c);
+      boxes.push({ kind: 'counter', c: [at.x, (UPPER_BOTTOM + top) / 2, at.y], size: [24, top - UPPER_BOTTOM, UPPER_DEPTH], rotY: -Math.atan2(d.y, d.x) });
     }
   }
   for (const f of project.furniture) {

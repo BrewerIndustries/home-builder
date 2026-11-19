@@ -1,5 +1,5 @@
 import { dist, nearestWall, pointAlong, pointInPolygon, polygonArea, projectOnWall, samePoint, wallDir, wallLength, wallNormal } from '../model/geometry.ts';
-import type { CornerCabinet, Counter, Cutout, Point, Project, Room, Wall } from '../model/types.ts';
+import type { BaseCabinetType, CornerCabinet, Counter, Cutout, Point, Project, Room, Wall } from '../model/types.ts';
 import type { Run } from './electrical.ts';
 import type { MaterialLine } from './materials.ts';
 
@@ -30,7 +30,9 @@ export const BAR_HEIGHT = 42;
 export const BAR_KNEE_SPACE = 12;
 /** A counter's top: 36", or 42" for a bar-height island. */
 export const counterHeight = (c: Counter) => (c.island && c.bar ? BAR_HEIGHT : COUNTER_HEIGHT);
-export const kneeSpaceFor = (c: Counter) => (c.island && c.bar ? BAR_KNEE_SPACE : KNEE_SPACE);
+/** Where the stools pull up: 42" at a bar-height or two-level island, else the counter's own height. */
+export const seatingHeight = (c: Counter) => (c.island && (c.bar || c.twoLevel) ? BAR_HEIGHT : COUNTER_HEIGHT);
+export const kneeSpaceFor = (c: Counter) => (seatingHeight(c) > COUNTER_HEIGHT ? BAR_KNEE_SPACE : KNEE_SPACE);
 
 const TOL = 0.5;
 
@@ -150,9 +152,13 @@ export function counterLines(project: Project): MaterialLine[] {
   const corners = cornerCabinets(project);
   // Corner units are priced on their own: take their corner square out of the run.
   const cornerLf = corners.reduce((s, k) => s + k.size, 0);
-  const lf = (project.counters.reduce((s, c) => s + counterLength(c) - width(c, ['dishwasher', 'fridge', 'pantry', 'oven']), 0) - shared - cornerLf) / 12;
-  const islands = project.counters.filter((c) => c.island).length;
-  add('Base cabinets (allowance)', Math.ceil(lf * 2) / 2, 'LF', `${project.counters.length} run${project.counters.length > 1 ? 's' : ''}${islands ? `, ${islands} island${islands > 1 ? 's' : ''} / peninsula${islands > 1 ? 's' : ''}` : ''}, less dishwasher, fridge, tall-cabinet and corner spaces`);
+  // Runs laid out cabinet by cabinet are priced from their layout (below), not by the foot: take their share out.
+  const laidOut = project.counters.filter((c) => c.cabinets);
+  const layoutShare = laidOut.reduce((s, c) => s + counterLength(c) - width(c, ['dishwasher', 'fridge', 'pantry', 'oven']) - cabinetLayout(project, c).filter((k) => k.kind === 'corner' || k.kind === 'joined').reduce((t, k) => t + k.e - k.s, 0), 0);
+  const lf = Math.max(0, project.counters.reduce((s, c) => s + counterLength(c) - width(c, ['dishwasher', 'fridge', 'pantry', 'oven']), 0) - shared - cornerLf - layoutShare) / 12;
+  const islands = project.counters.filter((c) => c.island && !c.cabinets).length;
+  const byFoot = project.counters.filter((c) => !c.cabinets).length;
+  if (byFoot) add('Base cabinets (allowance)', Math.ceil(lf * 2) / 2, 'LF', `${byFoot} run${byFoot > 1 ? 's' : ''}${islands ? `, ${islands} island${islands > 1 ? 's' : ''} / peninsula${islands > 1 ? 's' : ''}` : ''}, less dishwasher, fridge, tall-cabinet and corner spaces`);
   add('Corner base cabinet, lazy susan (allowance)', corners.filter((k) => k.kind === 'lazy-susan').length, 'ea', 'one per L corner set to lazy susan');
   add('Corner base cabinet, blind corner (allowance)', corners.filter((k) => k.kind === 'blind').length, 'ea', 'one per corner set to blind (default where a peninsula meets a run)');
   const sqft = (project.counters.reduce((s, c) => s + (counterLength(c) - width(c, ['fridge', 'pantry', 'oven'])) * c.depth, 0) - overlaps.reduce((s, o) => s + o.area, 0)) / 144;
@@ -167,11 +173,26 @@ export function counterLines(project: Project): MaterialLine[] {
   add('Wall oven cabinet (allowance)', count('oven'), 'ea', 'full-height, from the counters');
   add('Wall oven (allowance)', count('oven'), 'ea', 'one per oven cabinet');
   add('Countertop support brackets (allowance)', seats.reduce((s, c) => s + Math.max(2, Math.ceil(counterLength(c) / 36) + 1), 0), 'ea', 'under seating overhangs, about every 3 ft');
-  const upper = project.counters.reduce((s, c) => s + upperSpans(project, c).reduce((t, [a, b]) => t + b - a, 0), 0) / 12;
+  const upper = project.counters.filter((c) => !c.cabinets).reduce((s, c) => s + upperSpans(project, c).reduce((t, [a, b]) => t + b - a, 0), 0) / 12;
   add('Wall cabinets (allowance)', Math.ceil(upper * 2) / 2, 'LF', 'over wall counters, less windows, range hoods and corner wall cabinets');
+  // Cabinet by cabinet: one line per product (type + size), from the layout.
+  const each = new Map<string, { qty: number; runs: Set<string> }>();
+  for (const c of laidOut) {
+    for (const k of [...cabinetLayout(project, c), ...upperLayout(project, c)]) {
+      const item = cabinetItem(k);
+      if (!item) continue;
+      const e = each.get(item) ?? { qty: 0, runs: new Set<string>() };
+      e.qty += 1;
+      e.runs.add(c.id);
+      each.set(item, e);
+    }
+  }
+  for (const [item, e] of [...each].sort(([p], [q]) => p.localeCompare(q, undefined, { numeric: true }))) add(item, e.qty, 'ea', `from the cabinet layout of ${e.runs.size} run${e.runs.size > 1 ? 's' : ''}`);
   add('Corner wall cabinet (allowance)', cornerUppers(project).length, 'ea', 'one diagonal unit per L corner with wall cabinets on both runs');
-  const fillers = project.counters.reduce((s, c) => s + cabinetLayout(project, c).filter((x) => x.kind === 'filler').length, 0);
+  const fillers = project.counters.reduce((s, c) => s + cabinetLayout(project, c).filter((x) => x.kind === 'filler').length + (c.cabinets ? upperLayout(project, c).filter((x) => x.kind === 'filler').length : 0), 0);
   add('Cabinet filler strips (allowance)', fillers, 'ea', 'from the cabinet-by-cabinet layout');
+  const twoLevel = project.counters.filter((c) => raisedDepth(c) > 0);
+  add('Two-level island riser (allowance)', Math.ceil(twoLevel.reduce((s, c) => s + counterLength(c), 0) / 12), 'LF', '6" raised wall under the 42" bar ledge, full length of each two-level island');
   add('Range hood (allowance)', count('range'), 'ea', 'one over each range');
   return lines;
 }
@@ -606,13 +627,47 @@ export const CABINET_MIN = 9;
 export const CABINET_MAX = 36;
 export const CABINET_STEP = 3;
 
-export type CabinetKind = 'base' | 'sink' | 'appliance' | 'tall' | 'corner' | 'filler' | 'joined';
+export type CabinetKind = 'base' | 'sink' | 'appliance' | 'tall' | 'corner' | 'filler' | 'joined' | 'wall';
 
 export interface CabinetSlot {
   s: number;
   e: number;
   kind: CabinetKind;
   label: string;
+  /** Base and wall cabinets: which stretch (or wall-cabinet span) of the run, and which cabinet in it — the keys joint drags and types use. */
+  stretch?: number;
+  index?: number;
+  /** Base cabinets: the type picked (standard when unset). */
+  type?: BaseCabinetType;
+  /** Wall cabinets: their height. */
+  height?: number;
+}
+
+/** Base-cabinet types: label prefix and name. A sink cutout's cabinet is always a sink base. */
+export const BASE_TYPES: Record<BaseCabinetType, { prefix: string; name: string }> = {
+  standard: { prefix: 'B', name: 'Base cabinet' },
+  drawer: { prefix: 'DB', name: 'Drawer base' },
+  trash: { prefix: 'TR', name: 'Trash pull-out base' },
+  sink: { prefix: 'SB', name: 'Sink base' },
+};
+
+/** Widths dragged into a stretch, if they still fit it (at most a filler's worth short); else null for the stock fill. */
+export function plannedWidths(span: number, planned: number[] | null | undefined): number[] | null {
+  if (!planned?.length || planned.some((w) => !(w >= CABINET_MIN - 1e-6 && w <= CABINET_MAX + 1e-6))) return null;
+  const used = planned.reduce((t, w) => t + w, 0);
+  return used <= span + TOL && span - used < CABINET_MIN ? planned : null;
+}
+
+/** The estimate line a cabinet is priced on, cabinet by cabinet; null for slots priced elsewhere (corner, tall, filler) or not cabinets at all. */
+export function cabinetItem(k: CabinetSlot): string | null {
+  const w = Math.round(k.e - k.s);
+  if (k.kind === 'base') {
+    const t = BASE_TYPES[k.type ?? 'standard'];
+    return `${t.name} ${t.prefix}${w} (allowance)`;
+  }
+  if (k.kind === 'sink') return `${BASE_TYPES.sink.name} ${k.label} (allowance)`;
+  if (k.kind === 'wall') return `Wall cabinet ${k.label} (allowance)`;
+  return null;
 }
 
 /** Fill a stretch with stock widths: as few as fit under 36", near-equal, the odd inch or two left as a filler. */
@@ -661,17 +716,22 @@ export function cabinetLayout(project: Project, c: Counter): CabinetSlot[] {
   const out: CabinetSlot[] = [];
   let at = 0;
   const host = counterHost(project, c);
+  let n = 0;
   const stretch = (s: number, e: number) => {
     const span = e - s;
     if (span <= TOL) return;
-    const widths = fillStretch(span);
+    const i = n++;
+    const widths = plannedWidths(span, c.cabinets?.base?.[i]) ?? fillStretch(span);
     const used = widths.reduce((t, w) => t + w, 0);
     const filler = span - used;
     // The filler goes at a wall or corner end of the stretch (it gets scribed to fit); else at its far end.
     const atStart = (s <= TOL && !!host) || out.at(-1)?.kind === 'corner' || out.at(-1)?.kind === 'joined';
     let t = s;
     if (filler > TOL && atStart) out.push({ s: t, e: (t += filler), kind: 'filler', label: `Filler ${formatIn(filler)}` });
-    for (const w of widths) out.push({ s: t, e: (t += w), kind: 'base', label: `B${w}` });
+    widths.forEach((w, j) => {
+      const type = c.cabinets?.types?.[`${i}.${j}`];
+      out.push({ s: t, e: (t += w), kind: 'base', label: `${BASE_TYPES[type ?? 'standard'].prefix}${w}`, stretch: i, index: j, ...(type && type !== 'standard' ? { type } : {}) });
+    });
     if (filler > TOL && !atStart) out.push({ s: t, e: (t += filler), kind: 'filler', label: `Filler ${formatIn(filler)}` });
   };
   for (const k of taken) {
@@ -694,3 +754,42 @@ function formatIn(n: number): string {
   const [num, den] = eighths % 4 === 0 ? [eighths / 4, 2] : eighths % 2 === 0 ? [eighths / 2, 4] : [eighths, 8];
   return whole ? `${whole}-${num}/${den}"` : `${num}/${den}"`;
 }
+
+// ── v6: wall cabinets by width, heights ───────────────────────────────────
+
+/** Wall-cabinet heights: 30" unless the run says 36" or 42". */
+export const UPPER_HEIGHTS = [30, 36, 42] as const;
+export const upperHeight = (c: Counter) => c.upperHeight ?? UPPER_TOP - UPPER_BOTTOM;
+/** Top of a run's wall cabinets: the bottoms stay at 54", taller cabinets reach higher. */
+export const upperTop = (c: Counter) => UPPER_BOTTOM + upperHeight(c);
+
+/**
+ * Wall cabinets over a run, cabinet by cabinet: each wall-cabinet span (see
+ * upperSpans) filled with the same stock widths as the base cabinets, or the
+ * widths dragged in; the odd inch a filler at the span's wall / corner end.
+ * Labelled width then height, W3030 style.
+ */
+export function upperLayout(project: Project, c: Counter): CabinetSlot[] {
+  const h = upperHeight(c);
+  const out: CabinetSlot[] = [];
+  upperSpans(project, c).forEach(([s, e], i) => {
+    const span = e - s;
+    const widths = plannedWidths(span, c.cabinets?.upper?.[i]) ?? fillStretch(span);
+    const filler = span - widths.reduce((t, w) => t + w, 0);
+    // Filler at the start of the run (a wall or the corner unit); else at the span's far end, against what stops it.
+    const atStart = i === 0;
+    let t = s;
+    if (filler > TOL && atStart) out.push({ s: t, e: (t += filler), kind: 'filler', label: `Filler ${formatIn(filler)}` });
+    widths.forEach((w, j) => out.push({ s: t, e: (t += w), kind: 'wall', label: `W${w}${h}`, stretch: i, index: j, height: h }));
+    if (filler > TOL && !atStart) out.push({ s: t, e: (t += filler), kind: 'filler', label: `Filler ${formatIn(filler)}` });
+  });
+  return out;
+}
+
+// ── v6: two-level islands ──────────────────────────────────────────────────
+
+/** A two-level island's raised bar ledge runs this far back from its seating overhang, over a 6" riser on the cabinets. */
+export const BAR_LEDGE = 6;
+
+/** How deep (from the front) a two-level island's 42" top is: the overhang plus the ledge; 0 when not two-level. */
+export const raisedDepth = (c: Counter) => (c.island && c.twoLevel && !c.bar && seatingDepth(c) > 0 ? Math.min(c.depth, seatingDepth(c) + BAR_LEDGE) : 0);

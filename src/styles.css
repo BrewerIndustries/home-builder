@@ -622,6 +622,10 @@ svg.plan {
   font-weight: 600;
   pointer-events: none;
 }
+.cabinets .cabinet-joint {
+  fill: var(--accent);
+  stroke: var(--counter-edge);
+}
 .upper {
   fill: none;
   stroke: var(--counter-edge);

@@ -82,6 +82,7 @@ const SAMPLE: [RegExp, number][] = [
   [/^Wall oven cabinet/, 750],
   [/^Wall oven \(allowance\)/, 1800],
   [/^Countertop support brackets/, 35],
+  [/^Two-level island riser/, 40],
   [/^Toilet \(allowance\)/, 280],
   [/^Bidet \(allowance\)/, 450],
   [/^Closet rod \+ shelf/, 18],
@@ -161,9 +162,22 @@ const PER_FOOT: Record<string, number> = { '2x4': 0.6, '2x6': 0.95, '2x8': 1.35,
 
 export function samplePrice(item: string): number {
   for (const [re, price] of SAMPLE) if (re.test(item)) return price;
+  const cab = cabinetPrice(item);
+  if (cab) return cab;
   const stock = item.match(/^(2x\d+) (?:stud|board|rafter|ceiling joist|ridge board|hip rafter|floor joist|rim joist|girder ply \(3-ply built-up\)|blocking over girders), (\d+)'/);
   if (stock) return Math.round(PER_FOOT[stock[1]] * Number(stock[2]) * 100) / 100;
   return 0;
+}
+
+/** Cabinet-by-cabinet lines (Counters v6) are priced by width: per inch, plus the pull-out kit; wall cabinets scale with height. */
+const CABINET_PER_INCH: Record<string, [number, number]> = { 'Base cabinet': [16, 0], 'Drawer base': [22, 0], 'Trash pull-out base': [16, 90], 'Sink base': [14, 0], 'Wall cabinet': [14, 0] };
+function cabinetPrice(item: string): number {
+  const m = item.match(/^(Base cabinet|Drawer base|Trash pull-out base|Sink base|Wall cabinet) [A-Z]+(\d+) \(allowance\)$/);
+  if (!m) return 0;
+  const [perInch, kit] = CABINET_PER_INCH[m[1]];
+  // Wall cabinets: width then height (W3030 = 30" wide, 30" tall).
+  const [w, h] = m[1] === 'Wall cabinet' ? [Number(m[2].slice(0, -2)), Number(m[2].slice(-2))] : [Number(m[2]), 30];
+  return Math.round(w * perInch * (h / 30) + kit);
 }
 
 export const DEFAULT_PRICING: Pricing = { prices: {}, markup: 0.15, tax: 0.0825 };
