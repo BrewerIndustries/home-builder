@@ -1,4 +1,5 @@
 import type { Project } from './types.ts';
+import { planThumbnail } from './thumbnail.ts';
 
 // Client for the accounts / project-library Worker in api/. The build sets
 // VITE_API_BASE; local dev talks to `wrangler dev` on :8787.
@@ -18,6 +19,12 @@ export interface CloudProject {
   bytes: number;
   created_at: number;
   updated_at: number;
+  /** Small SVG of the plan (thumbnail.ts); null when the plan is empty. */
+  thumb?: string | null;
+}
+
+export interface ShareInfo {
+  created_at: number;
 }
 
 export interface Invite {
@@ -70,9 +77,17 @@ export const cloud = {
   put: (id: string, data: Project, base: number | undefined, force = false) =>
     api<{ project: CloudProject }>(`/projects/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      body: JSON.stringify({ name: data.name, data, base: base ?? 0, force }),
+      body: JSON.stringify({ name: data.name, data, base: base ?? 0, force, thumb: planThumbnail(data) }),
     }).then((r) => r.project),
   remove: (id: string) => api(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** The project's read-only link, if one is live (the token itself is only shown when made). */
+  shareStatus: (id: string) => api<{ share: ShareInfo | null }>(`/projects/${encodeURIComponent(id)}/share`).then((r) => r.share),
+  /** Make a read-only link; replaces any earlier one for the project. */
+  createShare: (id: string) => api<{ token: string; created_at: number }>(`/projects/${encodeURIComponent(id)}/share`, { method: 'POST' }),
+  revokeShare: (id: string) => api(`/projects/${encodeURIComponent(id)}/share`, { method: 'DELETE' }),
+  /** Open a shared project — no sign-in needed. */
+  shared: (token: string) => api<{ project: { name: string; updated_at: number }; data: Project }>(`/share/${encodeURIComponent(token)}`),
 
   invites: () => api<{ invites: Invite[] }>('/invites').then((r) => r.invites),
   invite: (note: string) => api<{ code: string }>('/invites', post('', { note })).then((r) => r.code),
@@ -82,4 +97,9 @@ export const cloud = {
 /** Shareable sign-up link for an invite code. */
 export function inviteLink(code: string): string {
   return `${location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(code)}`;
+}
+
+/** Read-only link to a shared project. */
+export function shareLink(token: string): string {
+  return `${location.origin}${import.meta.env.BASE_URL}?share=${encodeURIComponent(token)}`;
 }

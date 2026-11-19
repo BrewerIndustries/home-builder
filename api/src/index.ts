@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { hashPassword, newToken, sessionId, verifyPassword } from './auth';
+import { cleanThumb, hashShareToken, newShareToken, validShareToken } from './share';
 
 // Home Builder API: invite-only accounts and a per-user project library.
 // Project metadata lives in D1; each project's JSON (which can carry an
@@ -97,7 +98,7 @@ function inviteCode(): string {
 const r2key = (userId: string, id: string) => `projects/${userId}/${id}.json`;
 
 function publicProject(row: any) {
-  return { id: row.id, name: row.name, bytes: row.bytes, created_at: row.created_at, updated_at: row.updated_at };
+  return { id: row.id, name: row.name, bytes: row.bytes, created_at: row.created_at, updated_at: row.updated_at, thumb: row.thumb ?? null };
 }
 
 // ---------------- auth ----------------
@@ -241,15 +242,16 @@ app.put('/projects/:id', auth, async (c) => {
     if (Number(n?.n ?? 0) >= MAX_PROJECTS) return c.json({ error: `limit of ${MAX_PROJECTS} projects reached` }, 403);
   }
   const body = JSON.stringify(b.data);
+  const thumb = cleanThumb(b.thumb);
   const now = Math.max(Date.now(), Number(row?.updated_at ?? 0) + 1);
   await c.env.PROJECTS.put(r2key(user.id, id), body, { httpMetadata: { contentType: 'application/json' } });
   await c.env.DB.prepare(
-    `INSERT INTO projects (id, user_id, name, bytes, created_at, updated_at) VALUES (?,?,?,?,?,?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, bytes = excluded.bytes, updated_at = excluded.updated_at`,
+    `INSERT INTO projects (id, user_id, name, bytes, created_at, updated_at, thumb) VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, bytes = excluded.bytes, updated_at = excluded.updated_at, thumb = excluded.thumb`,
   )
-    .bind(id, user.id, name, body.length, Number(row?.created_at ?? now), now)
+    .bind(id, user.id, name, body.length, Number(row?.created_at ?? now), now, thumb)
     .run();
-  return c.json({ project: { id, name, bytes: body.length, created_at: Number(row?.created_at ?? now), updated_at: now } });
+  return c.json({ project: { id, name, bytes: body.length, created_at: Number(row?.created_at ?? now), updated_at: now, thumb } });
 });
 
 app.patch('/projects/:id', auth, async (c) => {
@@ -266,8 +268,56 @@ app.delete('/projects/:id', auth, async (c) => {
   const id = c.req.param('id');
   const res = await c.env.DB.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?').bind(id, user.id).run();
   if (!res.meta.changes) return c.json({ error: 'not found' }, 404);
+  await c.env.DB.prepare('DELETE FROM shares WHERE project_id = ?').bind(id).run();
   await c.env.PROJECTS.delete(r2key(user.id, id));
   return c.json({ ok: true });
+});
+
+// ---------------- read-only share links ----------------
+const ownProject = (c: any) =>
+  c.env.DB.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).first();
+
+app.get('/projects/:id/share', auth, async (c) => {
+  if (!(await ownProject(c))) return c.json({ error: 'not found' }, 404);
+  const row = await c.env.DB.prepare('SELECT created_at FROM shares WHERE project_id = ?').bind(c.req.param('id')).first();
+  return c.json({ share: row ? { created_at: Number(row.created_at) } : null });
+});
+
+// A new link; any earlier link for the project stops working.
+app.post('/projects/:id/share', auth, async (c) => {
+  if (!(await ownProject(c))) return c.json({ error: 'not found' }, 404);
+  const token = newShareToken();
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `INSERT INTO shares (token_hash, project_id, user_id, created_at) VALUES (?,?,?,?)
+     ON CONFLICT(project_id) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at`,
+  )
+    .bind(await hashShareToken(token), c.req.param('id'), c.get('user').id, now)
+    .run();
+  return c.json({ token, created_at: now });
+});
+
+app.delete('/projects/:id/share', auth, async (c) => {
+  await c.env.DB.prepare('DELETE FROM shares WHERE project_id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  return c.json({ ok: true });
+});
+
+// Anyone with the link: the project, read-only. No sign-in.
+app.get('/share/:token', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  c.header('X-Robots-Tag', 'noindex');
+  const token = c.req.param('token');
+  if (!validShareToken(token)) return c.json({ error: 'this link isn’t valid' }, 404);
+  const row = await c.env.DB.prepare(
+    `SELECT p.id, p.user_id, p.name, p.updated_at FROM shares s JOIN projects p ON p.id = s.project_id AND p.user_id = s.user_id
+     WHERE s.token_hash = ?`,
+  )
+    .bind(await hashShareToken(token))
+    .first();
+  if (!row) return c.json({ error: 'this link was turned off or the project was deleted' }, 404);
+  const obj = await c.env.PROJECTS.get(r2key(row.user_id as string, row.id as string));
+  if (!obj) return c.json({ error: 'project data missing' }, 404);
+  return c.json({ project: { name: row.name, updated_at: row.updated_at }, data: await obj.json() });
 });
 
 export default app;
