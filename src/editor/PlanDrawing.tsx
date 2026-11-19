@@ -914,9 +914,14 @@ export function FurnitureGlyph({ f, selected, ghost, px }: { f: Furniture; selec
       const edges = steps.slice(0, -1).map((_, i) => steps.slice(0, i + 1).reduce((a, x) => a + x, 0));
       const landFrom = L ? steps.slice(0, L - 1).reduce((a, x) => a + x, 0) : 0;
       const arrow = f.down ? 'DN' : 'UP';
+      // Handrails (4+ risers): a line 2" in from each railed side, walking up (−x is the left).
+      const railX = risers >= 4 ? ({ none: [], left: [l + 2], right: [r - 2], both: [l + 2, r - 2] } as const)[f.handrails ?? 'right'] : [];
       body = (
         <>
           {rect(l, t, r, b)}
+          {railX.map((x) => (
+            <line key={`rail${x}`} className="stair-rail" x1={x} y1={b - 2} x2={x} y2={t + 2} strokeWidth={px(1.5)} />
+          ))}
           {edges.map((e, i) => (
             <line key={i} x1={l} y1={b - e} x2={r} y2={b - e} strokeWidth={sw} />
           ))}

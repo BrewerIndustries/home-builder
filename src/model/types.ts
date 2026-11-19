@@ -161,6 +161,11 @@ export interface Furniture {
   rise?: number;
   landing?: number;
   landingEntry?: boolean;
+  /** Stairs: which sides have a handrail, as you walk up from the foot (right when unset), and its height above the nosings (36" when unset). */
+  handrails?: 'none' | 'left' | 'right' | 'both';
+  handrailHeight?: number;
+  /** Stairs: guards along any side not against a wall (on unless false). */
+  guards?: boolean;
   /** Fixtures: the product picked, and rough-in or other notes, for the schedule. */
   model?: string;
   note?: string;

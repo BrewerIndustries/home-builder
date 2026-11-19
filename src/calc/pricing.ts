@@ -84,6 +84,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Bidet \(allowance\)/, 450],
   [/^Closet rod \+ shelf/, 18],
   [/^Closet shelf \(allowance\)/, 10],
+  [/^Stair handrail \+ brackets/, 20],
+  [/^Stair guard \/ balustrade/, 60],
   [/^Tub \/ shower combo/, 1100],
   [/^Pocket door frame kit/, 180],
   [/^Bifold door hardware/, 40],

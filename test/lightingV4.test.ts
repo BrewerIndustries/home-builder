@@ -65,13 +65,16 @@ test('a new stair gets enough risers for the floor height and 11" treads; R311.7
       ['R311.7.5.1', 'pass'],
       ['R311.7.5.2', 'pass'],
       ['R311.7.3', 'pass'],
+      ['R311.7.8', 'pass'],
+      ['R311.7.8.1', 'pass'],
+      ['R312.1.1', 'pass'],
       ['R311.7.2', 'info'],
     ],
   );
   // Headroom: with a 97-1/8" ceiling, steps over 17-1/8" up need the opening: from the 3rd tread on.
   const g = stairGeometry(p, st);
   assert.equal(g.opening, 143 - 2 * 11);
-  assert.match(checks[4].message, /floor opening over the flight \(in the floor above\) has to run at least 10' 1" back from the top/);
+  assert.match(checks[7].message, /floor opening over the flight \(in the floor above\) has to run at least 10' 1" back from the top/);
   // Reaches the report.
   assert.ok(ircChecks({ ...p, furniture: [st] }).some((c) => c.section === 'R311.7.5.1'));
 });

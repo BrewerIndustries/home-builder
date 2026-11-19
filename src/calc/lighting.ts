@@ -574,6 +574,16 @@ export function lightingChecks(project: Project): CodeCheck[] {
             ? `${where} not used for storage or equipment — no light required`
             : `${where} (${use}): light at the equipment, switched at the access — counted in the estimate`,
     });
+    // M1305.1.3 — getting to equipment in an attic.
+    if (where === 'attic' && use === 'equipment') {
+      out.push({
+        rule: 'Attic equipment access',
+        section: 'M1305.1.3',
+        status: 'info',
+        message:
+          'not placed on the plan — allow an opening at least 20" × 30" (and big enough for the largest piece), a passageway at least 30" high and 22" wide no more than 20 ft long, and a level 30" × 30" service space at the control side',
+      });
+    }
   }
 
   // R314.3 — smoke alarms.

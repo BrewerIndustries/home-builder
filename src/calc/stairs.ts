@@ -1,4 +1,4 @@
-import { projectOnWall, pointAlong, wallLength } from '../model/geometry.ts';
+import { projectOnWall, pointAlong, wallDir, wallLength } from '../model/geometry.ts';
 import type { Fixture, Furniture, Point, Project, Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { HEADER_DEPTH } from './framing.ts';
@@ -9,6 +9,10 @@ import type { CodeCheck } from './irc.ts';
 //            six or more risers, a switch at each floor level — here, one by the
 //            foot on this floor and a matching 3-way counted for the other level.
 //            A landing with a door off it gets a switch too (counted as a 4-way).
+//   R311.7.8 a handrail on at least one side of a flight with four or more
+//            risers, 34"–38" above the nosings (R311.7.8.1);
+//   R312.1.1 guards on open sides more than 30" above the floor below, 34" high
+//            along a stair (R312.1.2), 36" round a floor opening;
 //   R311.7.1 36" clear width; R311.7.2 6' 8" headroom; R311.7.3 a flight rises
 //            151" at most between floor levels or landings; R311.7.5.1 risers
 //            7-3/4" at most; R311.7.5.2 treads 10" at least; R311.7.6 a landing
@@ -144,6 +148,53 @@ export function nearestSwitchWall(project: Project, p: Point): { wall: Wall; p: 
   return best && { wall: best.wall, p: best.p };
 }
 
+/** Handrails and guards, inches. */
+export const HANDRAIL_RISERS = 4;
+export const HANDRAIL_MIN = 34;
+export const HANDRAIL_MAX = 38;
+export const GUARD_DROP = 30;
+export const STAIR_GUARD = 34;
+export const FLOOR_GUARD = 36;
+
+/** The stair's two long sides, walking up from the foot (−x is the left): is each against a wall? */
+export function stairSides(project: Project, f: Furniture): { left: boolean; right: boolean } {
+  const walled = (x: number) => {
+    const [p, q] = [local(f, x, -f.d / 2), local(f, x, f.d / 2)];
+    const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    const u = { x: (q.x - p.x) / len, y: (q.y - p.y) / len };
+    return project.walls.some((w) => {
+      const d = wallDir(w);
+      if (Math.abs(u.x * d.y - u.y * d.x) > 0.02) return false;
+      const [a, b] = [projectOnWall(w, p), projectOnWall(w, q)];
+      // Its face within a couple of inches of the side, along most of the run.
+      if (a.perp - w.thickness / 2 > 2 || b.perp - w.thickness / 2 > 2) return false;
+      const [lo, hi] = [Math.max(0, Math.min(a.along, b.along)), Math.min(wallLength(w), Math.max(a.along, b.along))];
+      return hi - lo >= len * 0.75;
+    });
+  };
+  return { left: walled(-f.w / 2), right: walled(f.w / 2) };
+}
+
+const RAIL_SIDES = { none: [], left: ['left'], right: ['right'], both: ['left', 'right'] } as const;
+export const railSides = (f: Furniture): readonly ('left' | 'right')[] => RAIL_SIDES[f.handrails ?? 'right'];
+
+/**
+ * Handrail and guard runs along a stair: the sloped length of each handrail,
+ * and of a guard on each open side from the first riser more than 30" up
+ * (going down from this floor, the guard is round the floor opening, 36" high).
+ */
+export function stairRailing(project: Project, f: Furniture): { handrail: number; guard: number; open: ('left' | 'right')[]; guardFrom: number } {
+  const g = stairGeometry(project, f);
+  const slope = (run: number, rise: number) => Math.hypot(run, rise);
+  const handrail = g.risers >= HANDRAIL_RISERS ? railSides(f).length * slope(f.d, g.rise) : 0;
+  const sides = stairSides(project, f);
+  const open = (['left', 'right'] as const).filter((s) => !sides[s]);
+  const guardFrom = Math.floor(GUARD_DROP / g.riser) + 1;
+  const runFrom = Math.min(f.d, (guardFrom - 1) * g.tread);
+  const guard = g.rise > GUARD_DROP && f.guards !== false ? open.length * (f.down ? f.d : slope(f.d - runFrom, g.rise - (guardFrom - 1) * g.riser)) : 0;
+  return { handrail, guard, open, guardFrom };
+}
+
 /** R311.7: width, risers, treads, flight rise, landing and headroom, from the stair as drawn. */
 export function stairChecks(project: Project): CodeCheck[] {
   const out: CodeCheck[] = [];
@@ -170,6 +221,27 @@ export function stairChecks(project: Project): CodeCheck[] {
     if (landingAt(f)) {
       const deep = f.w <= g.landingDepth;
       add('Landing size', 'R311.7.6', deep, `landing ${formatFtIn(f.w)} wide × ${formatFtIn(g.landingDepth)} deep (as wide as the stair, 3' 0" deep at least)`);
+    }
+    // Handrails and guards.
+    if (g.risers >= HANDRAIL_RISERS) {
+      const sides = railSides(f);
+      add('Handrail (one side at least, 4+ risers)', 'R311.7.8', sides.length > 0, sides.length ? `handrail on the ${sides.join(' and ')}` : 'no handrail — a flight of four or more risers needs one on a side');
+      if (sides.length) {
+        const h = f.handrailHeight ?? 36;
+        add('Handrail height (34"–38")', 'R311.7.8.1', h >= HANDRAIL_MIN - 0.01 && h <= HANDRAIL_MAX + 0.01, `${formatFtIn(h)} above the nosings`);
+      }
+    }
+    const rail = stairRailing(project, f);
+    if (g.rise > GUARD_DROP && rail.open.length) {
+      const where = rail.open.join(' and ');
+      add(
+        'Guards on open sides (more than 30" up)',
+        'R312.1.1',
+        f.guards !== false,
+        f.down
+          ? `open on the ${where}: a ${FLOOR_GUARD}" guard round the floor opening on this floor (R312.1.2)${f.guards === false ? ' — none shown' : ''}`
+          : `open on the ${where}: a guard from riser ${rail.guardFrom} up, ${STAIR_GUARD}" high along the stair (R312.1.2)${f.guards === false ? ' — none shown' : ''}`,
+      );
     }
     add(
       'Headroom (6\' 8")',

@@ -47,7 +47,7 @@ import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { AngleInput, LengthInput } from './LengthInput.tsx';
 import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
-import { MAX_FLIGHT_RISE, stairGeometry } from '../calc/stairs.ts';
+import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { BAR_HEIGHT, cabinetLayout, cornerCabinets, cornerUppers, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, kneeSpaceFor, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
 import type { Tool } from './PlanCanvas.tsx';
@@ -689,6 +689,28 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                       <input type="checkbox" checked={!!f.landingEntry} onChange={(e) => up({ landingEntry: e.target.checked || undefined })} /> A door opens off the landing (it gets a switch too, E3903.3)
                     </label>
                   )}
+                  <Field label="Handrail" hint="Walking up from the foot. One side at least on a flight of four or more risers (R311.7.8)">
+                    <select value={f.handrails ?? 'right'} onChange={(e) => up({ handrails: e.target.value === 'right' ? undefined : (e.target.value as 'none' | 'left' | 'both') })}>
+                      <option value="right">Right side</option>
+                      <option value="left">Left side</option>
+                      <option value="both">Both sides</option>
+                      <option value="none">None</option>
+                    </select>
+                  </Field>
+                  {(f.handrails ?? 'right') !== 'none' && (
+                    <Field label="Handrail height" hint={`Above the nosings, ${formatFtIn(HANDRAIL_MIN)}–${formatFtIn(HANDRAIL_MAX)} (R311.7.8.1)`}>
+                      <LengthInput value={f.handrailHeight ?? 36} min={24} onChange={(v) => up({ handrailHeight: v === 36 ? undefined : v })} />
+                    </Field>
+                  )}
+                  {(() => {
+                    const rail = stairRailing(project, f);
+                    if (g.rise <= GUARD_DROP || !rail.open.length) return null;
+                    return (
+                      <label className="link-row">
+                        <input type="checkbox" checked={f.guards !== false} onChange={(e) => up({ guards: e.target.checked ? undefined : false })} /> Guards on the open {rail.open.join(' and ')} side{rail.open.length > 1 ? 's' : ''} (R312.1)
+                      </label>
+                    );
+                  })()}
                 </>
               );
             })()}

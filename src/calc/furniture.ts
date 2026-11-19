@@ -6,7 +6,7 @@ import { convexOverlap, counterCorners, counterPoint, CUTOUT_LABEL } from './cou
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
 import { roomAt, VEHICLE_DOOR } from './lighting.ts';
-import { floorToFloor, MAX_RISER } from './stairs.ts';
+import { floorToFloor, MAX_RISER, stairRailing } from './stairs.ts';
 
 // Plan symbols: plumbing fixtures and appliances (priced, code-checked, drawn in
 // 3D) and furniture (drawn, so a plan reads as rooms people use). Each is a
@@ -390,6 +390,12 @@ export function furnitureLines(project: Project): MaterialLine[] {
   if (rodFt) lines.push({ category: 'Lumber', item: 'Closet rod + shelf (allowance)', qty: rodFt, unit: 'lf', basis: 'rod-and-shelf run (double hang counts twice), rounded up to whole feet' });
   if (shelfFt) lines.push({ category: 'Lumber', item: 'Closet shelf (allowance)', qty: shelfFt, unit: 'lf', basis: 'shelf-only run, rounded up to whole feet' });
   add('Linen cabinet / shelving unit (allowance)', count('linen'), 'from the plan');
+  // Stair handrails and guards, by the sloped foot of run.
+  const rails = project.furniture.filter((f) => f.kind === 'stairs').map((f) => stairRailing(project, f));
+  const railFt = Math.ceil(rails.reduce((t, r) => t + r.handrail, 0) / 12);
+  const guardFt = Math.ceil(rails.reduce((t, r) => t + r.guard, 0) / 12);
+  if (railFt) lines.push({ category: 'Lumber', item: 'Stair handrail + brackets (allowance)', qty: railFt, unit: 'lf', basis: 'sloped length of each handrail side, rounded up to whole feet (R311.7.8)' });
+  if (guardFt) lines.push({ category: 'Lumber', item: 'Stair guard / balustrade (allowance)', qty: guardFt, unit: 'lf', basis: 'open sides more than 30" up — sloped along a stair going up, the run round the opening going down (R312.1)' });
   const rough = project.furniture.filter((f) => WET.has(f.kind)).length;
   add('Plumbing rough-in per fixture (allowance)', rough, 'supply, drain and vent per fixture; size runs with a plumber (IRC Chapters 29–31)');
   return lines;
