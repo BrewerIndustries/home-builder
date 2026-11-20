@@ -52,6 +52,8 @@ export type Action =
   | { type: 'addOpening'; opening: Opening }
   | { type: 'updateOpening'; id: string; patch: Partial<Omit<Opening, 'id'>>; transient?: boolean }
   | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>>; transient?: boolean }
+  /** Replace the room list (re-fitting rooms to their walls: outlines, merges, new rooms) as one step. */
+  | { type: 'setRooms'; rooms: Room[] }
   /** Several picked rooms at once (one undo step): a ceiling patch merged into each room's own ceiling, and/or a room patch. */
   | { type: 'updateRooms'; ids: string[]; ceiling?: Partial<Ceiling>; patch?: Partial<Pick<Room, 'type'>> }
   | { type: 'delete'; ids: string[] }
@@ -286,6 +288,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'updateRoom':
       return { ...p, rooms: p.rooms.map((r) => (r.id === action.id ? { ...r, ...action.patch } : r)) };
+
+    case 'setRooms':
+      return { ...p, rooms: action.rooms };
 
     case 'updateRooms': {
       const ids = new Set(action.ids);

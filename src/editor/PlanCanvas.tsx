@@ -34,6 +34,7 @@ import { boxSelect, selItems, toggleItem, type SelItem } from '../model/selectio
 import { GroupOverlay } from './GroupOverlay.tsx';
 import { GroupPanel } from './GroupPanel.tsx';
 import { GroupRooms } from './GroupRooms.tsx';
+import { applyRefit, describeRefit, staleRooms, type RefitResult } from '../calc/refit.ts';
 import { useGroupEdit } from './useGroupEdit.ts';
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
@@ -1022,6 +1023,15 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
     if (existing) {
       setSelection({ kind: 'room', id: existing.id });
       onMessage?.(`That's already ${existing.name}.`);
+      return;
+    }
+    // A room whose walls changed and that now traces to this area: re-fit it rather than add a second room.
+    const stale = staleRooms(project).find((f): f is RefitResult => !('error' in f) && samePolygon(f.points, points));
+    if (stale) {
+      dispatch({ type: 'setRooms', rooms: applyRefit(project, stale).rooms });
+      setSelection({ kind: 'room', id: stale.roomId });
+      const name = project.rooms.find((r) => r.id === stale.roomId)?.name || 'the room';
+      onMessage?.(`Re-fitted ${name} to the walls — ${describeRefit(stale)}.`);
       return;
     }
     const id = uid('r');

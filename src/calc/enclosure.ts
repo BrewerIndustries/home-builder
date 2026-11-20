@@ -139,8 +139,11 @@ export function enclosedArea(walls: Wall[], p: Point): Point[] | null {
     best = f;
     bestArea = area;
   }
-  if (!best) return null;
-  // Start at the top-left corner and wind one way, so rooms read the same however the walls were drawn.
+  return best ? normaliseLoop(best) : null;
+}
+
+/** Start at the top-left corner and wind one way, so rooms read the same however the walls were drawn. */
+export function normaliseLoop(best: Point[]): Point[] {
   let s = 0;
   for (let i = 0; i < best.length; i++) if (best[i].y < best[s].y - TOL || (Math.abs(best[i].y - best[s].y) <= TOL && best[i].x < best[s].x)) s = i;
   const pts = [...best.slice(s), ...best.slice(0, s)];

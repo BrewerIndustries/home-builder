@@ -1,5 +1,6 @@
 import { useState, type Dispatch, type ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
+import { RefitAllField, RoomRefitField } from './RoomRefit.tsx';
 import { clearNarrowest } from '../calc/roomShape.ts';
 import { BED_SIZES, FURNITURE, FURNITURE_KINDS, furnitureChecks, furnitureRoom, placeFurniture } from '../calc/furniture.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
@@ -822,6 +823,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             Guess name &amp; use
           </button>
         </div>
+        <RoomRefitField project={project} dispatch={dispatch} room={r} />
         <Field
           label="Turn the room"
           hint={`Its walls and everything in it turn about ${r.pivot ? 'its pivot (the crosshair; drag it to a corner or wall end)' : 'its centre (or drag the crosshair to pick another point)'}; walls attached outside stretch to follow. Anticlockwise is positive. Or drag the round handle above the room`}
@@ -928,6 +930,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Stat label="Lights / alarms" value={`${project.fixtures.filter((f) => isLight(f.kind)).length} / ${project.fixtures.filter((f) => !isLight(f.kind)).length}`} />
       </div>
 
+      <RefitAllField project={project} dispatch={dispatch} />
       <h4>Wall defaults</h4>
       <Field label="Exterior studs">
         <select value={fr.exteriorStud} onChange={(e) => dispatch({ type: 'setFraming', patch: { exteriorStud: e.target.value as LumberSize } })}>
