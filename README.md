@@ -209,7 +209,7 @@ The checks cover the following:
   - Projects → Share on an account project creates a read-only link (`?share=…`). Anyone with the link can view, print, download or "Save a copy" without signing in. D1 keeps only a hash of the token.
   - The Projects dialog shows a small thumbnail of each plan.
   - Account projects are cached on the device and open offline. Edits made offline sync when you're back online: the open project goes through the conflict banner, the others are last-write-wins with a notice.
-  - These need API migration 0002 on dev (`npm run migrate:dev`, then `npm run deploy:dev`).
+  - Live on the dev API since 2026-11-20 (migration 0002). Prod needs `npm run migrate:prod` and `npm run deploy` with the first prod release.
 
 - **Storeys v1.**
   - The floor switcher at the top-left of the plan adds floors above or a basement, renames them and sets floor-to-floor height.

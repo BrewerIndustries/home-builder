@@ -100,6 +100,6 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Create `main` (prod) via the first approved dev → main PR; prod URL shows a placeholder until then
 - [x] Invite-only accounts + multiple projects (device library + account sync), dev API live 2026-11-01
 - [ ] Prod API: migrate prod D1, set SESSION_SECRET, deploy the Worker (before/with the first main promotion)
-- [x] Accounts follow-ups: read-only share links (`?share=`), plan thumbnails, account projects cached for offline with sync on reconnect — dev API needs `migrate:dev` (0002) + `deploy:dev`
+- [x] Accounts follow-ups: read-only share links (`?share=`), plan thumbnails, account projects cached for offline with sync on reconnect — live on the dev API 2026-11-20 (migration 0002)
 - [ ] Password reset by email (needs an email provider: Cloudflare Email like Contact Capture?)
 - [ ] Code-edition picker (2018 / 2021 / 2024) once a rule actually differs between editions
