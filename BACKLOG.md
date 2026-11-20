@@ -36,6 +36,10 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Wall bracing (R602.10)
 - [x] Multiple floors (ghosted floor below) + stairs tool checked against R311.7 — done as Storeys v1 + Lighting v4–v6
 
+- [x] Glass walls + wet rooms (2026-11-20): Glass wall type (not framed, priced by glass, glass doors); wet-room option on a room / area (tile, membrane, cement board for drywall, linear / centre drain); R307.2, R308.4.5, NEC 406.9(C) checks
+- [ ] Wet rooms v2: tile shown in 3D; drain placed / dragged on the plan (linear drain along a chosen wall); curb vs curbless threshold; niches and benches; tile size picker
+- [ ] Glass walls v2: fixed panel + door split drawn on the plan; hinge side; returns / header bar options; glass height check vs the shower head
+
 ## Electrical
 
 - [x] **Switches, lighting outlets, switch-to-light links (E3903)** — Light / Switch tools, dashed switch legs, auto 3-way pairs in halls and garages, single-pole / 3-way / 4-way counts in the estimate.

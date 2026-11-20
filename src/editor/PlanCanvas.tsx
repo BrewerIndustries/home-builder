@@ -23,7 +23,7 @@ import { cabinetLayout, counterDir, newCounters, upperLayout } from '../calc/cou
 import { grabJoint, moveJoint, type CabinetJoint } from '../calc/cabinets.ts';
 import { newFurniture, placeFurniture } from '../calc/furniture.ts';
 import { defaultWallThickness } from '../model/assembly.ts';
-import { uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
+import { GLASS_HEIGHT, GLASS_THICKNESS, uid, type Counter, type Fixture, type FurnitureKind, type WallSwitch, type Opening, type Outlet, type Point, type Project, type DimAnchor, type UserDim, type Wall, type WallKind } from '../model/types.ts';
 import { CounterGlyph, FurnitureGlyph, OpeningGlyph, PlanDrawing } from './PlanDrawing.tsx';
 import { straightenUnderlay } from '../model/imaging.ts';
 import { formatFtIn, parseFtIn } from '../model/units.ts';
@@ -87,7 +87,7 @@ interface Props {
   dispatch: Dispatch<Action>;
   tool: Tool;
   setTool(t: Tool): void;
-  wallKind: WallKind;
+  wallKind: WallKind | 'glass';
   /** What the Fixture tool places. */
   furnitureKind: FurnitureKind;
   selection: Hit | null;
@@ -269,9 +269,12 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   };
 
   const { framing } = project;
-  const newWallThickness = defaultWallThickness(project, wallKind);
+  const newWallThickness = wallKind === 'glass' ? GLASS_THICKNESS : defaultWallThickness(project, wallKind);
   const makeWall = useCallback(
-    (a: Point, b: Point): Wall => ({ id: uid('w'), a, b, kind: wallKind, thickness: newWallThickness, height: framing.wallHeight }),
+    (a: Point, b: Point): Wall =>
+      wallKind === 'glass'
+        ? { id: uid('w'), a, b, kind: 'interior', glass: true, thickness: GLASS_THICKNESS, height: Math.min(GLASS_HEIGHT, framing.wallHeight) }
+        : { id: uid('w'), a, b, kind: wallKind, thickness: newWallThickness, height: framing.wallHeight },
     [wallKind, newWallThickness, framing.wallHeight],
   );
 

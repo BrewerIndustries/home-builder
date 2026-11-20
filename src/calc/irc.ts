@@ -17,6 +17,7 @@ import { kitchenChecks } from './kitchen.ts';
 import { basinReach, basinSpans, furnitureChecks, roomLavatories } from './furniture.ts';
 import { handrailNotes, stairChecks } from './stairs.ts';
 import { accessChecks } from './access.ts';
+import { wetChecks } from './wetRoom.ts';
 
 // International Residential Code plan checks. Each rule cites its IRC section and
 // encodes the numeric requirement only — the code text itself is ICC's and isn't
@@ -430,6 +431,7 @@ export function ircChecks(project: Project): CodeCheck[] {
   for (const c of stairChecks(project)) add(c);
   for (const c of handrailNotes(project)) add(c);
   for (const c of accessChecks(project)) add(c);
+  for (const c of wetChecks(project)) add(c);
 
   return checks;
 }

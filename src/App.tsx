@@ -60,7 +60,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('plan');
   const [tool, setTool] = useState<Tool>('select');
   const [furnitureKind, setFurnitureKind] = useState<FurnitureKind>('toilet');
-  const [wallKind, setWallKind] = useState<WallKind>(project.walls.length ? 'interior' : 'exterior');
+  const [wallKind, setWallKind] = useState<WallKind | 'glass'>(project.walls.length ? 'interior' : 'exterior');
   const [selection, setSelection] = useState<Hit | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -335,6 +335,9 @@ export function App() {
               </button>
               <button className={wallKind === 'interior' ? 'active' : ''} onClick={() => setWallKind('interior')} title="New walls and rooms are interior">
                 Int
+              </button>
+              <button className={wallKind === 'glass' ? 'active' : ''} onClick={() => setWallKind('glass')} title="New walls are glass (a shower screen or wet-room enclosure): not framed, priced by the glass">
+                Glass
               </button>
             </div>
             <div className="sep" />

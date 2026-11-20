@@ -3,7 +3,7 @@ import { regionEdges } from './regions.ts';
 import { autoOutdoor } from './outdoor.ts';
 import { lavatoryOutlets, roomLavatories } from './furniture.ts';
 import { counterPositions, counterSpans, roomCounters, type CounterSpan } from './counters.ts';
-import { uid, type Outlet, type OutletKind, type Point, type Project, type Room, type RoomType } from '../model/types.ts';
+import { framedWalls, uid, type Outlet, type OutletKind, type Point, type Project, type Room, type RoomType } from '../model/types.ts';
 
 // Receptacle layout per IRC Chapter 39 (which mirrors NEC 210.52):
 //   E3901.2  general rooms — no point along the floor line of any wall space more
@@ -129,7 +129,7 @@ export function autoOutlets(project: Project): Outlet[] {
 /** Put a point onto the wall under it, on the face toward `inside`. */
 export function attach(project: Project, p: Point, inside: Point): Pick<Outlet, 'wallId' | 'offset' | 'side'> | null {
   let best: { wallId: string; along: number; perp: number; side: 1 | -1 } | null = null;
-  for (const w of project.walls) {
+  for (const w of framedWalls(project)) {
     const { along, perp } = projectOnWall(w, p);
     if (perp > w.thickness / 2 + 1 || (best && perp >= best.perp)) continue;
     const n = wallNormal(w);

@@ -1,6 +1,7 @@
 import { wallLength } from '../model/geometry.ts';
 import { assemblyFor, inchText } from '../model/assembly.ts';
-import type { Project, Wall, WallLayer, WallLayerKind } from '../model/types.ts';
+import { framedWalls, type Project, type Wall, type WallLayer, type WallLayerKind } from '../model/types.ts';
+import { tiledFaceByWall } from './wetRoom.ts';
 import type { MaterialLine } from './materials.ts';
 
 // Sheet goods and cladding from the wall assemblies: every drywall, sheathing,
@@ -32,15 +33,21 @@ const key = (l: WallLayer) => `${l.kind}|${l.thickness}|${l.name ?? ''}`;
 /** Area per distinct layer product across all walls (studs and "other" layers aren't bought by area). */
 export function layerTakeoff(project: Project): LayerTakeoff[] {
   const out = new Map<string, LayerTakeoff>();
-  for (const w of project.walls) {
+  // Wet-room walls are tiled over cement board: that face's drywall comes off (wetRoom.ts).
+  const tiled = tiledFaceByWall(project);
+  for (const w of framedWalls(project)) {
     const net = netFace(project, w);
     if (!net) continue;
+    let wet = tiled.get(w.id) ?? 0;
     for (const l of assemblyFor(project, w)) {
       if (l.kind === 'stud' || l.kind === 'other' || !(l.thickness > 0)) continue;
       const k = key(l);
       const cur = out.get(k) ?? { kind: l.kind, thickness: l.thickness, name: l.name, sqft: 0, exteriorSqft: 0 };
-      cur.sqft += net;
-      if (w.kind === 'exterior') cur.exteriorSqft += net;
+      // The first drywall layer stands for the wet-room face (one face per drywall layer).
+      const less = l.kind === 'drywall' ? Math.min(wet, net) : 0;
+      if (less) wet = 0;
+      cur.sqft += net - less;
+      if (w.kind === 'exterior') cur.exteriorSqft += net - less;
       out.set(k, cur);
     }
   }

@@ -3,6 +3,7 @@ import type { MaterialLine } from './materials.ts';
 import { IRRIGATION_SAMPLE } from './irrigation.ts';
 import { DEMO_SAMPLE } from './demolition.ts';
 import { FLOOR_SAMPLE } from './floorPrices.ts';
+import { WET_SAMPLE } from './wetRoom.ts';
 
 // Turns the materials list into money. Prices are per the line's unit and keyed
 // by the line's item text, so a price the user types sticks to that item across
@@ -29,6 +30,7 @@ const SAMPLE: [RegExp, number][] = [
   ...IRRIGATION_SAMPLE,
   ...DEMO_SAMPLE,
   ...FLOOR_SAMPLE,
+  ...WET_SAMPLE,
   [/^2x4 stud, 92/, 4.5],
   [/^2x6 stud, 92/, 7.5],
   [/^2x8 stud, 92/, 11],

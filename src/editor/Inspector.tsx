@@ -1,6 +1,8 @@
 import { useState, type Dispatch, type ReactNode } from 'react';
 import { ceilingInfo } from '../calc/ceilings.ts';
 import { RefitAllField, RoomRefitField } from './RoomRefit.tsx';
+import { WetRoomField } from './WetRoomField.tsx';
+import { glassPanelArea } from '../calc/wetRoom.ts';
 import { clearNarrowest } from '../calc/roomShape.ts';
 import { BED_SIZES, FURNITURE, FURNITURE_KINDS, furnitureChecks, furnitureRoom, placeFurniture } from '../calc/furniture.ts';
 import { guessRoom } from '../calc/roomGuess.ts';
@@ -46,6 +48,7 @@ import {
   type WindowStyle,
   type DoorOperation,
   type FrontSide,
+  GLASS_HEIGHT,
 } from '../model/types.ts';
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -131,12 +134,27 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
       <aside className="inspector">
         <h3>Wall W{project.walls.indexOf(w) + 1}</h3>
         <Field label="Type">
-          <select value={w.kind} onChange={(e) => dispatch({ type: 'updateWall', id: w.id, patch: { kind: e.target.value as typeof w.kind } })}>
+          <select
+            value={w.glass ? 'glass' : w.kind}
+            onChange={(e) =>
+              dispatch({
+                type: 'updateWall',
+                id: w.id,
+                patch: e.target.value === 'glass' ? { kind: 'interior', glass: true, height: Math.min(GLASS_HEIGHT, w.height) } : { kind: e.target.value as typeof w.kind, glass: undefined },
+              })
+            }
+          >
             <option value="exterior">Exterior (bearing)</option>
             <option value="interior">Interior (partition)</option>
+            <option value="glass">Glass (shower screen)</option>
           </select>
         </Field>
-        <Field label="Studs" hint={`Finished thickness ${formatFtIn(w.thickness)}`}>
+        {w.glass && (
+          <p className="muted small">
+            3/8" tempered glass: not framed or finished, priced by its glass area ({Math.round(glassPanelArea(project, w))} sq ft). A door in it is a glass door. Safety glazing is required round tubs and showers (R308.4.5).
+          </p>
+        )}
+        {!w.glass && <Field label="Studs" hint={`Finished thickness ${formatFtIn(w.thickness)}`}>
           <select
             value={w.stud ?? ''}
             onChange={(e) => dispatch({ type: 'updateWall', id: w.id, patch: { stud: (e.target.value || undefined) as LumberSize | undefined } })}
@@ -148,7 +166,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
               </option>
             ))}
           </select>
-        </Field>
+        </Field>}
         <Field label="Length" hint={`Centreline. Faces: ${outer ? `outside ${faceText(outer)}, inside ${faceText(-outer as 1 | -1)}` : `${faceText(1)} / ${faceText(-1)}`}`}>
           <LengthInput value={wallLength(w)} min={1} onChange={(v) => dispatch({ type: 'setWallLength', id: w.id, length: v })} />
         </Field>
@@ -175,11 +193,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </button>
           </div>
         </Field>
-        <Field label="Wall height" hint="Plate to plate. 97-1/8&quot; = standard 8' wall">
+        <Field label={w.glass ? 'Glass height' : 'Wall height'} hint={w.glass ? "Floor to the top of the glass; 6' 6\" is common" : "Plate to plate. 97-1/8&quot; = standard 8' wall"}>
           <LengthInput value={w.height} min={24} onChange={(v) => dispatch({ type: 'updateWall', id: w.id, patch: { height: v } })} />
         </Field>
-        <BearingFootingField project={project} wall={w} dispatch={dispatch} />
-        <WallLayersPanel project={project} wall={w} dispatch={dispatch} />
+        {!w.glass && <BearingFootingField project={project} wall={w} dispatch={dispatch} />}
+        {!w.glass && <WallLayersPanel project={project} wall={w} dispatch={dispatch} />}
         <div className="stat-grid">
           <Stat label="Studs" value={studCount(f)} />
           <Stat label="Stud cut" value={formatFtIn(f.studLength)} />
@@ -824,6 +842,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </button>
         </div>
         <RoomRefitField project={project} dispatch={dispatch} room={r} />
+        <WetRoomField project={project} dispatch={dispatch} room={r} />
         <Field
           label="Turn the room"
           hint={`Its walls and everything in it turn about ${r.pivot ? 'its pivot (the crosshair; drag it to a corner or wall end)' : 'its centre (or drag the crosshair to pick another point)'}; walls attached outside stretch to follow. Anticlockwise is positive. Or drag the round handle above the room`}

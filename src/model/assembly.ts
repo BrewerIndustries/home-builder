@@ -1,4 +1,4 @@
-import { emptyProject, STUD_DEPTH, studFor, type LumberSize, type Project, type Wall, type WallAssemblies, type WallKind, type WallLayer, type WallLayerKind } from './types.ts';
+import { emptyProject, GLASS_THICKNESS, STUD_DEPTH, studFor, type LumberSize, type Project, type Wall, type WallAssemblies, type WallKind, type WallLayer, type WallLayerKind } from './types.ts';
 
 // Wall assemblies: each wall is an ordered stack of layers (drywall, the stud
 // framing, sheathing, siding…) and its drawn thickness is their sum. The plan
@@ -60,7 +60,8 @@ export function layersThickness(layers: WallLayer[], stud: LumberSize): number {
 }
 
 /** Total finished thickness of a wall from its layers. */
-export function assemblyThickness(project: Project, wall: Pick<Wall, 'kind' | 'assembly' | 'stud'>): number {
+export function assemblyThickness(project: Project, wall: Pick<Wall, 'kind' | 'assembly' | 'stud' | 'glass'>): number {
+  if (wall.glass) return GLASS_THICKNESS;
   return layersThickness(assemblyFor(project, wall), studFor(wall as Wall, project.framing));
 }
 

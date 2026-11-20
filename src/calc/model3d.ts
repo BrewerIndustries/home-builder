@@ -57,6 +57,12 @@ export function wallBoxes(project: Project): Box[] {
     if (len < 0.5) continue;
     const d = wallDir(w);
     const rotY = -Math.atan2(d.y, d.x);
+    if (w.glass) {
+      // A glass screen: one pane the wall's length (its door is glass too).
+      const mid = pointAlong(w, len / 2);
+      boxes.push({ kind: 'glass', c: [mid.x, w.height / 2, mid.y], size: [len, w.height, w.thickness], rotY });
+      continue;
+    }
     const kind = w.kind === 'exterior' ? 'wall-ext' : 'wall-int';
     const piece = (from: number, to: number, y0: number, y1: number) => {
       if (to - from < 0.1 || y1 - y0 < 0.1) return;

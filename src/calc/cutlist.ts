@@ -19,7 +19,7 @@
 import { floorSpec, storeyFloorLayout } from './floor.ts';
 import { frameWall, PLATE_THICKNESS, type MemberKind, type WallFraming } from './framing.ts';
 import { roofCutMembers } from './roof.ts';
-import type { Project } from '../model/types.ts';
+import { framedWalls, type Project } from '../model/types.ts';
 
 /** Stock lengths, inches (8' to 16' in 2' steps; 20' for a long header). */
 export const STOCK = [96, 120, 144, 168, 192];
@@ -158,7 +158,7 @@ export function plateStuds(f: WallFraming): number[] {
 }
 
 /** Every piece cut from stock, by wall (W1, W2… in plan order). */
-export function cutPieces(project: Project, walls: WallFraming[] = project.walls.map((w) => frameWall(w, project))): Piece[] {
+export function cutPieces(project: Project, walls: WallFraming[] = framedWalls(project).map((w) => frameWall(w, project))): Piece[] {
   const out: Piece[] = [];
   walls.forEach((f, i) => {
     const tag = `W${i + 1}`;

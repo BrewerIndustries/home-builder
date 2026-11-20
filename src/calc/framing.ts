@@ -1,6 +1,6 @@
 import { samePoint, projectOnWall, wallLength } from '../model/geometry.ts';
 import { barnBlocking } from './barn.ts';
-import { STUD_DEPTH, studFor, type LumberSize, type Opening, type Project, type Wall } from '../model/types.ts';
+import { framedWalls, STUD_DEPTH, studFor, type LumberSize, type Opening, type Project, type Wall } from '../model/types.ts';
 
 // Wall framing takeoff, derived from the plan. Conventional platform framing:
 // single bottom plate, double top plate, studs on a fixed layout from wall.a,
@@ -219,12 +219,12 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
   // first wall there (by id) so each corner is counted once. Tees: a wall that
   // dies into the middle of this one needs ladder backing — 2 studs here.
   [wall.a, wall.b].forEach((end, e) => {
-    const atVertex = project.walls.filter((w) => samePoint(w.a, end) || samePoint(w.b, end));
+    const atVertex = framedWalls(project).filter((w) => samePoint(w.a, end) || samePoint(w.b, end));
     if (atVertex.length > 1 && [...atVertex].sort((p, q) => p.id.localeCompare(q.id))[0].id === wall.id) {
       for (let k = 1; k < atVertex.length; k++) stud('corner', e === 0 ? T * (k + 0.5) : length - T * (k + 0.5));
     }
   });
-  for (const other of project.walls) {
+  for (const other of framedWalls(project)) {
     if (other.id === wall.id) continue;
     for (const end of [other.a, other.b]) {
       const { along, perp } = projectOnWall(wall, end);
@@ -264,7 +264,7 @@ export function frameWall(wall: Wall, project: Project): WallFraming {
 }
 
 export function framingTakeoff(project: Project): FramingTakeoff {
-  const walls = project.walls.map((w) => frameWall(w, project));
+  const walls = framedWalls(project).map((w) => frameWall(w, project));
   const byStudSize: FramingTakeoff['totals']['byStudSize'] = {};
   const headerLength: FramingTakeoff['totals']['headerLength'] = {};
   let studs = 0;

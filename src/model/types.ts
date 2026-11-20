@@ -32,6 +32,30 @@ export interface Wall {
   height: number;
   /** Its own layers (see WallLayer); unset = the project default for its kind. */
   assembly?: WallLayer[];
+  /**
+   * A glass partition (a shower screen or wet-room enclosure): it closes rooms
+   * like any wall, but isn't framed or finished — no studs, plates or drywall.
+   * It's priced by its glass area, and its doors are glass doors.
+   */
+  glass?: boolean;
+}
+
+/** Drawn thickness of a glass wall (3/8" tempered glass in a shoe / channel). */
+export const GLASS_THICKNESS = 0.75;
+/** Height given to new glass walls: a common frameless shower-screen height (6' 6"). */
+export const GLASS_HEIGHT = 78;
+
+/** The walls that are framed: everything but glass partitions. */
+export const framedWalls = <T extends { walls: Wall[] }>(p: T): Wall[] => p.walls.filter((w) => !w.glass);
+
+/** How a wet room drains: a linear (trench) drain or a centre (point) drain. */
+export type WetDrain = 'linear' | 'centre';
+
+/** A wet room: tiled floor and walls over a waterproofing membrane, draining to a floor drain. */
+export interface WetRoom {
+  /** Wall tile height above the floor; unset = full height (to the top of each wall). */
+  tileHeight?: number;
+  drain: WetDrain;
 }
 
 /** One layer of a wall assembly; `stud` is the framing, sized by the wall's stud (its thickness is ignored). */
@@ -310,6 +334,8 @@ export interface Room {
   pivot?: Point;
   /** Marked out with the Area tool: an outline with no walls of its own (an open-plan zone). Never re-fitted to walls. */
   area?: boolean;
+  /** A wet room (tiled, waterproofed, floor drain); see calc/wetRoom.ts. */
+  wet?: WetRoom;
 }
 
 export interface FramingSettings {

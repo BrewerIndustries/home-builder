@@ -16,12 +16,13 @@ import { furnitureLines } from './furniture.ts';
 import { blockingLines } from './barn.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 import { assemblyLines, drywallWallArea } from './assemblyTakeoff.ts';
+import { wetRoomLines } from './wetRoom.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
 
 export interface MaterialLine {
-  category: 'Lumber' | 'Sheathing' | 'Siding' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing' | 'Demolition';
+  category: 'Lumber' | 'Sheathing' | 'Siding' | 'Drywall' | 'Insulation & wrap' | 'Electrical' | 'Openings' | 'Foundation' | 'Floor' | 'Roof' | 'Landscape' | 'Kitchen' | 'Plumbing' | 'Tile & glass' | 'Demolition';
   item: string;
   qty: number;
   unit: string;
@@ -209,17 +210,20 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   lines.push(...lightingLines(project));
   lines.push(...counterLines(project));
   lines.push(...furnitureLines(project));
+  lines.push(...wetRoomLines(project));
 
-  // Door and window schedule, by kind and nominal size (e.g. 3068 = 3'0" × 6'8").
+  // Door and window schedule (glass doors in glass walls are priced with the glass, wetRoom.ts), by kind and nominal size (e.g. 3068 = 3'0" × 6'8").
   const units = new Map<string, number>();
+  const glassWalls = new Set(project.walls.filter((w) => w.glass).map((w) => w.id));
   for (const o of project.openings) {
+    if (glassWalls.has(o.wallId)) continue;
     const key = `${o.kind === 'door' ? 'Door' : 'Window'} ${sizeCode(o.width)}${sizeCode(o.height)}`;
     units.set(key, (units.get(key) ?? 0) + 1);
   }
   for (const [item, qty] of [...units].sort()) {
     lines.push({ category: 'Openings', item, qty, unit: 'ea', basis: 'from the plan' });
   }
-  const ops = (op: string) => project.openings.filter((o) => o.kind === 'door' && o.operation === op).length;
+  const ops = (op: string) => project.openings.filter((o) => o.kind === 'door' && o.operation === op && !glassWalls.has(o.wallId)).length;
   if (ops('pocket')) lines.push({ category: 'Openings', item: 'Pocket door frame kit (allowance)', qty: ops('pocket'), unit: 'ea', basis: 'one per pocket door; the pocket needs a door width of clear wall beside the opening' });
   if (ops('bifold')) lines.push({ category: 'Openings', item: 'Bifold door hardware (allowance)', qty: ops('bifold'), unit: 'ea', basis: 'track and pivots, one set per bifold door' });
   if (ops('bypass')) lines.push({ category: 'Openings', item: 'Bypass door track + hardware (allowance)', qty: ops('bypass'), unit: 'ea', basis: 'overhead track, rollers and floor guide, one set per bypass door' });

@@ -5,7 +5,7 @@ import { pointAlong, polygonCentroid, wallDir, wallNormal } from '../model/geome
 import { roomCenter, switchWays } from '../calc/lighting.ts';
 import { cabinetLayout, cornerUppers, counterCorners, counterLength, counterPoint, islandReceptacles, seatingDepth, seats, UPPER_DEPTH, upperSpans } from '../calc/counters.ts';
 import { angleBetween, openingChains, partitionStrings, runningLabels, stringStyle, type Keepout, outerCorners, roomClearSizes, wallDimLabels, type DimLabel } from '../calc/faces.ts';
-import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, UserDim, Wall } from '../model/types.ts';
+import type { Counter, Fixture, Furniture, Opening, Outlet, Point, Project, Room, UserDim, Wall } from '../model/types.ts';
 import { formatFtIn, formatSqFt } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
 import { CabinetGlyphs } from './CabinetGlyphs.tsx';
@@ -39,11 +39,17 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
   const labels = project.rooms.map((r) => ({ room: r, lines: roomLabelLines(project, r, px, wallDims, outlets) }));
   return (
     <g className="plan-drawing">
+      <defs>
+        <pattern id="wet-tile" width={12} height={12} patternUnits="userSpaceOnUse">
+          <path d="M12 0H0V12" fill="none" className="wet-tile-line" strokeWidth={px(0.75)} />
+        </pattern>
+      </defs>
       {labels.map(({ room: r, lines }) => {
         const sel = selection?.kind === 'room' && selection.id === r.id;
         return (
           <g key={r.id} className={phaseClass(project, r.id)}>
             <polygon points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill={sel ? 'var(--room-sel)' : 'var(--room)'} stroke="none" />
+            {r.wet && <WetRoomGlyph room={r} px={px} />}
             {r.area && <polygon className="room-area-edge" points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" strokeWidth={px(1.5)} strokeDasharray={`${px(8)} ${px(5)}`} />}
             {lines.map((l, i) => (
               <text key={i} x={l.x} y={l.y} className={l.cls} fontSize={l.size} textAnchor="middle" dominantBaseline={l.middle ? 'middle' : undefined}>
@@ -129,8 +135,8 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
             x2={w.b.x}
             y2={w.b.y}
             strokeWidth={w.thickness}
-            strokeLinecap="square"
-            stroke={sel ? 'var(--accent)' : w.kind === 'exterior' ? 'var(--wall-ext)' : 'var(--wall-int)'}
+            strokeLinecap={w.glass ? 'butt' : 'square'}
+            stroke={sel ? 'var(--accent)' : w.glass ? 'var(--glass-wall)' : w.kind === 'exterior' ? 'var(--wall-ext)' : 'var(--wall-int)'}
           />
         );
       })}
@@ -1095,6 +1101,30 @@ export function CounterGlyph({ c, selected, px, seatAt = [] }: { c: Counter; sel
           </g>
         );
       })}
+    </g>
+  );
+}
+
+/** A wet room: a 12" tile grid over the floor and its drain (a linear bar along the longest side's direction, or a round centre drain). */
+function WetRoomGlyph({ room, px }: { room: Room; px: (n: number) => number }) {
+  const pts = room.points.map((p) => `${p.x},${p.y}`).join(' ');
+  const c = polygonCentroid(room.points);
+  let long = { x: 1, y: 0 };
+  let best = 0;
+  room.points.forEach((a, i) => {
+    const b = room.points[(i + 1) % room.points.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > best) [best, long] = [len, { x: (b.x - a.x) / len, y: (b.y - a.y) / len }];
+  });
+  const half = Math.min(18, best / 4);
+  return (
+    <g className="wet-room">
+      <polygon points={pts} fill="url(#wet-tile)" stroke="none" />
+      {room.wet!.drain === 'linear' ? (
+        <line x1={c.x - long.x * half} y1={c.y - long.y * half} x2={c.x + long.x * half} y2={c.y + long.y * half} strokeWidth={2.5} className="wet-drain" />
+      ) : (
+        <circle cx={c.x} cy={c.y} r={2.5} strokeWidth={px(1.5)} className="wet-drain" />
+      )}
     </g>
   );
 }

@@ -12,6 +12,7 @@
   --grid-major: #d7dce4;
   --wall-ext: #2b3240;
   --wall-int: #6b7384;
+  --glass-wall: #5fa8d3;
   --opening: #2b3240;
   --outlet: #b45309;
   --outlet-gfci: #fde7c7;
@@ -55,6 +56,7 @@
     --grid-major: #262c37;
     --wall-ext: #d6dbe4;
     --wall-int: #8d96a7;
+    --glass-wall: #7cc4ec;
     --opening: #d6dbe4;
     --outlet: #f59e0b;
     --outlet-gfci: #4a3410;
@@ -1289,6 +1291,7 @@ tr.no-pick {
     --canvas: #fff;
     --wall-ext: #000;
     --wall-int: #333;
+    --glass-wall: #555;
     --opening: #000;
     --outlet: #000;
     --outlet-gfci: #ddd;
@@ -1499,3 +1502,6 @@ fieldset.read-only { border: none; margin: 0; padding: 0; min-width: 0; }
 .room-area-edge { stroke: var(--muted, #8a93a3); }
 .resize-handles polygon { stroke: var(--accent, #4f8cff); }
 .resize-handles rect { fill: var(--panel, #fff); stroke: var(--accent, #4f8cff); }
+
+.wet-tile-line { stroke: var(--glass-wall, #5fa8d3); opacity: 0.35; }
+.wet-drain { stroke: var(--glass-wall, #5fa8d3); fill: none; }
