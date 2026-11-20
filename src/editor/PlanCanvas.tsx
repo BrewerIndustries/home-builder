@@ -34,10 +34,11 @@ import { boxSelect, selItems, toggleItem, type SelItem } from '../model/selectio
 import { GroupOverlay } from './GroupOverlay.tsx';
 import { GroupPanel } from './GroupPanel.tsx';
 import { GroupRooms } from './GroupRooms.tsx';
+import { useAreaTool } from './useAreaTool.tsx';
 import { applyRefit, describeRefit, staleRooms, type RefitResult } from '../calc/refit.ts';
 import { useGroupEdit } from './useGroupEdit.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
+export type Tool = 'select' | 'wall' | 'room' | 'area' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
 
 interface View {
   /** Screen pixels per inch. */
@@ -146,6 +147,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   viewRef.current = view;
   const [boxDrag, setBoxDrag] = useState<{ a: Point; b: Point } | null>(null);
   const grp = useGroupEdit({ project, dispatch, selection, setSelection, active: tool === 'select', pointer: cursor?.p ?? null, onMessage });
+  const area = useAreaTool({ project, dispatch, active: tool === 'area', setSelection, onMessage, onCreated: onRoomCreated });
 
   const toWorld = useCallback((sx: number, sy: number): Point => {
     const r = svgRef.current!.getBoundingClientRect();
@@ -595,6 +597,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         else placeWall(p);
         return;
       }
+      case 'area':
+        area.down(snap(raw).p);
+        return;
       case 'room': {
         const { p } = snap(raw);
         drag.current = { kind: 'room', start: p, end: p, raw };
@@ -707,6 +712,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     const raw = toWorld(e.clientX, e.clientY);
+    if (tool === 'area') area.move(snap(raw).p);
     const d = drag.current;
     if (d?.kind === 'pan') {
       setView({ ...d.view, ox: d.view.ox + e.clientX - d.sx, oy: d.view.oy + e.clientY - d.sy });
@@ -930,6 +936,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   }
 
   function onPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
+    if (tool === 'area' && e) area.up(snap(toWorld(e.clientX, e.clientY)).p);
     const d = drag.current;
     drag.current = null;
     setMoveText(null);
@@ -1110,6 +1117,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         onPointerLeave={() => !drag.current && setCursor(null)}
         onDoubleClick={(e) => {
           if (tool === 'wall') setChain(null);
+          if (tool === 'area') area.finish();
           if (tool !== 'select') return;
           // Double-click a dragged dimension string to put it back.
           const dimEl = (e.target as Element).closest?.('[data-dim]');
@@ -1206,6 +1214,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             <PreviewSegment a={chain.start} b={cursor.p} thickness={newWallThickness} px={px} />
           )}
           {roomDrag && <PreviewRect a={roomDrag.a} b={roomDrag.b} px={px} />}
+          {tool === 'area' && area.svg(px)}
           {counterDraft.map((c) => (
             <CounterGlyph key={c.id} c={c} selected px={px} />
           ))}
@@ -1320,7 +1329,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         </GroupPanel>
       )}
 
-      <div className="hint">{hintFor(tool, !!chain)}</div>
+      <div className="hint">{tool === 'area' ? area.hint : hintFor(tool, !!chain)}</div>
     </div>
   );
 }
@@ -1331,6 +1340,8 @@ function hintFor(tool: Tool, drawing: boolean): string {
       return 'Click to select · drag empty space to box-pick (Shift-click / Shift-drag adds or drops; Space-drag or scroll pans) · drag any picked item to move them together · ⌘C / ⌘V copy and paste a room with its contents · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
+    case 'area':
+      return 'Drag a rectangle, or click corners, to mark out a room without walls';
     case 'room':
       return 'Click inside closed walls to make a room of that shape · or drag a rectangle (walls already on the plan are reused)';
     case 'door':

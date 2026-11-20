@@ -1496,3 +1496,4 @@ fieldset.read-only { border: none; margin: 0; padding: 0; min-width: 0; }
   .storey-print + .storey-print { break-before: page; }
   .storey-report + .storey-report { break-before: page; }
 }
+.room-area-edge { stroke: var(--muted, #8a93a3); }

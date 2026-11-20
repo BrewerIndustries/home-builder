@@ -85,6 +85,8 @@ function tally(project: Project, f: Faces, room: Room): { counts: Map<number, nu
 }
 
 function refitWith(project: Project, f: Faces, room: Room): Refit {
+  // An area marked out without walls keeps the outline it was given.
+  if (room.area) return { roomId: room.id, points: room.points, merged: [], added: [], changed: false };
   const { counts, total, best } = tally(project, f, room);
   if (best < 0) return { roomId: room.id, error: 'open' };
   const points = normaliseLoop(f.loops[best]);
@@ -94,14 +96,14 @@ function refitWith(project: Project, f: Faces, room: Room): Refit {
   if (fits) return { roomId: room.id, points: room.points, merged: [], added: [], changed: false };
 
   // Rooms that lost their own walls and now sit in the same face are merged in.
-  const merged = project.rooms.filter((r) => r.id !== room.id && tally(project, f, r).best === best);
+  const merged = project.rooms.filter((r) => r.id !== room.id && !r.area && tally(project, f, r).best === best);
   const taken = new Set([best]);
   // Parts a new wall cut off, big enough to be rooms and not rooms already.
   const added: Room[] = [];
   for (const [i, n] of counts) {
     if (taken.has(i) || n / total < MIN_NEW_SHARE || f.areas[i] < MIN_NEW_ROOM) continue;
     const pts = normaliseLoop(f.loops[i]);
-    if (project.rooms.some((r) => r.id !== room.id && (samePolygon(r.points, pts) || tally(project, f, r).best === i))) continue;
+    if (project.rooms.some((r) => r.id !== room.id && (samePolygon(r.points, pts) || (!r.area && tally(project, f, r).best === i)))) continue;
     taken.add(i);
     const fresh: Room = { id: uid('r'), name: '', type: 'other', points: pts, ...(room.ceiling && { ceiling: { ...room.ceiling, slopeEdge: undefined } }) };
     added.push({ ...fresh, ...guessRoom(project, fresh) });

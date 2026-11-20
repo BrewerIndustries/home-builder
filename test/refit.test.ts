@@ -96,3 +96,31 @@ test('re-fit is one undo step', () => {
   h = historyReducer(h, { type: 'undo' });
   assert.equal(h.present.rooms.length, 2);
 });
+
+test('areas marked out without walls are never flagged or re-fitted', () => {
+  // An open-plan great room (walled) with a kitchen area and a dining area marked out inside it, no walls between.
+  const p = project(box(360, 180), [], {
+    rooms: [
+      rect('G', 0, 0, 360, 180, { name: 'Great room', type: 'living' }),
+      rect('K', 0, 0, 144, 120, { name: 'Kitchen', type: 'kitchen', area: true }),
+      rect('D', 144, 0, 264, 120, { name: 'Dining', type: 'living', area: true }),
+    ],
+  });
+  assert.deepEqual(staleRooms(p), []);
+  // Two side-by-side areas with no walls at all, also left alone.
+  const open = project([], [], { rooms: [rect('K', 0, 0, 144, 120, { area: true }), rect('D', 144, 0, 264, 120, { area: true })] });
+  assert.deepEqual(staleRooms(open), []);
+  assert.equal(refitAll(open).fitted, 0);
+});
+
+test('re-fitting a walled room does not swallow an area marked out inside it', () => {
+  // The great room's end wall moved out; its kitchen area stays a room of its own.
+  const p = project(box(420, 180), [], {
+    rooms: [rect('G', 0, 0, 360, 180, { name: 'Great room', type: 'living' }), rect('K', 0, 0, 144, 120, { name: 'Kitchen', type: 'kitchen', area: true })],
+  });
+  const fit = ok(refitRoom(p, 'G'));
+  assert.equal(fit.merged.length, 0);
+  const q = applyRefit(p, fit);
+  assert.ok(q.rooms.some((r) => r.id === 'K' && r.area));
+  assert.equal(Math.round(sqft(q.rooms.find((r) => r.id === 'G')!)), 525);
+});

@@ -308,6 +308,8 @@ export interface Room {
   ceiling?: Ceiling;
   /** The point the room turns about (its handle on the plan); its outline's centre when unset. */
   pivot?: Point;
+  /** Marked out with the Area tool: an outline with no walls of its own (an open-plan zone). Never re-fitted to walls. */
+  area?: boolean;
 }
 
 export interface FramingSettings {

@@ -44,6 +44,7 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
         return (
           <g key={r.id} className={phaseClass(project, r.id)}>
             <polygon points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill={sel ? 'var(--room-sel)' : 'var(--room)'} stroke="none" />
+            {r.area && <polygon className="room-area-edge" points={r.points.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" strokeWidth={px(1.5)} strokeDasharray={`${px(8)} ${px(5)}`} />}
             {lines.map((l, i) => (
               <text key={i} x={l.x} y={l.y} className={l.cls} fontSize={l.size} textAnchor="middle" dominantBaseline={l.middle ? 'middle' : undefined}>
                 {l.text}

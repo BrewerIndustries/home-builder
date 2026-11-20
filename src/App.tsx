@@ -42,6 +42,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Select', key: 'v', icon: '↖' },
   { id: 'wall', label: 'Wall', key: 'w', icon: '▭' },
   { id: 'room', label: 'Room', key: 'r', icon: '▢' },
+  { id: 'area', label: 'Area', key: 'e', icon: '⬚' },
   { id: 'door', label: 'Door', key: 'd', icon: '◜' },
   { id: 'window', label: 'Window', key: 'n', icon: '▤' },
   { id: 'outlet', label: 'Outlet', key: 'o', icon: '⏀' },
