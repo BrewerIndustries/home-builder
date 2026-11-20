@@ -42,6 +42,9 @@ Ordered roughly by value. Competitor research behind these lives in
 
 - [x] Opening tool (2026-11-20): doorless cased or arched openings, any size
 
+- [x] Public API + MCP server (2026-11-20): personal tokens, /v1 REST, /mcp tools, versioned + rollback-able AI edits
+- [ ] API v2: OAuth for MCP clients that want it (no pasted token); live push to an open app (today: conflict on its next save); per-project token scopes; storey-aware summaries
+
 ## Electrical
 
 - [x] **Switches, lighting outlets, switch-to-light links (E3903)** — Light / Switch tools, dashed switch legs, auto 3-way pairs in halls and garages, single-pole / 3-way / 4-way counts in the estimate.

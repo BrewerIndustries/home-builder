@@ -35,6 +35,15 @@ export interface Invite {
   used_by_email: string | null;
 }
 
+/** A personal API token (the secret itself is only returned once, when it's made). */
+export interface ApiToken {
+  id: string;
+  name: string;
+  scope: 'read' | 'write';
+  created_at: number;
+  last_used_at: number | null;
+}
+
 export class ApiError extends Error {
   status: number;
   body: any;
@@ -92,6 +101,10 @@ export const cloud = {
   invites: () => api<{ invites: Invite[] }>('/invites').then((r) => r.invites),
   invite: (note: string) => api<{ code: string }>('/invites', post('', { note })).then((r) => r.code),
   revokeInvite: (code: string) => api(`/invites/${encodeURIComponent(code)}`, { method: 'DELETE' }),
+
+  tokens: () => api<{ tokens: ApiToken[] }>('/tokens').then((r) => r.tokens),
+  createToken: (name: string, scope: 'read' | 'write') => api<ApiToken & { token: string }>('/tokens', post('', { name, scope })),
+  revokeToken: (id: string) => api(`/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };
 
 /** Shareable sign-up link for an invite code. */

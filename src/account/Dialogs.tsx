@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ApiError, cloud, inviteLink, type CloudProject, type Invite, type User } from '../model/cloud.ts';
+import { API_BASE, ApiError, cloud, inviteLink, type ApiToken, type CloudProject, type Invite, type User } from '../model/cloud.ts';
 import { allCached } from '../model/cloudCache.ts';
 import { listLocal } from '../model/library.ts';
 import { accountListing, type ListingRow } from '../model/offlineSync.ts';
@@ -307,6 +307,7 @@ function AccountPanel({ ws, user, onClose }: { ws: Workspace; user: User; onClos
           <small className="muted">Each code works once. Send the link; it opens the sign-up form with the code filled in.</small>
         </section>
       )}
+      <ApiTokens />
       <section className="lib">
         <h3>Change password</h3>
         <form className="auth-form" onSubmit={changePassword}>
@@ -324,5 +325,78 @@ function AccountPanel({ ws, user, onClose }: { ws: Workspace; user: User; onClos
         Sign out
       </button>
     </Modal>
+  );
+}
+
+/** Personal API tokens: plug your own AI (an MCP client) or a script into your account's projects. */
+function ApiTokens() {
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [name, setName] = useState('');
+  const [scope, setScope] = useState<'read' | 'write'>('write');
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = () => {
+    cloud.tokens().then(setTokens, (e) => setMsg(e.message));
+  };
+  useEffect(load, []);
+  const mcpUrl = `${API_BASE}/mcp`;
+  const copy = (text: string, what: string) => navigator.clipboard?.writeText(text).then(() => setMsg(`${what} copied.`));
+  async function make() {
+    try {
+      const t = await cloud.createToken(name, scope);
+      setFresh(t.token);
+      setName('');
+      load();
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  const when = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString() : 'never');
+  return (
+    <section className="lib">
+      <h3>Connect your AI</h3>
+      <small className="muted">
+        Let an AI assistant read and edit the projects saved to your account (not "This device" ones). Add an MCP server in your AI app with the URL below and the header{' '}
+        <code>Authorization: Bearer &lt;token&gt;</code>, or call the REST API at <code>{API_BASE}/v1</code>. Every AI edit saves a version first, so you can roll it back from Versions.
+      </small>
+      <div className="row">
+        <code className="grow">{mcpUrl}</code>
+        <button onClick={() => copy(mcpUrl, 'MCP URL')}>Copy URL</button>
+      </div>
+      {msg && <p className="muted">{msg}</p>}
+      <div className="row">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Token name (e.g. Claude)" />
+        <select value={scope} onChange={(e) => setScope(e.target.value as 'read' | 'write')} title="What the token may do">
+          <option value="write">Read + edit</option>
+          <option value="read">Read only</option>
+        </select>
+        <button onClick={make}>Create token</button>
+      </div>
+      {fresh && (
+        <div className="invite-fresh">
+          <code className="token">{fresh}</code>
+          <button onClick={() => copy(fresh, 'Token')}>Copy token</button>
+          <small className="muted">Shown once — copy it now. Anyone with it can {scope === 'read' ? 'read' : 'read and edit'} your projects; revoke it below if it leaks.</small>
+        </div>
+      )}
+      {tokens && tokens.length > 0 && (
+        <table className="mini">
+          <tbody>
+            {tokens.map((t) => (
+              <tr key={t.id}>
+                <td>
+                  {t.name} <span className="muted">· {t.scope === 'read' ? 'read only' : 'read + edit'} · last used {when(t.last_used_at)}</span>
+                </td>
+                <td className="num">
+                  <button className="link danger" onClick={() => cloud.revokeToken(t.id).then(load)}>
+                    Revoke
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }

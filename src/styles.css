@@ -1505,3 +1505,6 @@ fieldset.read-only { border: none; margin: 0; padding: 0; min-width: 0; }
 
 .wet-tile-line { stroke: var(--glass-wall, #5fa8d3); opacity: 0.35; }
 .wet-drain { stroke: var(--glass-wall, #5fa8d3); fill: none; }
+
+.invite-fresh code.token { word-break: break-all; font-size: 0.8em; }
+.lib .row code.grow { flex: 1; min-width: 0; word-break: break-all; }

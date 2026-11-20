@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { hashPassword, newToken, sessionId, verifyPassword } from './auth';
 import { cleanThumb, hashShareToken, newShareToken, validShareToken } from './share';
+import { registerV1 } from './v1';
 
 // Home Builder API: invite-only accounts and a per-user project library.
 // Project metadata lives in D1; each project's JSON (which can carry an
@@ -37,7 +38,7 @@ app.use(
     },
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type'],
+    allowHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id', 'Mcp-Protocol-Version'],
   }),
 );
 
@@ -319,5 +320,8 @@ app.get('/share/:token', async (c) => {
   if (!obj) return c.json({ error: 'project data missing' }, 404);
   return c.json({ project: { name: row.name, updated_at: row.updated_at }, data: await obj.json() });
 });
+
+// ---------------- public API: tokens, /v1 REST, /mcp (v1.ts) ----------------
+registerV1(app, { currentUser });
 
 export default app;
