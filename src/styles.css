@@ -1497,3 +1497,5 @@ fieldset.read-only { border: none; margin: 0; padding: 0; min-width: 0; }
   .storey-report + .storey-report { break-before: page; }
 }
 .room-area-edge { stroke: var(--muted, #8a93a3); }
+.resize-handles polygon { stroke: var(--accent, #4f8cff); }
+.resize-handles rect { fill: var(--panel, #fff); stroke: var(--accent, #4f8cff); }

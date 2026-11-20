@@ -35,6 +35,7 @@ import { GroupOverlay } from './GroupOverlay.tsx';
 import { GroupPanel } from './GroupPanel.tsx';
 import { GroupRooms } from './GroupRooms.tsx';
 import { useAreaTool } from './useAreaTool.tsx';
+import { useFurnitureResize } from './useFurnitureResize.tsx';
 import { applyRefit, describeRefit, staleRooms, type RefitResult } from '../calc/refit.ts';
 import { useGroupEdit } from './useGroupEdit.ts';
 
@@ -147,6 +148,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   viewRef.current = view;
   const [boxDrag, setBoxDrag] = useState<{ a: Point; b: Point } | null>(null);
   const grp = useGroupEdit({ project, dispatch, selection, setSelection, active: tool === 'select', pointer: cursor?.p ?? null, onMessage });
+  const rs = useFurnitureResize({ project, dispatch, selectedId: selection?.kind === 'furniture' ? selection.id : null, active: tool === 'select' });
   const area = useAreaTool({ project, dispatch, active: tool === 'area', setSelection, onMessage, onCreated: onRoomCreated });
 
   const toWorld = useCallback((sx: number, sy: number): Point => {
@@ -493,6 +495,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 
     switch (tool) {
       case 'select': {
+        // A fixture being resized: grab one of its handles.
+        if (rs.down(raw, 8 / view.scale)) return;
         // Picking a mirror line: two clicks, snapped like a wall's ends.
         if (grp.mirrorPick) {
           grp.addMirrorPoint(snap(raw, { origin: grp.mirrorPick[0] }).p);
@@ -713,6 +717,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     const raw = toWorld(e.clientX, e.clientY);
     if (tool === 'area') area.move(snap(raw).p);
+    if (rs.move(raw, e.altKey)) return;
     const d = drag.current;
     if (d?.kind === 'pan') {
       setView({ ...d.view, ox: d.view.ox + e.clientX - d.sx, oy: d.view.oy + e.clientY - d.sy });
@@ -937,6 +942,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 
   function onPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
     if (tool === 'area' && e) area.up(snap(toWorld(e.clientX, e.clientY)).p);
+    if (rs.up()) return;
     const d = drag.current;
     drag.current = null;
     setMoveText(null);
@@ -1131,6 +1137,12 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           // Double-click a wall to split it there.
           const raw = toWorld(e.clientX, e.clientY);
           const hit = hitTest(project, raw, 6 / viewRef.current.scale);
+          // Double-click a fixture to resize it with handles.
+          if (hit?.kind === 'furniture') {
+            setSelection({ kind: 'furniture', id: hit.id });
+            rs.start(hit.id);
+            return;
+          }
           if (hit?.kind !== 'wall') return;
           const w = project.walls.find((x) => x.id === hit.id)!;
           const t = splitAt(project, w, projectOnWall(w, raw).along);
@@ -1215,6 +1227,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           )}
           {roomDrag && <PreviewRect a={roomDrag.a} b={roomDrag.b} px={px} />}
           {tool === 'area' && area.svg(px)}
+          {tool === 'select' && rs.svg(px)}
           {counterDraft.map((c) => (
             <CounterGlyph key={c.id} c={c} selected px={px} />
           ))}
@@ -1337,7 +1350,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to box-pick (Shift-click / Shift-drag adds or drops; Space-drag or scroll pans) · drag any picked item to move them together · ⌘C / ⌘V copy and paste a room with its contents · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
+      return 'Click to select · drag empty space to box-pick (Shift-click / Shift-drag adds or drops; Space-drag or scroll pans) · drag any picked item to move them together · ⌘C / ⌘V copy and paste a room with its contents · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · double-click a fixture for resize handles (drag one; Alt = about its centre) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'area':
