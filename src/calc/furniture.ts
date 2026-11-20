@@ -561,7 +561,8 @@ export function doorSweeps(project: Project, o: Opening): Point[][] {
     case 'pocket':
     case 'bypass':
     case 'barn':
-      // Sliding: in the wall, in the opening, or flat against the wall face.
+    case 'open':
+      // Sliding (in the wall, in the opening, or flat against the wall face), or no door at all.
       return [];
   }
 }

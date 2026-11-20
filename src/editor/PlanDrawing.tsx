@@ -502,7 +502,27 @@ export function OpeningGlyph({ wall, o, selected, ghost, px }: { wall: Wall; o: 
   };
   const op = o.operation ?? 'swing';
   let body: ReactNode;
-  if (op === 'double') {
+  if (op === 'open') {
+    // No door: the jambs across the wall, and a dashed head line (an arch's crown is overhead).
+    const jamb = (p: Point, k: string) => <line key={k} x1={p.x + n.x * t} y1={p.y + n.y * t} x2={p.x - n.x * t} y2={p.y - n.y * t} stroke={stroke} strokeWidth={px(1.5)} />;
+    body = (
+      <>
+        {jamb(p1, 'a')}
+        {jamb(p2, 'b')}
+        {o.arch ? (
+          <path
+            d={`M ${p1.x} ${p1.y} Q ${c.x + n.x * t * 1.6} ${c.y + n.y * t * 1.6} ${p2.x} ${p2.y} M ${p1.x} ${p1.y} Q ${c.x - n.x * t * 1.6} ${c.y - n.y * t * 1.6} ${p2.x} ${p2.y}`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={px(1)}
+            strokeDasharray={dash}
+          />
+        ) : (
+          <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={stroke} strokeWidth={px(1)} strokeDasharray={dash} />
+        )}
+      </>
+    );
+  } else if (op === 'double') {
     body = [leaf(p1, c, half, 'l'), leaf(p2, c, half, 'r')];
   } else if (op === 'pocket') {
     // The door slid half open on the centreline, its pocket (dashed) in the wall past the hinge-end jamb.

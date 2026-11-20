@@ -39,7 +39,7 @@ import { useFurnitureResize } from './useFurnitureResize.tsx';
 import { applyRefit, describeRefit, staleRooms, type RefitResult } from '../calc/refit.ts';
 import { useGroupEdit } from './useGroupEdit.ts';
 
-export type Tool = 'select' | 'wall' | 'room' | 'area' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
+export type Tool = 'select' | 'wall' | 'room' | 'area' | 'door' | 'opening' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
 
 interface View {
   /** Screen pixels per inch. */
@@ -620,6 +620,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
         return;
       }
       case 'door':
+      case 'opening':
       case 'window': {
         const near = nearestWall(project.walls, raw, 18 / view.scale + 6);
         if (!near) return;
@@ -1104,7 +1105,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 
   // Ghost opening under the cursor for door/window tools.
   let ghost: { wall: Wall; opening: Opening } | null = null;
-  if ((tool === 'door' || tool === 'window') && cursor) {
+  if ((tool === 'door' || tool === 'opening' || tool === 'window') && cursor) {
     const near = nearestWall(project.walls, cursor.p, 18 / s + 6);
     if (near) ghost = { wall: near.wall, opening: newOpening(tool, near.wall, near.along) };
   }
@@ -1363,6 +1364,8 @@ function hintFor(tool: Tool, drawing: boolean): string {
     case 'door':
     case 'window':
       return `Click on a wall to place a ${tool}`;
+    case 'opening':
+      return 'Click on a wall to cut an opening with no door (36" × 80" to start) · set any width and height, square or arched, in the panel';
     case 'outlet':
       return 'Click beside a wall to add a receptacle on that face';
     case 'switch':
@@ -1391,9 +1394,11 @@ function groupTurnHandle(b: { min: Point; max: Point }, scale: number): Point {
   return turnHandle([b.min, b.max], 36 / scale);
 }
 
-export function newOpening(kind: 'door' | 'window', wall: Wall, along: number): Opening {
+export function newOpening(tool: 'door' | 'opening' | 'window', wall: Wall, along: number): Opening {
   const width = 36;
-  const base = { id: uid(kind === 'door' ? 'd' : 'n'), wallId: wall.id, kind, width, offset: clampOpeningOffset(wall, width, Math.round(along)) };
+  const kind = tool === 'window' ? 'window' : 'door';
+  const base = { id: uid(tool === 'window' ? 'n' : tool === 'opening' ? 'p' : 'd'), wallId: wall.id, kind, width, offset: clampOpeningOffset(wall, width, Math.round(along)) } as const;
+  if (tool === 'opening') return { ...base, height: 80, sill: 0, operation: 'open' };
   return kind === 'door'
     ? { ...base, height: 80, sill: 0, swing: { side: 1, hinge: 'a' } }
     : { ...base, height: 48, sill: 34, style: 'single-hung' };

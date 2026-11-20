@@ -101,6 +101,8 @@ const SAMPLE: [RegExp, number][] = [
   [/^Stair guard \/ balustrade/, 60],
   [/^Tub \/ shower combo/, 1100],
   [/^Pocket door frame kit/, 180],
+  [/^Cased opening trim kit/, 120],
+  [/^Arched opening kit/, 260],
   [/^Bifold door hardware/, 40],
   [/^Laundry sink \+ faucet/, 300],
   [/^Vanity \+ lavatory faucet/, 450],

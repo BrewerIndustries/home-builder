@@ -71,13 +71,24 @@ export function wallBoxes(project: Project): Box[] {
     };
     const ops = project.openings
       .filter((o) => o.wallId === w.id)
-      .map((o) => ({ kind: o.kind, s: Math.max(0, o.offset - o.width / 2), e: Math.min(len, o.offset + o.width / 2), bottom: o.kind === 'door' ? 0 : o.sill, top: (o.kind === 'door' ? 0 : o.sill) + o.height }))
+      .map((o) => ({ kind: o.kind, arch: o.kind === 'door' ? o.arch : undefined, s: Math.max(0, o.offset - o.width / 2), e: Math.min(len, o.offset + o.width / 2), bottom: o.kind === 'door' ? 0 : o.sill, top: (o.kind === 'door' ? 0 : o.sill) + o.height }))
       .sort((p, q) => p.s - q.s);
     let cursor = 0;
     for (const o of ops) {
       piece(cursor, o.s, 0, w.height);
       piece(o.s, o.e, 0, o.bottom);
       piece(o.s, o.e, Math.min(o.top, w.height), w.height);
+      if (o.arch && o.e - o.s > 1) {
+        // An arched opening: fill the corners under the head down to the curve (an elliptical arch), in thin slices.
+        const n = 16;
+        const [half, c, spring] = [(o.e - o.s) / 2, (o.s + o.e) / 2, o.top - o.arch];
+        for (let k = 0; k < n; k++) {
+          const x0 = o.s + ((o.e - o.s) * k) / n;
+          const x1 = o.s + ((o.e - o.s) * (k + 1)) / n;
+          const u = Math.min(1, Math.abs((x0 + x1) / 2 - c) / half);
+          piece(x0, x1, Math.min(spring + o.arch * Math.sqrt(1 - u * u), w.height), Math.min(o.top, w.height));
+        }
+      }
       if (o.kind === 'window') {
         const mid = pointAlong(w, (o.s + o.e) / 2);
         boxes.push({ kind: 'glass', c: [mid.x, (o.bottom + Math.min(o.top, w.height)) / 2, mid.y], size: [o.e - o.s, Math.min(o.top, w.height) - o.bottom, 0.5], rotY });

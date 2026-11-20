@@ -1,5 +1,5 @@
 import { dist, pointAlong, polygonArea, wallLength } from '../model/geometry.ts';
-import { HABITABLE, studFor, type Opening, type Point, type Project, type Room, type Wall } from '../model/types.ts';
+import { HABITABLE, isOpenWay, studFor, type Opening, type Point, type Project, type Room, type Wall } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { areaWithHeadroom, ceilingInfo } from './ceilings.ts';
 import { narrowest } from './outline.ts';
@@ -194,7 +194,7 @@ export function ircChecks(project: Project): CodeCheck[] {
 
     // R310 — emergency escape and rescue opening in every sleeping room.
     if (room.type === 'bedroom') {
-      const exteriorDoor = inRoom.some((x) => x.opening.kind === 'door' && x.wall.kind === 'exterior');
+      const exteriorDoor = inRoom.some((x) => x.opening.kind === 'door' && !isOpenWay(x.opening) && x.wall.kind === 'exterior');
       const qualifying = windows.filter((o) => {
         const nc = netClearOpening(o);
         return nc.area >= 5.7 && nc.height >= 24 && nc.width >= 20 && o.sill <= 44;
@@ -317,7 +317,7 @@ export function ircChecks(project: Project): CodeCheck[] {
 
   // R311.2 — at least one egress door: side-hinged, 32" clear width, 78" clear height.
   const wallsById = new Map(project.walls.map((w) => [w.id, w]));
-  const exteriorDoors = project.openings.filter((o) => o.kind === 'door' && wallsById.get(o.wallId)?.kind === 'exterior');
+  const exteriorDoors = project.openings.filter((o) => o.kind === 'door' && !isOpenWay(o) && wallsById.get(o.wallId)?.kind === 'exterior');
   if (project.walls.length) {
     // A nominal 36" × 80" door leaf yields ~32-3/4" × 78-1/2" clear once stops and the open leaf are deducted.
     const egress = exteriorDoors.find((o) => o.width - 3.25 >= 32 && o.height - 1.5 >= 78);

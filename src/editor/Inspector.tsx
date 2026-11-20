@@ -49,6 +49,7 @@ import {
   type DoorOperation,
   type FrontSide,
   GLASS_HEIGHT,
+  isOpenWay,
 } from '../model/types.ts';
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
 import type { Hit } from './hitTest.ts';
@@ -263,13 +264,24 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
     const nc = o.kind === 'window' ? netClearOpening(o) : null;
     return (
       <aside className="inspector">
-        <h3>{o.kind === 'door' ? 'Door' : 'Window'}</h3>
+        <h3>{isOpenWay(o) ? (o.arch ? 'Arched opening' : 'Opening') : o.kind === 'door' ? 'Door' : 'Window'}</h3>
         <Field label="Width">
-          <LengthInput value={o.width} min={12} onChange={(v) => up({ width: v })} />
+          <LengthInput value={o.width} min={12} onChange={(v) => up({ width: v, ...(o.arch && { arch: Math.min(o.arch, v / 2) }) })} />
         </Field>
-        <Field label="Height">
+        <Field label="Height" hint={isOpenWay(o) ? (o.arch ? 'Floor to the top of the arch (the crown)' : 'Floor to the head') : undefined}>
           <LengthInput value={o.height} min={12} onChange={(v) => up({ height: v })} />
         </Field>
+        {isOpenWay(o) && (
+          <Field label="Top" hint="No door, just a cased opening. An arch's rise is how far the curve climbs from where it springs to the crown; half the width is a half-round">
+            <div className="row">
+              <select value={o.arch ? 'arch' : 'square'} onChange={(e) => up({ arch: e.target.value === 'arch' ? Math.min(o.width / 2, o.height / 3) : undefined })}>
+                <option value="square">Square</option>
+                <option value="arch">Arched</option>
+              </select>
+              {!!o.arch && <LengthInput value={o.arch} min={1} onChange={(v) => up({ arch: Math.min(v, o.width / 2, o.height - 12) })} />}
+            </div>
+          </Field>
+        )}
         {o.kind === 'window' && (
           <>
             <Field label="Sill height">
@@ -288,7 +300,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <Field label="Centre from wall start">
           <LengthInput value={o.offset} onChange={(v) => up({ offset: v })} />
         </Field>
-        {o.kind === 'door' && o.width <= VEHICLE_DOOR && (
+        {o.kind === 'door' && !isOpenWay(o) && o.width <= VEHICLE_DOOR && (
           <Field
             label="Opens"
             hint={
@@ -311,7 +323,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </select>
           </Field>
         )}
-        {o.kind === 'door' && (
+        {o.kind === 'door' && !isOpenWay(o) && (
           <div className="row">
             {o.operation !== 'pocket' && o.operation !== 'bypass' && <button onClick={() => up({ swing: { side: (o.swing?.side ?? 1) === 1 ? -1 : 1, hinge: o.swing?.hinge ?? 'a' } })}>{o.operation === 'barn' ? 'Other face' : 'Flip swing side'}</button>}
             {o.operation !== 'double' && o.operation !== 'bypass' && (
@@ -320,7 +332,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
           </div>
         )}
         <button className="danger" onClick={() => del(o.id)}>
-          Delete {o.kind}
+          Delete {isOpenWay(o) ? 'opening' : o.kind}
         </button>
       </aside>
     );

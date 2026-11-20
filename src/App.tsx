@@ -44,6 +44,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'room', label: 'Room', key: 'r', icon: '▢' },
   { id: 'area', label: 'Area', key: 'e', icon: '⬚' },
   { id: 'door', label: 'Door', key: 'd', icon: '◜' },
+  { id: 'opening', label: 'Opening', key: 'p', icon: '⌒' },
   { id: 'window', label: 'Window', key: 'n', icon: '▤' },
   { id: 'outlet', label: 'Outlet', key: 'o', icon: '⏀' },
   { id: 'switch', label: 'Switch', key: 's', icon: 'S' },

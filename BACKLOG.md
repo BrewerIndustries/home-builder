@@ -40,6 +40,8 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] Wet rooms v2: tile shown in 3D; drain placed / dragged on the plan (linear drain along a chosen wall); curb vs curbless threshold; niches and benches; tile size picker
 - [ ] Glass walls v2: fixed panel + door split drawn on the plan; hinge side; returns / header bar options; glass height check vs the shower head
 
+- [x] Opening tool (2026-11-20): doorless cased or arched openings, any size
+
 ## Electrical
 
 - [x] **Switches, lighting outlets, switch-to-light links (E3903)** — Light / Switch tools, dashed switch legs, auto 3-way pairs in halls and garages, single-pole / 3-way / 4-way counts in the estimate.

@@ -96,9 +96,15 @@ export interface Opening {
   operation?: DoorOperation;
   /** Window operation — drives the estimated net clear opening for egress checks. */
   style?: WindowStyle;
+  /** A doorless opening's arch: how far the curved top rises above the springline (inches; width / 2 = a half-round). Unset = square top. `height` is to the crown. */
+  arch?: number;
 }
 
-export type DoorOperation = 'swing' | 'double' | 'pocket' | 'bifold' | 'bypass' | 'barn';
+/** A doorless opening (cased or arched): the Opening tool's kind of door. */
+export const isOpenWay = (o: Pick<Opening, 'kind' | 'operation'>) => o.kind === 'door' && o.operation === 'open';
+
+/** `open`: no door at all — a cased (square-topped) or arched opening, any size (the Opening tool). */
+export type DoorOperation = 'swing' | 'double' | 'pocket' | 'bifold' | 'bypass' | 'barn' | 'open';
 
 export type WindowStyle = 'single-hung' | 'slider' | 'casement' | 'fixed';
 

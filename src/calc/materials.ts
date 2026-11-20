@@ -1,6 +1,6 @@
 import { polygonArea, wallLength } from '../model/geometry.ts';
 import { cutList } from './cutlist.ts';
-import { studFor, type LumberSize, type Point, type Project } from '../model/types.ts';
+import { isOpenWay, studFor, type LumberSize, type Point, type Project } from '../model/types.ts';
 import { ceilingInfo } from './ceilings.ts';
 import { exclusiveArea, totalFloorArea } from './regions.ts';
 import { roomCeiling } from './model3d.ts';
@@ -216,7 +216,7 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   const units = new Map<string, number>();
   const glassWalls = new Set(project.walls.filter((w) => w.glass).map((w) => w.id));
   for (const o of project.openings) {
-    if (glassWalls.has(o.wallId)) continue;
+    if (glassWalls.has(o.wallId) || isOpenWay(o)) continue;
     const key = `${o.kind === 'door' ? 'Door' : 'Window'} ${sizeCode(o.width)}${sizeCode(o.height)}`;
     units.set(key, (units.get(key) ?? 0) + 1);
   }
@@ -224,6 +224,10 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
     lines.push({ category: 'Openings', item, qty, unit: 'ea', basis: 'from the plan' });
   }
   const ops = (op: string) => project.openings.filter((o) => o.kind === 'door' && o.operation === op && !glassWalls.has(o.wallId)).length;
+  const ways = project.openings.filter((o) => isOpenWay(o) && !glassWalls.has(o.wallId));
+  const square = ways.filter((o) => !o.arch).length;
+  if (square) lines.push({ category: 'Openings', item: 'Cased opening trim kit (allowance)', qty: square, unit: 'ea', basis: 'jamb extensions + casing both faces, one per doorless opening (framed like a door: header, kings, jacks)' });
+  if (ways.length - square) lines.push({ category: 'Openings', item: 'Arched opening kit (allowance)', qty: ways.length - square, unit: 'ea', basis: 'arch form or bent plywood + corner bead, one per arched opening (framed square, with a header above the crown)' });
   if (ops('pocket')) lines.push({ category: 'Openings', item: 'Pocket door frame kit (allowance)', qty: ops('pocket'), unit: 'ea', basis: 'one per pocket door; the pocket needs a door width of clear wall beside the opening' });
   if (ops('bifold')) lines.push({ category: 'Openings', item: 'Bifold door hardware (allowance)', qty: ops('bifold'), unit: 'ea', basis: 'track and pivots, one set per bifold door' });
   if (ops('bypass')) lines.push({ category: 'Openings', item: 'Bypass door track + hardware (allowance)', qty: ops('bypass'), unit: 'ea', basis: 'overhead track, rollers and floor guide, one set per bypass door' });
