@@ -70,8 +70,8 @@ interface Props {
   setTool(t: Tool): void;
 }
 
-const ROOM_TYPES: RoomType[] = ['bedroom', 'living', 'kitchen', 'bath', 'hall', 'garage', 'utility', 'other'];
-const CEILINGS: { value: CeilingType; label: string }[] = [
+export const ROOM_TYPES: RoomType[] = ['bedroom', 'living', 'kitchen', 'bath', 'hall', 'garage', 'utility', 'other'];
+export const CEILINGS: { value: CeilingType; label: string }[] = [
   { value: 'flat', label: 'Flat' },
   { value: 'vaulted', label: 'Vaulted (single slope)' },
   { value: 'cathedral', label: 'Cathedral (ridge)' },

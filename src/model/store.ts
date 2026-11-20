@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, type WallAssemblies, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim, type OrdinateDim, type DimLook } from './types.ts';
+import { DEFAULT_FRAMING, type Ceiling, type WallAssemblies, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim, type OrdinateDim, type DimLook } from './types.ts';
 import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
@@ -52,6 +52,8 @@ export type Action =
   | { type: 'addOpening'; opening: Opening }
   | { type: 'updateOpening'; id: string; patch: Partial<Omit<Opening, 'id'>>; transient?: boolean }
   | { type: 'updateRoom'; id: string; patch: Partial<Omit<Room, 'id'>>; transient?: boolean }
+  /** Several picked rooms at once (one undo step): a ceiling patch merged into each room's own ceiling, and/or a room patch. */
+  | { type: 'updateRooms'; ids: string[]; ceiling?: Partial<Ceiling>; patch?: Partial<Pick<Room, 'type'>> }
   | { type: 'delete'; ids: string[] }
   | { type: 'setFraming'; patch: Partial<FramingSettings> }
   /** Default wall layers per kind (walls with their own assembly keep it). */
@@ -284,6 +286,16 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'updateRoom':
       return { ...p, rooms: p.rooms.map((r) => (r.id === action.id ? { ...r, ...action.patch } : r)) };
+
+    case 'updateRooms': {
+      const ids = new Set(action.ids);
+      return {
+        ...p,
+        rooms: p.rooms.map((r) =>
+          ids.has(r.id) ? { ...r, ...action.patch, ...(action.ceiling ? { ceiling: { ...(r.ceiling ?? { type: 'flat' }), ...action.ceiling } } : {}) } : r,
+        ),
+      };
+    }
 
     case 'delete': {
       const ids = new Set(action.ids);

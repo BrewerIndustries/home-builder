@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { AlignHow } from '../model/selection.ts';
 import { AngleInput } from './LengthInput.tsx';
 
@@ -21,6 +22,8 @@ interface Props {
   onPaste(): void;
   onDelete(): void;
   onClear(): void;
+  /** Extra rows for the picked items (e.g. the picked rooms' ceilings). */
+  children?: ReactNode;
 }
 
 const ALIGN: [AlignHow, string, string][] = [
@@ -69,6 +72,7 @@ export function GroupPanel(p: Props) {
         )}
         <button onClick={p.onMirrorLine} title="Mirror about a line you pick: two clicks">Mirror about a line…</button>
       </div>
+      {p.children}
       <div style={ROW}>
         {group && (
           <>

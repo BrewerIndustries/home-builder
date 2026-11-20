@@ -33,6 +33,7 @@ import { hitTest, type Hit } from './hitTest.ts';
 import { boxSelect, selItems, toggleItem, type SelItem } from '../model/selection.ts';
 import { GroupOverlay } from './GroupOverlay.tsx';
 import { GroupPanel } from './GroupPanel.tsx';
+import { GroupRooms } from './GroupRooms.tsx';
 import { useGroupEdit } from './useGroupEdit.ts';
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window' | 'outlet' | 'light' | 'switch' | 'alarm' | 'counter' | 'furniture' | 'calibrate' | 'straighten' | 'moveImage' | 'dimension';
@@ -1304,7 +1305,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           onPaste={grp.paste}
           onDelete={grp.remove}
           onClear={grp.clear}
-        />
+        >
+          {grp.group.length > 1 && <GroupRooms project={project} dispatch={dispatch} ids={grp.group.filter((i) => i.kind === 'room').map((i) => i.id)} />}
+        </GroupPanel>
       )}
 
       <div className="hint">{hintFor(tool, !!chain)}</div>

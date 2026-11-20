@@ -149,6 +149,7 @@ The checks cover the following:
 - **Wall edits v6.**
   - Drag a box on empty canvas, or Shift-click, to pick several items. Drag any of them to move them all.
   - The group has a turn handle, and a bottom panel to turn, mirror (about the centre or a picked line), align, distribute, copy, paste or delete.
+  - When rooms are in the pick, the same panel sets ceiling style, ceiling height and use for all of them at once (one undo step; mixed values show as "mixed").
   - ⌘C / ⌘V copies a room with all its contents.
   - Panning is now Space-drag, middle button or scroll.
 - **Dimensions v7.**
