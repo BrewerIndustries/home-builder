@@ -145,6 +145,7 @@ The checks cover the following:
 ### Added 2026-11-19 (multi-agent batch)
 
 - **Wall layers.** Each wall is a stack of layers (drywall, studs, sheathing, foam, siding), editable per wall and as project defaults (Project panel). Thickness, finished and framing faces, clear sizes and the estimate (drywall per face, sheathing and foam sheets, siding squares) all follow the layers. Older projects keep the old +1" rule through a legacy preset; use "Use the current presets" to switch. Layer thicknesses are common product sizes, not code values.
+- **Office room use.** Rooms can be used as an Office. It counts as habitable (70 sq ft / 7 ft checks, a required light), gets AFCI on its circuits like a den, and is not a sleeping room (no smoke alarm required in it).
 - **Rooms v3.** R304.2 (7 ft minimum) is checked between finished faces, and the line that measures it is drawn on the selected room, in red when a habitable room is under 7 ft. Tray and coffered ceilings follow L, T and angled outlines. Vaulted and cathedral rooms can pick their low side or ridge edge.
 - **Wall edits v6.**
   - Drag a box on empty canvas, or Shift-click, to pick several items. Drag any of them to move them all.

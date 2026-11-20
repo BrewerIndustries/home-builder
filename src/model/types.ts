@@ -78,10 +78,10 @@ export type DoorOperation = 'swing' | 'double' | 'pocket' | 'bifold' | 'bypass' 
 
 export type WindowStyle = 'single-hung' | 'slider' | 'casement' | 'fixed';
 
-export type RoomType = 'bedroom' | 'living' | 'kitchen' | 'bath' | 'hall' | 'garage' | 'utility' | 'other';
+export type RoomType = 'bedroom' | 'living' | 'office' | 'kitchen' | 'bath' | 'hall' | 'garage' | 'utility' | 'other';
 
-/** Room types the IRC treats as habitable space (R202): sleeping, living, eating, cooking. */
-export const HABITABLE: ReadonlySet<RoomType> = new Set(['bedroom', 'living', 'kitchen']);
+/** Room types the IRC treats as habitable space (R202): sleeping, living (a home office included), eating, cooking. */
+export const HABITABLE: ReadonlySet<RoomType> = new Set(['bedroom', 'living', 'office', 'kitchen']);
 
 export type OutletKind = 'duplex' | 'gfci' | 'dedicated' | '240v';
 

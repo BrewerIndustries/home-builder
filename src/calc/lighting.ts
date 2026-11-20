@@ -216,7 +216,7 @@ export function sleepingAreaExits(project: Project): { bedroom: Room; d: RoomDoo
   return out;
 }
 
-const LIGHTED: ReadonlySet<Room['type']> = new Set(['bedroom', 'living', 'kitchen', 'bath', 'hall', 'garage', 'utility', 'other']);
+const LIGHTED: ReadonlySet<Room['type']> = new Set(['bedroom', 'living', 'office', 'kitchen', 'bath', 'hall', 'garage', 'utility', 'other']);
 
 /**
  * Auto-layout: a light in every room's region, a switch at its main door (a 3-way

@@ -135,7 +135,7 @@ export interface Circuit {
 }
 
 /** NEC 210.12 rooms (kitchens, living spaces, bedrooms, halls, laundry areas and similar). */
-const AFCI_ROOMS: ReadonlySet<RoomType> = new Set(['bedroom', 'living', 'kitchen', 'hall', 'utility', 'other']);
+const AFCI_ROOMS: ReadonlySet<RoomType> = new Set(['bedroom', 'living', 'office', 'kitchen', 'hall', 'utility', 'other']);
 const GFCI_ROOMS: ReadonlySet<RoomType> = new Set(['kitchen', 'bath', 'garage']);
 
 /** Where a wall device is: a few inches off the face it's on. */
