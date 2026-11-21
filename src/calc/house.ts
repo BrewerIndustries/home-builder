@@ -4,7 +4,7 @@ import { uid, type Point, type Project, type Storey, type Wall, type WallSwitch 
 import { formatFtIn } from '../model/units.ts';
 import { attach } from './electrical.ts';
 import { upperFloorLines } from './floor.ts';
-import { floorOpenings, type FloorOpening } from './floorOpenings.ts';
+import { floorOpenings, openVoids, type FloorOpening } from './floorOpenings.ts';
 import { foundationOf } from './foundation.ts';
 import { ircChecks, type CodeCheck } from './irc.ts';
 import { detectsSmoke, lightsRoom, SWITCH_HEIGHT } from './lighting.ts';
@@ -131,21 +131,24 @@ export function houseFloorArea(p: Project): number {
 export function houseScene(p: Project): Scene3D {
   if (!isMultiStorey(p)) return buildScene(p);
   const scene: Scene3D = { boxes: [], flats: [], faces: [], bounds: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] } };
-  for (const { storey } of storeyViews(p)) {
+  const views = storeyViews(p);
+  views.forEach(({ storey }, i) => {
     const v = roleView(p, storey.id);
-    if (!v.walls.length) continue;
+    if (!v.walls.length) return;
     const s = buildScene(v);
     const e = storeyElevation(p, storey.id);
     const up = (q: V3): V3 => [q[0], q[1] + e, q[2]];
-    const holes = floorOpenings(p, storey.id).flatMap((o) => o.polys);
+    const holes = [...floorOpenings(p, storey.id).flatMap((o) => o.polys), ...openVoids(v)];
+    // A room open to below on the storey above: no ceiling here under it either.
+    const above = views[i + 1] ? openVoids(roleView(p, views[i + 1].storey.id)) : [];
     scene.boxes.push(...s.boxes.map((b) => ({ ...b, c: up(b.c) })));
-    scene.flats.push(...s.flats.map((f) => ({ ...f, y: f.y + e, holes: f.kind === 'floor' ? [...f.holes, ...holes] : f.holes })));
+    scene.flats.push(...s.flats.map((f) => ({ ...f, y: f.y + e, holes: f.kind === 'floor' ? [...f.holes, ...holes] : [...f.holes, ...above] })));
     scene.faces.push(...s.faces.map((f) => ({ ...f, pts: f.pts.map(up) })));
     for (let k = 0; k < 3; k++) {
       scene.bounds.min[k] = Math.min(scene.bounds.min[k], up(s.bounds.min)[k]);
       scene.bounds.max[k] = Math.max(scene.bounds.max[k], up(s.bounds.max)[k]);
     }
-  }
+  });
   if (!Number.isFinite(scene.bounds.min[0])) scene.bounds = { min: [0, 0, 0], max: [0, 0, 0] };
   return scene;
 }

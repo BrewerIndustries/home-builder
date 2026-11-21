@@ -11,6 +11,7 @@ import { netClearOpening } from '../calc/irc.ts';
 import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
+import { isMultiStorey } from '../model/storeys.ts';
 import { foundationOf } from '../calc/foundation.ts';
 import { dist, wallLength } from '../model/geometry.ts';
 import { isLight, roomAt, switchRoom, switchWays, VEHICLE_DOOR } from '../calc/lighting.ts';
@@ -49,6 +50,7 @@ import {
   type DoorOperation,
   type FrontSide,
   GLASS_HEIGHT,
+  RAIL_HEIGHT,
   isOpenWay,
 } from '../model/types.ts';
 import { formatFtIn, formatSqFt, parseFtIn } from '../model/units.ts';
@@ -136,18 +138,24 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         <h3>Wall W{project.walls.indexOf(w) + 1}</h3>
         <Field label="Type">
           <select
-            value={w.glass ? 'glass' : w.kind}
+            value={w.glass ? 'glass' : w.railing ? 'railing' : w.kind}
             onChange={(e) =>
               dispatch({
                 type: 'updateWall',
                 id: w.id,
-                patch: e.target.value === 'glass' ? { kind: 'interior', glass: true, height: Math.min(GLASS_HEIGHT, w.height) } : { kind: e.target.value as typeof w.kind, glass: undefined },
+                patch:
+                  e.target.value === 'glass'
+                    ? { kind: 'interior', glass: true, railing: undefined, height: Math.min(GLASS_HEIGHT, w.height) }
+                    : e.target.value === 'railing'
+                    ? { kind: 'interior', railing: true, glass: undefined, height: RAIL_HEIGHT }
+                    : { kind: e.target.value as typeof w.kind, glass: undefined, railing: undefined },
               })
             }
           >
             <option value="exterior">Exterior (bearing)</option>
             <option value="interior">Interior (partition)</option>
             <option value="glass">Glass (shower screen)</option>
+            <option value="railing">Railing (guard)</option>
           </select>
         </Field>
         {w.glass && (
@@ -155,7 +163,12 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             3/8" tempered glass: not framed or finished, priced by its glass area ({Math.round(glassPanelArea(project, w))} sq ft). A door in it is a glass door. Safety glazing is required round tubs and showers (R308.4.5).
           </p>
         )}
-        {!w.glass && <Field label="Studs" hint={`Finished thickness ${formatFtIn(w.thickness)}`}>
+        {w.railing && (
+          <p className="muted small">
+            A guard, not a wall: a top rail on posts with balusters or panels between, priced by the foot. Guards along a drop of more than 30" must be at least 36" high (R312.1.2), with openings a 4" sphere can't pass (R312.1.3).
+          </p>
+        )}
+        {!w.glass && !w.railing && <Field label="Studs" hint={`Finished thickness ${formatFtIn(w.thickness)}`}>
           <select
             value={w.stud ?? ''}
             onChange={(e) => dispatch({ type: 'updateWall', id: w.id, patch: { stud: (e.target.value || undefined) as LumberSize | undefined } })}
@@ -194,11 +207,11 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
             </button>
           </div>
         </Field>
-        <Field label={w.glass ? 'Glass height' : 'Wall height'} hint={w.glass ? "Floor to the top of the glass; 6' 6\" is common" : "Plate to plate. 97-1/8&quot; = standard 8' wall"}>
+        <Field label={w.glass ? 'Glass height' : w.railing ? 'Rail height' : 'Wall height'} hint={w.glass ? "Floor to the top of the glass; 6' 6\" is common" : w.railing ? 'Floor to the top of the rail; 36" minimum for a guard (42" is common on balconies)' : "Plate to plate. 97-1/8&quot; = standard 8' wall"}>
           <LengthInput value={w.height} min={24} onChange={(v) => dispatch({ type: 'updateWall', id: w.id, patch: { height: v } })} />
         </Field>
-        {!w.glass && <BearingFootingField project={project} wall={w} dispatch={dispatch} />}
-        {!w.glass && <WallLayersPanel project={project} wall={w} dispatch={dispatch} />}
+        {!w.glass && !w.railing && <BearingFootingField project={project} wall={w} dispatch={dispatch} />}
+        {!w.glass && !w.railing && <WallLayersPanel project={project} wall={w} dispatch={dispatch} />}
         <div className="stat-grid">
           <Stat label="Studs" value={studCount(f)} />
           <Stat label="Stud cut" value={formatFtIn(f.studLength)} />
@@ -855,6 +868,14 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
         </div>
         <RoomRefitField project={project} dispatch={dispatch} room={r} />
         <WetRoomField project={project} dispatch={dispatch} room={r} />
+        {isMultiStorey(project) && (
+          <Field label="Open to below" hint="No floor here: the space is open to the storey underneath (a two-storey living room, a gallery). Edge it with Railing walls (R312.1.1); it's left out of this floor's area, framing and the ceiling below">
+            <label className="link-row">
+              <input type="checkbox" checked={!!r.openToBelow} onChange={(e) => dispatch({ type: 'updateRoom', id: r.id, patch: { openToBelow: e.target.checked || undefined } })} />
+              Open to the storey below
+            </label>
+          </Field>
+        )}
         <Field
           label="Turn the room"
           hint={`Its walls and everything in it turn about ${r.pivot ? 'its pivot (the crosshair; drag it to a corner or wall end)' : 'its centre (or drag the crosshair to pick another point)'}; walls attached outside stretch to follow. Anticlockwise is positive. Or drag the round handle above the room`}

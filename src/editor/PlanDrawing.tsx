@@ -135,8 +135,9 @@ export function PlanDrawing({ project, px, selection = null, wallDims = true, ov
             x2={w.b.x}
             y2={w.b.y}
             strokeWidth={w.thickness}
-            strokeLinecap={w.glass ? 'butt' : 'square'}
-            stroke={sel ? 'var(--accent)' : w.glass ? 'var(--glass-wall)' : w.kind === 'exterior' ? 'var(--wall-ext)' : 'var(--wall-int)'}
+            strokeLinecap={w.glass || w.railing ? 'butt' : 'square'}
+            strokeDasharray={w.railing ? `${px(6)} ${px(3)}` : undefined}
+            stroke={sel ? 'var(--accent)' : w.glass ? 'var(--glass-wall)' : w.railing ? 'var(--rail)' : w.kind === 'exterior' ? 'var(--wall-ext)' : 'var(--wall-int)'}
           />
         );
       })}

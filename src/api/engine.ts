@@ -1,7 +1,7 @@
 import { defaultWallThickness } from '../model/assembly.ts';
 import { polygonArea, wallLength } from '../model/geometry.ts';
 import { historyReducer, initHistory, migrate, syncThickness, type Action } from '../model/store.ts';
-import { GLASS_HEIGHT, GLASS_THICKNESS, uid, type Project } from '../model/types.ts';
+import { GLASS_HEIGHT, GLASS_THICKNESS, RAIL_HEIGHT, RAIL_THICKNESS, uid, type Project } from '../model/types.ts';
 import { saveVersion } from '../model/versions.ts';
 import { houseChecks, houseMaterials } from '../calc/house.ts';
 import { phasedMaterials } from '../calc/phasing.ts';
@@ -19,15 +19,15 @@ import { FURNITURE } from '../calc/furniture.ts';
 /** Actions an API client may send (cosmetic dimension tweaks included; history, image and whole-project swaps not). */
 export const API_ACTIONS: Record<string, string> = {
   rename: '{name} — rename the project',
-  addWalls: '{walls:[{a:{x,y}, b:{x,y}, kind?:"exterior"|"interior", glass?:true, height?}], room?} — add walls (inches, y runs down the plan); id/thickness/height filled in when left out',
-  updateWall: '{id, patch:{kind?, height?, stud?, glass?, a?, b?}} — change a wall',
+  addWalls: '{walls:[{a:{x,y}, b:{x,y}, kind?:"exterior"|"interior", glass?:true, railing?:true, height?}], room?} — add walls (inches, y runs down the plan); id/thickness/height filled in when left out',
+  updateWall: '{id, patch:{kind?, height?, stud?, glass?, railing?, a?, b?}} — change a wall',
   setWallLength: '{id, length} — set a wall\'s centreline length (moves its b end)',
   moveVertex: '{from:{x,y}, to:{x,y}} — move a wall corner (every wall meeting there follows)',
   splitWall: '{id, at, newId} — split a wall `at` inches from its a end',
   joinWalls: '{id, otherId} — join two collinear walls',
   addOpening: '{opening:{wallId, kind:"door"|"window", offset, width?, height?, sill?, operation?, style?, arch?}} — door / window / doorless opening (kind "door" + operation "open", optional arch rise) centred `offset` inches from the wall\'s a end',
   updateOpening: '{id, patch} — change a door, window or opening',
-  updateRoom: '{id, patch:{name?, type?, ceiling?, wet?}} — change a room (type: bedroom|living|office|kitchen|bath|hall|garage|utility|other; wet:{drain:"linear"|"centre", tileHeight?})',
+  updateRoom: '{id, patch:{name?, type?, ceiling?, wet?, openToBelow?}} — change a room (type: bedroom|living|office|kitchen|bath|hall|garage|utility|other; wet:{drain:"linear"|"centre", tileHeight?})',
   updateRooms: '{ids, ceiling?, patch?:{type?}} — change several rooms at once',
   setRooms: '{rooms} — replace the rooms list (each {id?, name, type, points:[{x,y}...], area?})',
   delete: '{ids} — delete walls, openings, rooms, outlets, fixtures, switches, counters, furniture by id',
@@ -77,14 +77,16 @@ function normalise(p: Project, a: Record<string, any>, i: number): Action {
       out.walls = a.walls.map((w: any, k: number) => {
         if (!obj(w) || !pt(w.a) || !pt(w.b)) throw bad(`walls[${k}] needs a:{x,y} and b:{x,y}`);
         const glass = !!w.glass;
-        const kind = w.kind === 'exterior' ? 'exterior' : 'interior';
+        const railing = !glass && !!w.railing;
+        const kind = w.kind === 'exterior' && !railing ? 'exterior' : 'interior';
         return {
           ...w,
           id: w.id ?? uid('w'),
           kind,
           ...(glass && { glass: true }),
-          thickness: glass ? GLASS_THICKNESS : defaultWallThickness(p, kind),
-          height: Number(w.height) > 0 ? Number(w.height) : glass ? GLASS_HEIGHT : p.framing.wallHeight,
+          ...(railing && { railing: true }),
+          thickness: glass ? GLASS_THICKNESS : railing ? RAIL_THICKNESS : defaultWallThickness(p, kind),
+          height: Number(w.height) > 0 ? Number(w.height) : glass ? GLASS_HEIGHT : railing ? RAIL_HEIGHT : p.framing.wallHeight,
         };
       });
       if (a.room) out.room = { id: uid('r'), type: 'other', name: '', ...a.room };
@@ -182,7 +184,7 @@ export function planSummary(p: Project) {
     units: 'inches; plan x runs right, y runs down',
     framing: q.framing,
     storeys: q.storeys?.map((s) => ({ id: s.id, name: s.name })) ?? [],
-    walls: q.walls.map((w) => ({ id: w.id, a: w.a, b: w.b, kind: w.glass ? 'glass' : w.kind, length: r1(wallLength(w)), height: w.height, thickness: r1(w.thickness) })),
+    walls: q.walls.map((w) => ({ id: w.id, a: w.a, b: w.b, kind: w.glass ? 'glass' : w.railing ? 'railing' : w.kind, length: r1(wallLength(w)), height: w.height, thickness: r1(w.thickness) })),
     openings: q.openings.map((o) => ({
       id: o.id,
       wallId: o.wallId,
@@ -193,7 +195,7 @@ export function planSummary(p: Project) {
       ...(o.kind === 'window' && { sill: o.sill, style: o.style }),
       ...(o.operation && o.operation !== 'open' && { operation: o.operation }),
     })),
-    rooms: q.rooms.map((r) => ({ id: r.id, name: r.name, type: r.type, sqft: r1(polygonArea(r.points) / 144), points: r.points, ...(r.area && { area: true }), ...(r.wet && { wet: r.wet }), ...(r.ceiling && { ceiling: r.ceiling }) })),
+    rooms: q.rooms.map((r) => ({ id: r.id, name: r.name, type: r.type, sqft: r1(polygonArea(r.points) / 144), points: r.points, ...(r.area && { area: true }), ...(r.wet && { wet: r.wet }), ...(r.openToBelow && { openToBelow: true }), ...(r.ceiling && { ceiling: r.ceiling }) })),
     furniture: q.furniture.map((f) => ({ id: f.id, kind: f.kind, at: f.at, rot: f.rot, w: f.w, d: f.d })),
     counters: q.counters.map((c) => ({ id: c.id })),
     outlets: q.outlets.map((o) => ({ id: o.id, wallId: o.wallId, offset: o.offset, side: o.side, kind: o.kind, height: o.height })),

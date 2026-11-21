@@ -13,6 +13,7 @@
   --wall-ext: #2b3240;
   --wall-int: #6b7384;
   --glass-wall: #5fa8d3;
+  --rail: #a0784e;
   --opening: #2b3240;
   --outlet: #b45309;
   --outlet-gfci: #fde7c7;
@@ -57,6 +58,7 @@
     --wall-ext: #d6dbe4;
     --wall-int: #8d96a7;
     --glass-wall: #7cc4ec;
+    --rail: #c49a6c;
     --opening: #d6dbe4;
     --outlet: #f59e0b;
     --outlet-gfci: #4a3410;
@@ -1292,6 +1294,7 @@ tr.no-pick {
     --wall-ext: #000;
     --wall-int: #333;
     --glass-wall: #555;
+    --rail: #444;
     --opening: #000;
     --outlet: #000;
     --outlet-gfci: #ddd;

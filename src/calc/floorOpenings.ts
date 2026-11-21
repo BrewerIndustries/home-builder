@@ -28,3 +28,6 @@ export function floorOpenings(p: Project, id: string = activeStoreyId(p)): Floor
   }
   return out;
 }
+
+/** Rooms on this storey (a storey view) marked open to below: holes in its floor, and in the ceiling of the storey under it. */
+export const openVoids = (view: Pick<Project, 'rooms'>): Point[][] => view.rooms.filter((r) => r.openToBelow).map((r) => r.points);

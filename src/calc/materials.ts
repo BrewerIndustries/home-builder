@@ -17,6 +17,7 @@ import { blockingLines } from './barn.ts';
 import { framingTakeoff, type FramingTakeoff, type HeaderSize } from './framing.ts';
 import { assemblyLines, drywallWallArea } from './assemblyTakeoff.ts';
 import { wetRoomLines } from './wetRoom.ts';
+import { railingLines } from './guards.ts';
 
 // Materials list: the framing takeoff turned into things you buy, plus the
 // area-driven sheet goods. Waste is applied here, once, to purchase quantities.
@@ -211,10 +212,11 @@ export function materialsList(project: Project, takeoff: FramingTakeoff = framin
   lines.push(...counterLines(project));
   lines.push(...furnitureLines(project));
   lines.push(...wetRoomLines(project));
+  lines.push(...railingLines(project));
 
   // Door and window schedule (glass doors in glass walls are priced with the glass, wetRoom.ts), by kind and nominal size (e.g. 3068 = 3'0" × 6'8").
   const units = new Map<string, number>();
-  const glassWalls = new Set(project.walls.filter((w) => w.glass).map((w) => w.id));
+  const glassWalls = new Set(project.walls.filter((w) => w.glass || w.railing).map((w) => w.id));
   for (const o of project.openings) {
     if (glassWalls.has(o.wallId) || isOpenWay(o)) continue;
     const key = `${o.kind === 'door' ? 'Door' : 'Window'} ${sizeCode(o.width)}${sizeCode(o.height)}`;

@@ -39,7 +39,7 @@ export function exclusiveArea(project: Project, room: Room): number {
 
 /** Total floor area without double counting nested rooms, square inches. */
 export function totalFloorArea(project: Project): number {
-  return project.rooms.reduce((s, r) => s + exclusiveArea(project, r), 0);
+  return project.rooms.reduce((s, r) => s + (r.openToBelow ? 0 : exclusiveArea(project, r)), 0);
 }
 
 export interface RegionEdge {

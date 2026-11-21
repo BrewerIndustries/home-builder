@@ -38,7 +38,18 @@ export interface Wall {
    * It's priced by its glass area, and its doors are glass doors.
    */
   glass?: boolean;
+  /**
+   * A guard railing (round an open-to-below space, a loft or a stair): closes
+   * rooms like a wall but isn't framed or finished; priced per foot; drawn as
+   * a top rail over open balusters. `height` is the rail height (36" = R312.1.2).
+   */
+  railing?: boolean;
 }
+
+/** Drawn thickness of a railing (a 2x / handrail-width top rail). */
+export const RAIL_THICKNESS = 2;
+/** Guard height for new railings (R312.1.2: 36" min in a dwelling). */
+export const RAIL_HEIGHT = 36;
 
 /** Drawn thickness of a glass wall (3/8" tempered glass in a shoe / channel). */
 export const GLASS_THICKNESS = 0.75;
@@ -46,7 +57,7 @@ export const GLASS_THICKNESS = 0.75;
 export const GLASS_HEIGHT = 78;
 
 /** The walls that are framed: everything but glass partitions. */
-export const framedWalls = <T extends { walls: Wall[] }>(p: T): Wall[] => p.walls.filter((w) => !w.glass);
+export const framedWalls = <T extends { walls: Wall[] }>(p: T): Wall[] => p.walls.filter((w) => !w.glass && !w.railing);
 
 /** How a wet room drains: a linear (trench) drain or a centre (point) drain. */
 export type WetDrain = 'linear' | 'centre';
@@ -342,6 +353,8 @@ export interface Room {
   area?: boolean;
   /** A wet room (tiled, waterproofed, floor drain); see calc/wetRoom.ts. */
   wet?: WetRoom;
+  /** Open to the floor below (a two-storey living room, a loft's void): no floor here — it's cut out of this storey's floor, and the ceiling below it. Edge it with railings. */
+  openToBelow?: boolean;
 }
 
 export interface FramingSettings {

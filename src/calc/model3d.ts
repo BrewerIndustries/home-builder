@@ -58,6 +58,17 @@ export function wallBoxes(project: Project): Box[] {
     if (len < 0.5) continue;
     const d = wallDir(w);
     const rotY = -Math.atan2(d.y, d.x);
+    if (w.railing) {
+      // A guard: a top rail on posts, open (glassy) infill between.
+      const mid = pointAlong(w, len / 2);
+      boxes.push({ kind: 'stair', c: [mid.x, w.height - 1.75, mid.y], size: [len, 3.5, 3.5], rotY });
+      boxes.push({ kind: 'glass', c: [mid.x, (w.height - 3.5) / 2, mid.y], size: [len, w.height - 3.5, 0.5], rotY });
+      for (let t = 0; t <= len + 0.01; t += Math.max(24, len / Math.max(1, Math.round(len / 48)))) {
+        const p = pointAlong(w, Math.min(t, len));
+        boxes.push({ kind: 'stair', c: [p.x, w.height / 2, p.y], size: [3.5, w.height, 3.5], rotY });
+      }
+      continue;
+    }
     if (w.glass) {
       // A glass screen: one pane the wall's length (its door is glass too).
       const mid = pointAlong(w, len / 2);

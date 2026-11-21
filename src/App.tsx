@@ -61,7 +61,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('plan');
   const [tool, setTool] = useState<Tool>('select');
   const [furnitureKind, setFurnitureKind] = useState<FurnitureKind>('toilet');
-  const [wallKind, setWallKind] = useState<WallKind | 'glass'>(project.walls.length ? 'interior' : 'exterior');
+  const [wallKind, setWallKind] = useState<WallKind | 'glass' | 'railing'>(project.walls.length ? 'interior' : 'exterior');
   const [selection, setSelection] = useState<Hit | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -339,6 +339,9 @@ export function App() {
               </button>
               <button className={wallKind === 'glass' ? 'active' : ''} onClick={() => setWallKind('glass')} title="New walls are glass (a shower screen or wet-room enclosure): not framed, priced by the glass">
                 Glass
+              </button>
+              <button className={wallKind === 'railing' ? 'active' : ''} onClick={() => setWallKind('railing')} title="New walls are railings (a 36&quot; guard): edge a balcony, a stair or a room open to below">
+                Rail
               </button>
             </div>
             <div className="sep" />

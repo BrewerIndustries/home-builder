@@ -46,6 +46,7 @@ Ordered roughly by value. Competitor research behind these lives in
 - [ ] API v2: OAuth for MCP clients that want it (no pasted token); live push to an open app (today: conflict on its next save); per-project token scopes; storey-aware summaries
 
 - [x] Stairs in 3D + first-person walkthrough (2026-11-21)
+- [x] Open to below + railings (2026-11-21): room flag cuts the upper floor + ceiling below; Railing wall type (36" guard, priced per LF, 3D rail/posts/infill); R312.1.1 / R312.1.2 checks
 - [ ] Walkthrough v2: touch joystick for phones / iPad; walk through glass-wall doors; handrails and guards in 3D; jump to a room from a list
 
 ## Electrical

@@ -2,7 +2,7 @@ import { pointInPolygon, polygonArea } from '../model/geometry.ts';
 import { activeStoreyId, adjacentStorey, isLowestStorey, isMultiStorey, storeyView } from '../model/storeys.ts';
 import type { FloorEdge, FloorInsulation, Foundation, JoistSize, Point, Project, Wall } from '../model/types.ts';
 import { foundationOf } from './foundation.ts';
-import { floorOpenings } from './floorOpenings.ts';
+import { floorOpenings, openVoids } from './floorOpenings.ts';
 import type { MaterialLine } from './materials.ts';
 import { childRooms } from './regions.ts';
 import { pierPadLines } from './foundationV2.ts';
@@ -187,7 +187,7 @@ export function upperFloorLayout(view: Project): FloorLayout | null {
   if (!polys.length) return null;
   const below = adjacentStorey(view, -1)!;
   const walls = storeyView(view, below.id).walls;
-  return frameFloor(polys, floorSpec(view), floorOpenings(view).map((o) => o.polys), walls);
+  return frameFloor(polys, floorSpec(view), [...floorOpenings(view).map((o) => o.polys), ...openVoids(view).map((v) => [v])], walls);
 }
 
 /** The framed floor of the plan's active storey, whichever kind it is. */
