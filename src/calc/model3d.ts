@@ -8,6 +8,7 @@ import { cofferBeams, trayOutline } from './roomShape.ts';
 import { childRooms } from './regions.ts';
 import { roofFaces } from './roof.ts';
 import { foundationScene } from './foundation3d.ts';
+import { stairBoxes } from './stairs3d.ts';
 import { counterDir, counterHeight, cornerUppers, counterLength, counterPoint, FRIDGE_HEIGHT, raisedDepth, seatingDepth, seatingHeight, TALL_HEIGHT, UPPER_BOTTOM, UPPER_DEPTH, upperSpans, upperTop } from './counters.ts';
 
 // 3D description of the plan, independent of three.js so it can be tested.
@@ -17,7 +18,7 @@ export type V3 = [number, number, number];
 
 /** Axis-aligned-in-wall-space box: a wall piece or a coffer beam. */
 export interface Box {
-  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door' | 'footing' | 'foundation' | 'girder';
+  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door' | 'stair' | 'footing' | 'foundation' | 'girder';
   /** Centre. */
   c: V3;
   /** Size along the wall, height, thickness. */
@@ -268,8 +269,12 @@ export function buildScene(project: Project): Scene3D {
   }
   for (const f of project.furniture) {
     // A curbless walk-in shower's floor is flush: just a sliver to show it.
+    if (f.kind === 'stairs') {
+      boxes.push(...stairBoxes(project, f));
+      continue;
+    }
     const h = f.kind === 'shower' && f.walkIn ? 0.5 : FURNITURE[f.kind].h;
-    if (!h) continue; // stairs: plan only
+    if (!h) continue;
     if (f.kind === 'closet-rod') {
       // A shelf at 5' 6" (a double hang: shelves at 7' and 3' 6", a rod under each).
       for (const y of f.closet === 'double' ? [84, 42] : [66]) boxes.push({ kind: 'furniture', c: [f.at.x, y, f.at.y], size: [f.w, 0.75, f.d], rotY: (-f.rot * Math.PI) / 180 });
