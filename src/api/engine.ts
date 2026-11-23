@@ -51,7 +51,7 @@ export const API_ACTIONS: Record<string, string> = {
   moveRoom: '{id, delta:{x,y}} — move a room with its walls and contents',
   mirrorRoom: '{id, axis:"x"|"y"}',
   setSite: '{patch} — site / lot settings',
-  storey: '{op} — storey operations (add / switch / rename storeys)',
+  storey: '{op} — storey operations (add / switch / update {id, patch: {name, height, lowerRoof: {type: lean-to|none, pitch, overhang, rake}}})',
   stairSwitches: '{} — place 3-way switches at every stair',
 };
 

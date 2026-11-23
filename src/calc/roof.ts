@@ -156,7 +156,7 @@ export function roofOf(project: Project): Roof {
 const EPS = 0.5;
 
 /** Sorted distinct values (within 1/2"). */
-function distinct(vals: number[]): number[] {
+export function distinct(vals: number[]): number[] {
   const out: number[] = [];
   for (const v of [...vals].sort((a, b) => a - b)) if (!out.length || v - out[out.length - 1] > EPS) out.push(v);
   return out;
@@ -212,6 +212,13 @@ export function footprintRects(project: Project): Rect[] | null {
     }
   }
   if (!free.some((c) => c.some(Boolean))) return null;
+  return greedyRects(xs, ys, free);
+}
+
+/** Cells of a grid (free[i][j] = the cell between xs[i..i+1] and ys[j..j+1]) merged into rectangles, largest first. Consumes `free`. */
+export function greedyRects(xs: number[], ys: number[], free: boolean[][]): Rect[] {
+  const nx = xs.length - 1;
+  const ny = ys.length - 1;
   const rects: Rect[] = [];
   for (;;) {
     let best: { i0: number; i1: number; j0: number; j1: number; area: number } | null = null;

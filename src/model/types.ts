@@ -649,7 +649,21 @@ export interface Storey extends Partial<StoreyData> {
   height?: number;
   /** Floor v2: the framed floor under this storey (storeys above the lowest). */
   floor?: FloorFrame;
+  /** The roof over the parts of this storey the storey above doesn't cover (calc/lowerRoof.ts). */
+  lowerRoof?: Partial<LowerRoof>;
 }
+
+/** A lean-to roof over an uncovered part of a lower storey: rising to the wall above, its eave on the outside wall. */
+export interface LowerRoof {
+  type: 'lean-to' | 'none';
+  /** Rise per 12 of run. */
+  pitch: number;
+  /** Eave overhang past the outside wall, and rake overhang at free ends, inches. */
+  overhang: number;
+  rake: number;
+}
+
+export const DEFAULT_LOWER_ROOF: LowerRoof = { type: 'lean-to', pitch: 4, overhang: 12, rake: 12 };
 
 export type RoofType = 'gable' | 'hip' | 'shed' | 'none';
 export type RafterSize = '2x6' | '2x8' | '2x10' | '2x12';

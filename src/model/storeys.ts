@@ -1,6 +1,6 @@
 import { HEADER_DEPTH } from '../calc/framing.ts';
 import { assemblyThickness } from './assembly.ts';
-import { DEFAULT_FOUNDATION, uid, type FloorFrame, type Project, type Storey, type StoreyData, type Wall } from './types.ts';
+import { DEFAULT_FOUNDATION, uid, type FloorFrame, type LowerRoof, type Project, type Storey, type StoreyData, type Wall } from './types.ts';
 
 // Storeys v1. A project is one storey until a second is added. The ACTIVE
 // storey's plan data lives in the project's top-level arrays (walls, rooms …),
@@ -148,7 +148,7 @@ export function removeStorey(p: Project, id: string): Project {
   return { ...q, storeys: shifted };
 }
 
-export type StoreyPatch = { name?: string; height?: number | undefined; floor?: FloorFrame };
+export type StoreyPatch = { name?: string; height?: number | undefined; floor?: FloorFrame; lowerRoof?: Partial<LowerRoof> };
 
 /** Rename a storey, set its floor-to-floor height (undefined = estimated) or its framed floor. */
 export function updateStorey(p: Project, id: string, patch: StoreyPatch): Project {

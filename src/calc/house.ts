@@ -12,6 +12,7 @@ import { materialsList, wallAreas, type MaterialLine } from './materials.ts';
 import { buildScene, type Box, type Scene3D, type V3 } from './model3d.ts';
 import { subtractHoles } from './outline.ts';
 import { roofOf } from './roof.ts';
+import { leanTos, lowerRoofChecks, lowerRoofLines } from './lowerRoof.ts';
 import { FLOOR_GUARD, openingGuardLength, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
 
 // The whole house across its storeys (Storeys v1). Each storey is a Project view
@@ -67,6 +68,7 @@ export function houseChecks(p: Project): HouseCheck[] {
     for (const c of ircChecks(v)) if (c.rule !== 'Smoke alarm on each storey') out.push(tag(c));
     if (!v.walls.length) continue;
     const smoke = v.fixtures.filter((f) => detectsSmoke(f.kind)).length;
+    for (const c of lowerRoofChecks(p, storey.id)) out.push(tag(c));
     out.push(tag({ rule: 'Smoke alarm on each storey', section: 'R314.3', status: smoke ? 'pass' : 'fail', message: smoke ? `${smoke} on this floor` : 'no smoke alarm on this floor' }));
     // Floor openings under stairs coming up from below.
     for (const o of floorOpenings(p, storey.id).filter((x) => x.from !== storey.id)) {
@@ -117,6 +119,8 @@ export function houseMaterials(p: Project, list: (p: Project) => MaterialLine[] 
     if (!isLowestStorey(p, storey.id) && v.walls.length) lines.push(...upperFloorLines(v, p.framing.waste));
     const guard = floorOpenings(p, storey.id).filter((o) => o.from !== storey.id).reduce((t, o) => t + openingGuard(v, o), 0);
     if (guard > 0) lines.push({ category: 'Lumber', item: 'Stair guard / balustrade (allowance)', qty: Math.ceil(guard / 12), unit: 'lf', basis: 'open edges round the stair opening in the floor (R312.1)' });
+    // The lean-to over whatever of this storey the one above doesn't cover.
+    lines.push(...lowerRoofLines(p, storey.id));
     parts.push({ name: storey.name, lines });
   }
   return mergeLines(parts);
@@ -128,8 +132,11 @@ export function houseFloorArea(p: Project): number {
   return storeyViews(p).reduce((t, { view }) => t + wallAreas(view).floor, 0);
 }
 
-/** Boxes filling the floor depth under a storey at elevation e: over the lower storey's outside walls, and round the holes in this floor. */
-function floorBand(p: Project, belowId: string, e: number, holes: Point[][]): Box[] {
+/**
+ * Boxes filling the floor depth under a storey at elevation e: the rim under this storey's outside walls (where the floor
+ * sits on the walls below, or a pulled-back wall sits on the floor), and round the holes in this floor.
+ */
+function floorBand(p: Project, belowId: string, e: number, holes: Point[][], upperWalls: Wall[]): Box[] {
   const below = roleView(p, belowId);
   const solid = below.walls.filter((w) => !w.railing && !w.glass);
   if (!solid.length) return [];
@@ -143,7 +150,8 @@ function floorBand(p: Project, belowId: string, e: number, holes: Point[][]): Bo
     if (len < 0.5) return;
     out.push({ kind, c: [(a.x + b.x) / 2, y, (a.y + b.y) / 2], size: [len + (kind === 'rim' ? 0 : t), depth, t], rotY: -Math.atan2(b.y - a.y, b.x - a.x) });
   };
-  for (const w of solid) if (w.kind === 'exterior') along(w.a, w.b, w.thickness, 'wall-ext');
+  const rim = upperWalls.filter((w) => w.kind === 'exterior' && !w.railing && !w.glass);
+  for (const w of rim.length ? rim : solid.filter((x) => x.kind === 'exterior')) along(w.a, w.b, w.thickness, 'wall-ext');
   // Edge only where floor meets hole: not where a flight's piece of the opening meets the landing's,
   // nor along a stretch that's open on both sides (a stair opening running into a void).
   const inHole = (q: Point) => holes.some((h) => pointInPolygon(q, h));
@@ -194,8 +202,10 @@ export function houseScene(p: Project, closedDoors?: ReadonlySet<string>): Scene
     }
     // The floor's depth between the ceiling below and this floor: a band on the outside walls
     // under it, and a finished edge round every stair opening and open-to-below void.
-    if (i > 0) scene.boxes.push(...floorBand(p, views[i - 1].storey.id, e, holes));
+    if (i > 0) scene.boxes.push(...floorBand(p, views[i - 1].storey.id, e, holes, v.walls));
     scene.faces.push(...s.faces.map((f) => ({ ...f, pts: f.pts.map(up) })));
+    // A lean-to over what the storey above doesn't cover.
+    for (const l of leanTos(p, storey.id)) scene.faces.push(...l.faces.map((f) => ({ ...f, pts: f.pts.map(up), roofPart: true })));
     for (let k = 0; k < 3; k++) {
       scene.bounds.min[k] = Math.min(scene.bounds.min[k], up(s.bounds.min)[k]);
       scene.bounds.max[k] = Math.max(scene.bounds.max[k], up(s.bounds.max)[k]);

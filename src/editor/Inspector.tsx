@@ -11,7 +11,8 @@ import { netClearOpening } from '../calc/irc.ts';
 import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
-import { isMultiStorey } from '../model/storeys.ts';
+import { activeStorey, activeStoreyId, isMultiStorey } from '../model/storeys.ts';
+import { leanTos, lowerRoofOf, uncoveredRects } from '../calc/lowerRoof.ts';
 import { foundationOf } from '../calc/foundation.ts';
 import { dist, wallLength } from '../model/geometry.ts';
 import { isLight, roomAt, switchRoom, switchWays, VEHICLE_DOOR } from '../calc/lighting.ts';
@@ -27,6 +28,7 @@ import {
   type RafterSize,
   type Roof,
   type RoofType,
+  type LowerRoof,
   type Foundation,
   JOIST_SIZES,
   type JoistSize,
@@ -1093,6 +1095,7 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
       )}
 
       <RoofFields roof={roofOf(project)} set={(patch) => dispatch({ type: 'setRoof', patch })} />
+      <LowerRoofFields project={project} dispatch={dispatch} />
       <FoundationFields f={foundationOf(project)} set={(patch) => dispatch({ type: 'setFoundation', patch })} />
 
       {u && (
@@ -1249,6 +1252,60 @@ function FoundationFields({ f, set }: { f: Foundation; set(patch: Partial<Founda
         </div>
       )}
       <FoundationV2Fields f={f} set={set} />
+    </>
+  );
+}
+
+/** The lean-to over the part of this floor the floor above doesn't cover (shown only when there is such a part). */
+function LowerRoofFields({ project, dispatch }: { project: Project; dispatch: Dispatch<Action> }) {
+  const id = activeStoreyId(project);
+  const u = uncoveredRects(project, id);
+  if (!u?.rects.length) return null;
+  const lr = lowerRoofOf(project, id);
+  const set = (patch: Partial<LowerRoof>) => dispatch({ type: 'storey', op: { op: 'update', id, patch: { lowerRoof: { ...activeStorey(project).lowerRoof, ...patch } } } });
+  const ls = leanTos(project, id);
+  const area = u.rects.reduce((t, r) => t + (r.x1 - r.x0) * (r.y1 - r.y0), 0) / 144;
+  return (
+    <>
+      <h4>Lower roof</h4>
+      <p className="muted small">
+        {Math.round(area)} sq ft of this floor isn't under the floor above. It gets a lean-to: rafters from a ledger on the wall above down to the outside wall.
+      </p>
+      <div className="row">
+        <Field label="Type">
+          <select value={lr.type} onChange={(e) => set({ type: e.target.value as LowerRoof['type'] })}>
+            <option value="lean-to">Lean-to (shed against the wall above)</option>
+            <option value="none">None (flat / not drawn)</option>
+          </select>
+        </Field>
+        <Field label="Pitch" hint="Shingles need 2/12 or more; under 4/12 they need two layers of underlayment (R905.2.2)">
+          <select value={lr.pitch} onChange={(e) => set({ pitch: Number(e.target.value) })} disabled={lr.type === 'none'}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12].map((p) => (
+              <option key={p} value={p}>
+                {p}/12
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {lr.type !== 'none' && (
+        <>
+          <div className="row">
+            <Field label="Eave overhang">
+              <LengthInput value={lr.overhang} onChange={(v) => set({ overhang: v })} />
+            </Field>
+            <Field label="Rake overhang">
+              <LengthInput value={lr.rake} onChange={(v) => set({ rake: v })} />
+            </Field>
+          </div>
+          {ls.map((l, i) => (
+            <p key={i} className="muted small">
+              {ls.length > 1 ? `Lean-to ${i + 1}: ` : ''}
+              {formatFtIn(l.run)} run, rises {formatFtIn(l.rise)} to {formatFtIn(l.top)} above this floor where it meets the wall above.
+            </p>
+          ))}
+        </>
+      )}
     </>
   );
 }
