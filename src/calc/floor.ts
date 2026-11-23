@@ -307,8 +307,20 @@ export function frameFloor(polys: Point[][], s: FloorSpec, holePolys: Point[][][
     const [a, b] = span;
     const [a0, b0] = supported(mid, a, b);
     const brk = breaks(mid, a, b, a0, b0);
-    const sLo = supportAt(h.va, a0, b0, brk);
-    const sHi = supportAt(h.vb, a0, b0, brk);
+    // An edge sits on a support only if it does all the way across: a wall below that stops short needs a header.
+    const across = (v: number) => {
+      const at = supportAt(v, a0, b0, brk);
+      if (at === null) return null;
+      for (const u of [h.ua + 1, h.ub - 1]) {
+        const sp = scan(uv, u).find(([x, y]) => v >= x - BEAR && v <= y + BEAR);
+        if (!sp) return null;
+        const [c0, c1] = supported(u, sp[0], sp[1]);
+        if (supportAt(at, c0, c1, breaks(u, sp[0], sp[1], c0, c1)) === null) return null;
+      }
+      return at;
+    };
+    const sLo = across(h.va);
+    const sHi = across(h.vb);
     h.va = Math.max(sLo ?? h.va, a);
     h.vb = Math.min(sHi ?? h.vb, b);
     h.headLo = sLo === null;

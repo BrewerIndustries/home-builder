@@ -144,7 +144,29 @@ function floorBand(p: Project, belowId: string, e: number, holes: Point[][]): Bo
     out.push({ kind, c: [(a.x + b.x) / 2, y, (a.y + b.y) / 2], size: [len + (kind === 'rim' ? 0 : t), depth, t], rotY: -Math.atan2(b.y - a.y, b.x - a.x) });
   };
   for (const w of solid) if (w.kind === 'exterior') along(w.a, w.b, w.thickness, 'wall-ext');
-  for (const h of holes) h.forEach((a, k) => along(a, h[(k + 1) % h.length], 1.5, 'rim'));
+  // Edge only where floor meets hole: not where a flight's piece of the opening meets the landing's,
+  // nor along a stretch that's open on both sides (a stair opening running into a void).
+  const inHole = (q: Point) => holes.some((h) => pointInPolygon(q, h));
+  for (const h of holes) {
+    h.forEach((a, k) => {
+      const b = h[(k + 1) % h.length];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len < 0.5) return;
+      const [ux, uy] = [(b.x - a.x) / len, (b.y - a.y) / len];
+      const n = Math.max(1, Math.ceil(len / 3));
+      let start: number | null = null;
+      for (let s = 0; s <= n; s++) {
+        const t = s < n ? ((s + 0.5) / n) * len : len;
+        const real = s < n && inHole({ x: a.x + ux * t - uy, y: a.y + uy * t + ux }) !== inHole({ x: a.x + ux * t + uy, y: a.y + uy * t - ux });
+        if (real && start === null) start = (s / n) * len;
+        if (!real && start !== null) {
+          const end = (s / n) * len;
+          along({ x: a.x + ux * start, y: a.y + uy * start }, { x: a.x + ux * end, y: a.y + uy * end }, 1.5, 'rim');
+          start = null;
+        }
+      }
+    });
+  }
   return out;
 }
 

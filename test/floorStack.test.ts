@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { roomWallHeight } from '../src/calc/ceilings.ts';
-import { houseScene } from '../src/calc/house.ts';
+import { floorOpenings, houseScene } from '../src/calc/house.ts';
 import { subtractHoles } from '../src/calc/outline.ts';
 import { stairGeometry } from '../src/calc/stairs.ts';
 import { stairBoxes } from '../src/calc/stairs3d.ts';
@@ -57,6 +57,13 @@ test('the floor depth between storeys is closed: a band on the outside walls and
   assert.ok(rims.length >= 4);
   assert.ok(rims.every((b) => Math.abs(b.c[1] - b.size[1] / 2 - 144) < 0.01));
   assert.ok(s.boxes.some((b) => b.kind === 'wall-ext' && b.c[1] - b.size[1] / 2 >= 143.9 && b.c[1] + b.size[1] / 2 > 150));
+  // No edge across the stair opening where its flight and landing pieces meet (they'd read as joists).
+  const polys = floorOpenings(gallery(), 'up').flatMap((o) => o.polys);
+  assert.ok(polys.length > 1);
+  const pts = polys.flat();
+  const [x0, x1] = [Math.min(...pts.map((q) => q.x)) + 2, Math.max(...pts.map((q) => q.x)) - 2];
+  const [z0, z1] = [Math.min(...pts.map((q) => q.y)) + 2, Math.max(...pts.map((q) => q.y)) - 2];
+  assert.deepEqual(rims.filter((b) => b.c[0] > x0 && b.c[0] < x1 && b.c[2] > z0 && b.c[2] < z1), []);
 });
 
 test('you can walk up a stair with treads shallower than your body, to the floor above', () => {
