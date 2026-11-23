@@ -48,6 +48,7 @@ Ordered roughly by value. Competitor research behind these lives in
 - [x] Stairs in 3D + first-person walkthrough (2026-11-21)
 - [x] Open to below + railings (2026-11-21): room flag cuts the upper floor + ceiling below; Railing wall type (36" guard, priced per LF, 3D rail/posts/infill); R312.1.1 / R312.1.2 checks
 - [x] Storey stacking fixes + multi-landing stairs (2026-11-23): floor band / opening edges, holes cut into pieces, ceiling under stair openings, railings ignored for ceiling height, walk up shallow treads, any number of landings on a straight stair
+- [x] Project setup + standards (2026-11-23): ceiling, door, window sizes; cold/warm attic; vented/sealed eaves; roof, framing, foundation; apply to what's drawn; walkthrough doors open / close with E
 - [ ] Walkthrough v2: touch joystick for phones / iPad; walk through glass-wall doors; handrails and guards in 3D; jump to a room from a list
 
 ## Electrical

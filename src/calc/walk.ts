@@ -120,3 +120,29 @@ export function startPoint(scene: Pick<Scene3D, 'flats' | 'bounds'>): Walker {
   if (!pointInPolygon(c, pick.outline)) c = { x: (pick.outline[0].x + pick.outline[1].x + pick.outline[2].x) / 3, y: (pick.outline[0].y + pick.outline[1].y + pick.outline[2].y) / 3 };
   return { x: c.x, z: c.y, y: pick.y };
 }
+
+/** How far away a door can be opened or closed from (about 6 ft). */
+export const REACH = 72;
+
+/**
+ * The door to open or close: the nearest leaf within reach on your floor,
+ * preferring one in front of you. `yaw` 0 faces -z (plan up).
+ */
+export function doorInReach(scene: Pick<Scene3D, 'boxes'>, w: Walker, yaw: number): string | null {
+  const fx = -Math.sin(yaw);
+  const fz = -Math.cos(yaw);
+  let best: { id: string; score: number } | null = null;
+  for (const b of scene.boxes) {
+    if (!b.door) continue;
+    const bottom = b.c[1] - b.size[1] / 2;
+    if (Math.abs(bottom - w.y) > 30) continue;
+    const [dx, dz] = [b.c[0] - w.x, b.c[2] - w.z];
+    const d = Math.hypot(dx, dz);
+    if (d > REACH) continue;
+    // In front counts double: distance, less a bonus for facing it.
+    const facing = d > 1e-6 ? (dx * fx + dz * fz) / d : 1;
+    const score = d - facing * 24;
+    if (!best || score < best.score) best = { id: b.door, score };
+  }
+  return best?.id ?? null;
+}

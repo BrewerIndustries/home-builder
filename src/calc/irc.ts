@@ -1,5 +1,5 @@
 import { dist, pointAlong, polygonArea, wallLength } from '../model/geometry.ts';
-import { HABITABLE, isOpenWay, studFor, type Opening, type Point, type Project, type Room, type Wall } from '../model/types.ts';
+import { HABITABLE, isOpenWay, studFor, type Opening, type Point, type Project, type Room, type Wall, standardsOf } from '../model/types.ts';
 import { formatFtIn } from '../model/units.ts';
 import { areaWithHeadroom, ceilingInfo } from './ceilings.ts';
 import { narrowest } from './outline.ts';
@@ -413,6 +413,15 @@ export function ircChecks(project: Project): CodeCheck[] {
             : `${p}/12 meets the shingle minimum`,
     });
     const v = roof.vent;
+    const std = standardsOf(project);
+    if (std.roofVent === 'sealed') {
+      add(
+        std.attic === 'warm'
+          ? { rule: 'Unvented attic', section: 'R806.5', status: 'warn', message: 'Warm roof with sealed eaves and ridge: an unvented attic is allowed only under R806.5 — air-impermeable insulation against the underside of the roof deck (or rigid board above it) to your climate zone\'s R-value; confirm every condition' }
+          : { rule: 'Attic ventilation', section: 'R806.1', status: 'fail', message: 'Cold roof (insulation on the ceiling) with sealed eaves and ridge: an attic outside the insulation has to be ventilated — vent it, or make it a warm roof with insulation at the deck (R806.5)' },
+      );
+    } else {
+      if (std.attic === 'warm') add({ rule: 'Attic ventilation', section: 'R806', status: 'info', message: 'Warm roof with vented eaves and ridge: the vent space has to run between the insulation and the roof deck (a vented-over-deck roof), not through the attic' });
     add({
       rule: 'Attic ventilation',
       section: 'R806.2',
@@ -420,6 +429,7 @@ export function ircChecks(project: Project): CodeCheck[] {
       message: `${Math.round(v.atticArea / 144)} sq ft attic needs ${Math.round(v.required)} sq in of net free vent area (1/${v.ratio}), split high and low — the estimate's vents are sized to it at typical ratings`
         + (roof.roof.vent300 ? '; 1/300 holds only when the R806.2 exception conditions are met — confirm them' : ''),
     });
+    }
     for (const n of roof.notes) add({ rule: 'Roof', section: 'R801', status: 'warn', message: n });
   }
 

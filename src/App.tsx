@@ -22,6 +22,7 @@ import { SitePrintSheet } from './site/SitePrint.tsx';
 import { CodeView, MaterialsView } from './views/Reports.tsx';
 import { ElectricalView } from './views/Electrical.tsx';
 import { PhaseBar } from './editor/PhaseBar.tsx';
+import { ProjectSetupDialog } from './editor/ProjectSetup.tsx';
 import { PlanAltsDialog } from './editor/PlanAlts.tsx';
 import { phaseOf, phaseView, planElementIds, setPhase, type PhaseView } from './model/phase.ts';
 
@@ -68,7 +69,12 @@ export function App() {
   const canvas = useRef<PlanCanvasHandle>(null);
   const projectFile = useRef<HTMLInputElement>(null);
   const imageFile = useRef<HTMLInputElement>(null);
-  const [dialog, setDialog] = useState<'projects' | 'account' | 'options' | null>(null);
+  const [dialog, setDialog] = useState<'projects' | 'account' | 'options' | 'setup' | null>(null);
+  // A new, empty project opens on Project setup (once: Done marks it seen).
+  const fresh = !project.walls.length && !project.storeys?.length && !project.standards?.seen;
+  useEffect(() => {
+    if (fresh && dialog === null) setDialog('setup');
+  }, [fresh, dialog]);
   // Remodel phases the plan shows (see model/phase.ts); the plan canvas and print sheet get the filtered project.
   const [phases, setPhases] = useState<PhaseView>('all');
   const shown = useMemo(() => phaseView(project, phases), [project, phases]);
@@ -238,6 +244,9 @@ export function App() {
           <button onClick={() => window.print()} disabled={!project.walls.length} title="Print or save as PDF — the Plan tab prints a to-scale sheet">
             Print / PDF
           </button>
+          <button onClick={() => setDialog('setup')} title="Project setup: ceiling height, door and window sizes, attic and roof venting, framing and foundation — the standards new work is drawn to">
+            Setup
+          </button>
           <button onClick={() => setDialog('options')} title="Design options (Option A / Plan B) with a cost compare, remodel phases, and saved plan versions with change orders">
             Options
           </button>
@@ -286,6 +295,7 @@ export function App() {
           }}
         />
       )}
+      {dialog === 'setup' && <ProjectSetupDialog project={project} dispatch={dispatch} onClose={() => setDialog(null)} />}
       {dialog === 'options' && <PlanAltsDialog project={project} dispatch={dispatch} onClose={() => setDialog(null)} />}
       {dialog === 'projects' && <ProjectsDialog ws={ws} onClose={() => setDialog(null)} onSignIn={() => setDialog('account')} />}
       {dialog === 'account' && (

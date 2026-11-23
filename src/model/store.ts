@@ -1,5 +1,5 @@
 import { clampOpeningOffset, dist, samePoint, uncoveredPieces, wallDir, wallLength } from './geometry.ts';
-import { DEFAULT_FRAMING, type Ceiling, type WallAssemblies, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim, type OrdinateDim, type DimLook } from './types.ts';
+import { DEFAULT_FRAMING, type Ceiling, type WallAssemblies, type AngleDim, type FramingSettings, type Opening, type Outlet, type Fixture, type WallSwitch, type Counter, type Furniture, type ElectricalSettings, type Pricing, type Plant, type Site, type SiteArea, EMPTY_SITE, type Point, type Project, type Room, type Underlay, type Wall, DEFAULT_ROOF, type Roof, DEFAULT_FOUNDATION, type Foundation, type DimMode, type UserDim, type OrdinateDim, type DimLook, type ProjectStandards } from './types.ts';
 import { joinWalls, mirrorRoom, moveRoom, rotateRoom, splitWall, translatePoints } from './wallEdit.ts';
 import { followWalls as followCounters } from '../calc/counters.ts';
 import { followFurniture } from '../calc/furniture.ts';
@@ -61,6 +61,7 @@ export type Action =
   /** Default wall layers per kind (walls with their own assembly keep it). */
   | { type: 'setAssemblies'; assemblies: WallAssemblies }
   | { type: 'setRoof'; patch: Partial<Roof> }
+  | { type: 'setStandards'; patch: Partial<ProjectStandards> }
   | { type: 'setFoundation'; patch: Partial<Foundation> }
   | { type: 'setPricing'; pricing: Pricing }
   | { type: 'setSite'; patch: Partial<Site>; transient?: boolean }
@@ -399,6 +400,9 @@ export function projectReducer(p: Project, action: Action): Project {
 
     case 'updatePlant':
       return { ...p, site: { ...site(p), plants: site(p).plants.map((x) => (x.id === action.id ? { ...x, ...action.patch } : x)) } };
+
+    case 'setStandards':
+      return { ...p, standards: { ...p.standards, ...action.patch } };
 
     case 'setRoof':
       return { ...p, roof: { ...DEFAULT_ROOF, ...p.roof, ...action.patch } };

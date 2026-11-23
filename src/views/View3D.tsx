@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { type Box, type Scene3D } from '../calc/model3d.ts';
 import { houseScene } from '../calc/house.ts';
 import { buildSiteScene } from '../calc/site3d.ts';
-import { EYE, move, startPoint, type Walker } from '../calc/walk.ts';
+import { doorInReach, EYE, move, startPoint, type Walker } from '../calc/walk.ts';
 import type { Project } from '../model/types.ts';
 
 // Orbitable 3D model of the plan. Loaded lazily (three.js is most of its weight).
@@ -74,7 +74,9 @@ export default function View3D({ project }: { project: Project }) {
   const [showRoof, setShowRoof] = useState(true);
   const [showSite, setShowSite] = useState(true);
   const [showFoundation, setShowFoundation] = useState(true);
-  const scene3d = useMemo(() => houseScene(project), [project]);
+  // Doors shut in the walkthrough (E opens / closes the one in front of you); drawn open otherwise.
+  const [closedDoors, setClosedDoors] = useState<ReadonlySet<string>>(() => new Set());
+  const scene3d = useMemo(() => houseScene(project, closedDoors), [project, closedDoors]);
   const site3d = useMemo(() => buildSiteScene(project), [project]);
   const fitted = useRef(false);
   walkRef.current.scene = scene3d;
@@ -146,6 +148,17 @@ export default function View3D({ project }: { project: Project }) {
       if (key === 'escape') {
         world.current?.walk(false);
         setWalking(false);
+        return;
+      }
+      if (key === 'e') {
+        const id = wk.scene ? doorInReach(wk.scene, wk.me, wk.yaw) : null;
+        if (id)
+          setClosedDoors((c) => {
+            const next = new Set(c);
+            if (!next.delete(id)) next.add(id);
+            return next;
+          });
+        e.preventDefault();
         return;
       }
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key)) {
@@ -357,7 +370,7 @@ export default function View3D({ project }: { project: Project }) {
           {walking ? 'Exit walkthrough' : '🚶 Walk through'}
         </button>
         {!walking && <button onClick={() => world.current?.fit(scene3d)}>Reset view</button>}
-        <span className="muted small">{walking ? 'W A S D / ↑ ↓ to walk · ← → or drag to look round · Shift to hurry · stairs carry you up · Esc to stop' : 'Drag to orbit · right-drag to pan · scroll to zoom'}</span>
+        <span className="muted small">{walking ? 'W A S D / ↑ ↓ to walk · ← → or drag to look round · E opens / closes the door in front of you · Shift to hurry · Esc to stop' : 'Drag to orbit · right-drag to pan · scroll to zoom'}</span>
       </div>
       <div className="view3d-canvas" ref={host} />
       {!project.walls.length && !site3d.bounds && <p className="view3d-empty muted">Draw some walls on the Plan tab first.</p>}

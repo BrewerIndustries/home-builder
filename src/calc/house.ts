@@ -171,14 +171,14 @@ function floorBand(p: Project, belowId: string, e: number, holes: Point[][]): Bo
 }
 
 /** The 3D scene with every storey stacked at its height, the roof on the top one and stair openings cut in the floors. */
-export function houseScene(p: Project): Scene3D {
-  if (!isMultiStorey(p)) return buildScene(p);
+export function houseScene(p: Project, closedDoors?: ReadonlySet<string>): Scene3D {
+  if (!isMultiStorey(p)) return buildScene(p, closedDoors);
   const scene: Scene3D = { boxes: [], flats: [], faces: [], bounds: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] } };
   const views = storeyViews(p);
   views.forEach(({ storey }, i) => {
     const v = roleView(p, storey.id);
     if (!v.walls.length) return;
-    const s = buildScene(v);
+    const s = buildScene(v, closedDoors);
     const e = storeyElevation(p, storey.id);
     const up = (q: V3): V3 => [q[0], q[1] + e, q[2]];
     const holes = [...floorOpenings(p, storey.id).flatMap((o) => o.polys), ...openVoids(v)];

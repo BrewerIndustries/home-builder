@@ -25,6 +25,8 @@ export interface Box {
   size: V3;
   /** Rotation about Y, radians. */
   rotY: number;
+  /** A door leaf: the id of its door (the walkthrough opens and closes it). */
+  door?: string;
 }
 
 /** A flat polygon (with optional holes) lying in a horizontal plane at height y. */
@@ -219,8 +221,8 @@ export function roomCeiling(project: Project, room: Room): { flats: FlatSurface[
   return { flats, faces, boxes };
 }
 
-export function buildScene(project: Project): Scene3D {
-  const boxes = [...wallBoxes(project), ...doorLeafBoxes(project)];
+export function buildScene(project: Project, closedDoors?: ReadonlySet<string>): Scene3D {
+  const boxes = [...wallBoxes(project), ...doorLeafBoxes(project, closedDoors)];
   const flats: FlatSurface[] = [];
   const faces: Face[] = [];
   // Floors: outermost rooms only (nested rooms sit on the same slab).

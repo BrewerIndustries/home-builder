@@ -1,4 +1,4 @@
-import { DEFAULT_ROOF, type Dormer, type Point, type Project, type RafterSize, type Roof } from '../model/types.ts';
+import { DEFAULT_ROOF, type Dormer, type Point, type Project, type RafterSize, type Roof, standardsOf } from '../model/types.ts';
 import type { MaterialLine } from './materials.ts';
 
 // Roof over the house: geometry, framing members and roofing materials. Inches.
@@ -685,14 +685,23 @@ export function roofLines(project: Project, waste: number): MaterialLine[] {
   add('Roof', "2x6 fascia, 16'", Math.ceil((edge * w) / 192), 'ea', `${ft(edge)} ${pct}`);
   const v = c.vent;
   const vp = ventPlan(c);
+  const std = standardsOf(project);
   const ventBasis = `R806.2: ${Math.round(v.atticArea / 144)} sq ft attic ÷ ${v.ratio} = ${Math.round(v.required)} sq in net free area, half high / half low`;
-  if (roof.overhang > 0) {
-    const soffit = (c.eaveLength * roof.overhang) / 144;
-    add('Roof', 'Vented soffit', Math.ceil(soffit * w), 'sq ft', `${ft(c.eaveLength)} of eave × ${roof.overhang}" overhang ${pct}; intake needs ${Math.round(v.intake)} sq in net free area — check the panel's rating`);
+  const soffit = roof.overhang > 0 ? (c.eaveLength * roof.overhang) / 144 : 0;
+  if (std.roofVent === 'sealed') {
+    // Sealed roof-to-wall junction and ridge: no vents, a solid soffit.
+    if (soffit) add('Roof', 'Solid soffit', Math.ceil(soffit * w), 'sq ft', `${ft(c.eaveLength)} of eave × ${roof.overhang}" overhang ${pct}; sealed eaves (Project setup), no intake`);
+  } else {
+    if (soffit) add('Roof', 'Vented soffit', Math.ceil(soffit * w), 'sq ft', `${ft(c.eaveLength)} of eave × ${roof.overhang}" overhang ${pct}; intake needs ${Math.round(v.intake)} sq in net free area — check the panel's rating`);
+    add('Roof', "Ridge vent, 4'", Math.ceil(vp.ridgeVentFeet / 4), 'pieces', `${vp.ridgeVentFeet} LF of ridge at ~${VENT_NFA.ridgePerFoot} sq in/LF (check product). ${ventBasis}`);
+    add('Roof', 'Roof louver vent', vp.louvers, 'ea', `exhaust the ridge vent can't supply, ~${VENT_NFA.louver} sq in each (check product). ${ventBasis}`);
+    add('Roof', "Edge intake vent, 4'", Math.ceil(vp.edgeIntakeFeet / 4), 'pieces', `no soffit to vent through: ${Math.round(v.intake)} sq in intake at ~${VENT_NFA.edgeIntakePerFoot} sq in/LF (check product)`);
+    if (std.attic === 'cold') add('Roof', 'Rafter vent baffle', Math.ceil(c.eaveLength / 24), 'ea', `one per rafter bay at the eaves (24" o.c.), so the ceiling insulation doesn't block the soffit intake`);
   }
-  add('Roof', "Ridge vent, 4'", Math.ceil(vp.ridgeVentFeet / 4), 'pieces', `${vp.ridgeVentFeet} LF of ridge at ~${VENT_NFA.ridgePerFoot} sq in/LF (check product). ${ventBasis}`);
-  add('Roof', 'Roof louver vent', vp.louvers, 'ea', `exhaust the ridge vent can't supply, ~${VENT_NFA.louver} sq in each (check product). ${ventBasis}`);
-  add('Roof', "Edge intake vent, 4'", Math.ceil(vp.edgeIntakeFeet / 4), 'pieces', `no soffit to vent through: ${Math.round(v.intake)} sq in intake at ~${VENT_NFA.edgeIntakePerFoot} sq in/LF (check product)`);
+  // Where the insulation goes: on the ceiling (cold roof) or at the roof deck (warm roof).
+  if (std.attic === 'warm')
+    add('Insulation & wrap', 'Closed-cell spray foam at the roof deck (allowance)', Math.ceil(c.area / 144), 'sq ft', `warm roof (Project setup): ${Math.round(c.area / 144)} sq ft of roof deck, to your climate zone's R-value (N1102.1.2)${std.roofVent === 'sealed' ? '; air-impermeable at the deck for an unvented attic (R806.5)' : ''}`);
+  else add('Insulation & wrap', 'Blown-in attic insulation at the ceiling (allowance)', Math.ceil(v.atticArea / 144), 'sq ft', `cold roof (Project setup): ${Math.round(v.atticArea / 144)} sq ft of attic floor, to your climate zone's ceiling R-value (N1102.1.2)`);
   if (c.gableArea > 0) add('Sheathing', '7/16" OSB gable-end sheathing, 4×8', Math.ceil(((c.gableArea / 144) * w) / 32), 'sheets', `${Math.round(c.gableArea / 144)} sq ft of wall above the plate ${pct}`);
   return lines;
 }

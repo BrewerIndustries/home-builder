@@ -1,3 +1,4 @@
+import { doorSize, windowSize } from '../model/standards.ts';
 import { defaultWallThickness } from '../model/assembly.ts';
 import { polygonArea, wallLength } from '../model/geometry.ts';
 import { historyReducer, initHistory, migrate, syncThickness, type Action } from '../model/store.ts';
@@ -97,7 +98,8 @@ function normalise(p: Project, a: Record<string, any>, i: number): Action {
       if (!obj(o) || !p.walls.some((w) => w.id === o.wallId)) throw bad('opening.wallId must be an existing wall');
       if (!Number.isFinite(o.offset)) throw bad('opening.offset (inches from the wall\'s a end to the centre) is required');
       const kind = o.kind === 'window' ? 'window' : 'door';
-      const base = kind === 'door' ? { width: 36, height: 80, sill: 0, ...(o.operation !== 'open' && { swing: { side: 1, hinge: 'a' } }) } : { width: 36, height: 48, sill: 34, style: 'single-hung' };
+      const wall = p.walls.find((w) => w.id === o.wallId)!;
+      const base = kind === 'door' ? { ...doorSize(p, wall), sill: 0, ...(o.operation !== 'open' && { swing: { side: 1, hinge: 'a' } }) } : windowSize(p);
       out.opening = { ...base, ...o, kind, id: o.id ?? uid(kind === 'window' ? 'n' : 'd') };
       break;
     }

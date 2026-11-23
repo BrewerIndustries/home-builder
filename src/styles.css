@@ -1511,3 +1511,10 @@ fieldset.read-only { border: none; margin: 0; padding: 0; min-width: 0; }
 
 .invite-fresh code.token { word-break: break-all; font-size: 0.8em; }
 .lib .row code.grow { flex: 1; min-width: 0; word-break: break-all; }
+
+/* Project setup */
+.setup { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+.setup section h3 { margin: 0 0 6px; font-size: 14px; }
+.setup-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 8px 14px; }
+.setup-ticks { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.setup-foot { justify-content: flex-end; }

@@ -1,3 +1,4 @@
+import { doorSize, windowSize } from '../model/standards.ts';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Dispatch, type ReactNode, type Ref } from 'react';
 import { StoreyGhost } from './StoreyGhost.tsx';
 import {
@@ -626,7 +627,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       case 'window': {
         const near = nearestWall(project.walls, raw, 18 / view.scale + 6);
         if (!near) return;
-        const opening = newOpening(tool, near.wall, near.along);
+        const opening = newOpening(tool, near.wall, near.along, project);
         dispatch({ type: 'addOpening', opening });
         setSelection({ kind: 'opening', id: opening.id });
         return;
@@ -1109,7 +1110,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   let ghost: { wall: Wall; opening: Opening } | null = null;
   if ((tool === 'door' || tool === 'opening' || tool === 'window') && cursor) {
     const near = nearestWall(project.walls, cursor.p, 18 / s + 6);
-    if (near) ghost = { wall: near.wall, opening: newOpening(tool, near.wall, near.along) };
+    if (near) ghost = { wall: near.wall, opening: newOpening(tool, near.wall, near.along, project) };
   }
   const furnitureGhost = tool === 'furniture' && cursor ? newFurniture(project, furnitureKind, { x: Math.round(cursor.p.x), y: Math.round(cursor.p.y) }, 'ghost') : null;
 
@@ -1396,14 +1397,17 @@ function groupTurnHandle(b: { min: Point; max: Point }, scale: number): Point {
   return turnHandle([b.min, b.max], 36 / scale);
 }
 
-export function newOpening(tool: 'door' | 'opening' | 'window', wall: Wall, along: number): Opening {
-  const width = 36;
+export function newOpening(tool: 'door' | 'opening' | 'window', wall: Wall, along: number, project: Pick<Project, 'standards'> = {}): Opening {
   const kind = tool === 'window' ? 'window' : 'door';
+  // Sizes from the project's standards (Project setup): interior / exterior doors, windows.
+  const win = windowSize(project);
+  const door = doorSize(project, wall);
+  const width = kind === 'window' ? win.width : door.width;
   const base = { id: uid(tool === 'window' ? 'n' : tool === 'opening' ? 'p' : 'd'), wallId: wall.id, kind, width, offset: clampOpeningOffset(wall, width, Math.round(along)) } as const;
-  if (tool === 'opening') return { ...base, height: 80, sill: 0, operation: 'open' };
+  if (tool === 'opening') return { ...base, height: door.height, sill: 0, operation: 'open' };
   return kind === 'door'
-    ? { ...base, height: 80, sill: 0, swing: { side: 1, hinge: 'a' } }
-    : { ...base, height: 48, sill: 34, style: 'single-hung' };
+    ? { ...base, height: door.height, sill: 0, swing: { side: 1, hinge: 'a' } }
+    : { ...base, height: win.height, sill: win.sill, style: win.style };
 }
 
 function PreviewSegment({ a, b, thickness, px }: { a: Point; b: Point; thickness: number; px(n: number): number }) {

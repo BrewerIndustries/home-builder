@@ -583,10 +583,47 @@ export interface Project {
   options?: DesignOptions;
   /** Named, dated snapshots of the plan (see versions.ts). */
   versions?: PlanVersion[];
+  /** Project standards from the setup screen: door / window sizes, attic and roof venting. Unset fields use STANDARD_DEFAULTS. */
+  standards?: ProjectStandards;
   /** Storeys v1: every storey, the active one's plan data living in the top-level arrays above (see model/storeys.ts). Unset = one storey. */
   storeys?: Storey[];
   activeStorey?: string;
 }
+
+/** Sizes and choices set once for a project (Project setup), used for everything drawn after. Inches. */
+export interface ProjectStandards {
+  interiorDoorWidth?: number;
+  interiorDoorHeight?: number;
+  exteriorDoorWidth?: number;
+  exteriorDoorHeight?: number;
+  windowWidth?: number;
+  windowHeight?: number;
+  /** Floor to the top of the window (head height); the sill follows from the height. */
+  windowHead?: number;
+  windowStyle?: WindowStyle;
+  /** Cold roof: insulation on the ceiling, the attic outside the heated space. Warm roof: insulation at the roof deck, the attic inside it. */
+  attic?: 'cold' | 'warm';
+  /** Where roof meets wall and ridge: vented (soffit intake + ridge exhaust) or sealed (no vents). */
+  roofVent?: 'vented' | 'sealed';
+  /** True once the setup screen has been seen (so it doesn't open again on an empty plan). */
+  seen?: boolean;
+}
+
+export const STANDARD_DEFAULTS: Required<Omit<ProjectStandards, 'seen'>> = {
+  interiorDoorWidth: 36,
+  interiorDoorHeight: 80,
+  exteriorDoorWidth: 36,
+  exteriorDoorHeight: 80,
+  windowWidth: 36,
+  windowHeight: 48,
+  windowHead: 82,
+  windowStyle: 'single-hung',
+  attic: 'cold',
+  roofVent: 'vented',
+};
+
+/** The project's standards with defaults filled in. */
+export const standardsOf = (p: Pick<Project, 'standards'>) => ({ ...STANDARD_DEFAULTS, ...p.standards });
 
 /** The plan data each storey has of its own. */
 export interface StoreyData {
