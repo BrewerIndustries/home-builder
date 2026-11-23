@@ -45,6 +45,8 @@ export type Action =
   | { type: 'updateWall'; id: string; patch: Partial<Omit<Wall, 'id'>> }
   | { type: 'setWallLength'; id: string; length: number }
   | { type: 'moveVertex'; from: Point; to: Point; transient?: boolean }
+  /** Move one wall's end only (a broken corner): the other walls there stay put. */
+  | { type: 'moveWallEnd'; id: string; from: Point; to: Point; transient?: boolean }
   /** Slide wall ends and room corners at `from` by `delta` (whole-wall drag; see wallDragPoints). */
   | { type: 'translatePoints'; from: Point[]; delta: Point; transient?: boolean }
   | { type: 'splitWall'; id: string; at: number; newId: string }
@@ -237,6 +239,12 @@ export function projectReducer(p: Project, action: Action): Project {
         walls: p.walls.map((w) => ({ ...w, a: move(w.a), b: move(w.b) })),
         rooms: p.rooms.map((r) => ({ ...r, points: r.points.map(move) })),
       }));
+    }
+
+    case 'moveWallEnd': {
+      const { id, from, to } = action;
+      const move = (q: Point) => (samePoint(q, from) ? { ...to } : q);
+      return followWalls(p, reclampOpenings({ ...p, walls: p.walls.map((w) => (w.id === id ? { ...w, a: move(w.a), b: move(w.b) } : w)) }));
     }
 
     case 'translatePoints':

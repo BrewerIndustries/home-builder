@@ -52,7 +52,7 @@ interface View {
 type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
   /** A wall end; `anchor` is the selected wall's other end (Alt swings round it, keeping `radius`). */
-  | { kind: 'vertex'; start: Point; current: Point; anchor: Point; radius: number; swung: boolean }
+  | { kind: 'vertex'; start: Point; current: Point; anchor: Point; radius: number; swung: boolean; only?: string }
   /** Whole-wall drag: slides across its own length; `current` = the points travelling with it. */
   | { kind: 'wall'; start: Point; normal: Point; moved: number; current: Point[]; started: boolean; snap: { start: number; targets: WallSnapTarget[] }; square: boolean }
   | { kind: 'opening'; id: string; grab: number; from: number }
@@ -134,6 +134,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
   const [straightening, setStraightening] = useState(false);
   const [lengthText, setLengthText] = useState('');
   const [moveText, setMoveText] = useState<string | null>(null);
+  /** A corner broken by a double-click: dragging it moves only this wall's end. */
+  const [broken, setBroken] = useState<{ at: Point; wallId: string } | null>(null);
   const lastEdit = useRef<LastEdit | null>(null);
   const [entry, setEntry] = useState('');
   // A typed value only applies straight after the drag it sets.
@@ -540,7 +542,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             if (dist(end, raw) <= 10 / view.scale) {
               dispatch({ type: 'checkpoint' });
               const anchor = end === selectedWall.a ? selectedWall.b : selectedWall.a;
-              drag.current = { kind: 'vertex', start: end, current: end, anchor, radius: wallLength(selectedWall), swung: false };
+              const only = broken && broken.wallId === selectedWall.id && samePoint(broken.at, end) ? selectedWall.id : undefined;
+              drag.current = { kind: 'vertex', start: end, current: end, anchor, radius: wallLength(selectedWall), swung: false, only };
               return;
             }
           }
@@ -776,7 +779,8 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
       setCursor({ p, snapped });
       setMoveText(`${note ? `${note} · ` : ''}Length ${formatFtIn(dist(d.anchor, p))}`);
       if (!samePoint(p, d.current)) {
-        dispatch({ type: 'moveVertex', from: d.current, to: p, transient: true });
+        if (d.only) dispatch({ type: 'moveWallEnd', id: d.only, from: d.current, to: p, transient: true });
+        else dispatch({ type: 'moveVertex', from: d.current, to: p, transient: true });
         d.current = p;
       }
       return;
@@ -1141,8 +1145,27 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
             if ((project.dimOffsets?.[id] ?? 0) !== home) dispatch({ type: 'setDimOffset', id, offset: home });
             return;
           }
-          // Double-click a wall to split it there.
           const raw = toWorld(e.clientX, e.clientY);
+          // Double-click a wall corner to break it: dragging that end then moves only this wall.
+          const tol = 10 / viewRef.current.scale;
+          const at = wallEndpoints(project.walls).find((q) => dist(q, raw) <= tol);
+          const there = at ? project.walls.filter((w) => samePoint(w.a, at) || samePoint(w.b, at)) : [];
+          if (at && there.length > 1) {
+            // The selected wall if it's one of them, else the one whose run the click leans toward.
+            const toward = (w: Wall) => {
+              const far = samePoint(w.a, at) ? w.b : w.a;
+              const len = dist(at, far) || 1;
+              return ((far.x - at.x) * (raw.x - at.x) + (far.y - at.y) * (raw.y - at.y)) / len;
+            };
+            const pick =
+              there.find((w) => w.id === selectedWall?.id) ??
+              [...there].sort((a, b) => toward(b) - toward(a))[0];
+            setBroken({ at, wallId: pick.id });
+            setSelection({ kind: 'wall', id: pick.id });
+            onMessage?.(`Corner broken: drag this end to move only this ${formatFtIn(wallLength(pick))} wall — the other ${there.length - 1 > 1 ? 'walls stay' : 'wall stays'} put.`);
+            return;
+          }
+          // Double-click a wall to split it there.
           const hit = hitTest(project, raw, 6 / viewRef.current.scale);
           // Double-click a fixture to resize it with handles.
           if (hit?.kind === 'furniture') {
@@ -1251,6 +1274,9 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
           {tool === 'calibrate' && calPoints.length === 1 && cursor && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={cursor.p.x} y2={cursor.p.y} className="cal-line" strokeWidth={px(2)} />}
           {tool === 'calibrate' && calPoints.length === 2 && <line x1={calPoints[0].x} y1={calPoints[0].y} x2={calPoints[1].x} y2={calPoints[1].y} className="cal-line" strokeWidth={px(2)} />}
 
+          {broken && selectedWall?.id === broken.wallId && (samePoint(selectedWall.a, broken.at) || samePoint(selectedWall.b, broken.at)) && (
+            <rect x={broken.at.x - px(6)} y={broken.at.y - px(6)} width={px(12)} height={px(12)} className="broken-corner" strokeWidth={px(2)} />
+          )}
           {cursor?.snapped === 'endpoint' && <circle cx={cursor.p.x} cy={cursor.p.y} r={px(7)} className="snap" strokeWidth={px(2)} />}
         </g>
       </svg>
@@ -1357,7 +1383,7 @@ export function PlanCanvas({ project, dispatch, tool, setTool, wallKind, furnitu
 function hintFor(tool: Tool, drawing: boolean): string {
   switch (tool) {
     case 'select':
-      return 'Click to select · drag empty space to box-pick (Shift-click / Shift-drag adds or drops; Space-drag or scroll pans) · drag any picked item to move them together · ⌘C / ⌘V copy and paste a room with its contents · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · double-click a fixture for resize handles (drag one; Alt = about its centre) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
+      return 'Click to select · drag empty space to box-pick (Shift-click / Shift-drag adds or drops; Space-drag or scroll pans) · drag any picked item to move them together · ⌘C / ⌘V copy and paste a room with its contents · drag a wall to slide it (attached walls follow; snaps to other walls and the grid, Shift = free) · double-click a wall to split it there, or a corner to break it (that end then drags without the other wall) · drag its ends (they snap onto other walls; Alt swings an end round the other) or openings · drag a selected room to move it, its round handle to turn it (15° steps, Shift = free) and its crosshair to pick what it turns about · drag a dimension string to move it (double-click resets) · double-click a fixture for resize handles (drag one; Alt = about its centre) · after a drag, type a value + ↵ to set it exactly · ⌫ deletes';
     case 'wall':
       return drawing ? 'Click to add the next corner · type a length + ↵ · Shift = any angle · double-click / Esc to finish' : 'Click to start a wall';
     case 'area':
