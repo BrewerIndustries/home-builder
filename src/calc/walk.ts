@@ -83,12 +83,15 @@ const onFlat = (f: FlatSurface, x: number, z: number) => pointInPolygon({ x, y: 
 export function move(scene: Pick<Scene3D, 'boxes' | 'flats'>, w: Walker, dx: number, dz: number, dt = 1 / 60): Walker {
   let x = w.x + dx;
   let z = w.z + dz;
-  const near = scene.boxes.filter((b) => blocks(b, w.y) && overBox(b, x, z, RADIUS + 1));
+  // A stair's next riser (or the floor edge at the top) stops your feet, not your whole body: treads (often under 10") are
+  // shallower than the body's radius, so you'd be pushed off the first step before standing on it.
+  const reach = (b: Box) => (b.kind === 'stair' || b.kind === 'rim' ? 1 : RADIUS);
+  const near = scene.boxes.filter((b) => blocks(b, w.y) && overBox(b, x, z, reach(b) + 1));
   // A few passes so corners (two walls at once) resolve.
   for (let pass = 0; pass < 3; pass++) {
     let moved = false;
     for (const b of near) {
-      const p = pushOut(b, x, z, RADIUS);
+      const p = pushOut(b, x, z, reach(b));
       if (p) {
         [x, z] = [p.x, p.y];
         moved = true;

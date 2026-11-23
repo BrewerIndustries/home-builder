@@ -154,7 +154,9 @@ export function triangulate(pts: Point[]): [Point, Point, Point][] {
   const idx = pts.map((_, i) => i);
   const out: [Point, Point, Point][] = [];
   const cross = (a: Point, b: Point, c: Point) => ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) * s;
-  const inside = (p: Point, a: Point, b: Point, c: Point) => cross(a, b, p) > 1e-9 && cross(b, c, p) > 1e-9 && cross(c, a, p) > 1e-9;
+  // Inside or on the edge (a reflex corner on the ear's diagonal makes it no ear), but not one of its corners.
+  const same = (p: Point, q: Point) => Math.abs(p.x - q.x) < 1e-9 && Math.abs(p.y - q.y) < 1e-9;
+  const inside = (p: Point, a: Point, b: Point, c: Point) => !same(p, a) && !same(p, b) && !same(p, c) && cross(a, b, p) >= -1e-9 && cross(b, c, p) >= -1e-9 && cross(c, a, p) >= -1e-9;
   let guard = idx.length * idx.length;
   while (idx.length > 3 && guard-- > 0) {
     let clipped = false;
@@ -172,4 +174,62 @@ export function triangulate(pts: Point[]): [Point, Point, Point][] {
   }
   if (idx.length === 3 && cross(pts[idx[0]], pts[idx[1]], pts[idx[2]]) > 1e-9) out.push([pts[idx[0]], pts[idx[1]], pts[idx[2]]]);
   return out;
+}
+
+function isConvex(pts: Point[]): boolean {
+  let sign = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [a, b, c] = [pts[i], pts[(i + 1) % pts.length], pts[(i + 2) % pts.length]];
+    const z = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (Math.abs(z) < 1e-9) continue;
+    if (sign && Math.sign(z) !== sign) return false;
+    sign = Math.sign(z);
+  }
+  return true;
+}
+
+const box = (pts: Point[]) => {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+};
+
+/** a − h for a convex h: the parts of a outside each of h's edges in turn (disjoint pieces, no holes). */
+function minusConvex(a: Point[], h: Point[]): Point[][] {
+  const c = polygonCentroid(h);
+  const out: Point[][] = [];
+  let rest = a;
+  for (let i = 0; i < h.length && rest.length; i++) {
+    const p = h[i];
+    const q = h[(i + 1) % h.length];
+    let n = { x: -(q.y - p.y), y: q.x - p.x };
+    if (Math.hypot(n.x, n.y) < 1e-9) continue;
+    let c0 = dot(p, n);
+    if (dot(c, n) < c0) [n, c0] = [{ x: -n.x, y: -n.y }, -c0];
+    const outside = clipHalfPlane(rest, { x: -n.x, y: -n.y }, -c0);
+    if (outside.length && polygonArea(outside) > 0.5) out.push(outside);
+    rest = clipHalfPlane(rest, n, c0);
+  }
+  return out;
+}
+
+/**
+ * A polygon with holes cut out, as plain pieces with no holes. Holes may cross
+ * or touch the outline's edge (a stair opening at the edge of a floor, a void
+ * beside it), which a renderer's hole triangulation can't take.
+ */
+export function subtractHoles(outline: Point[], holes: Point[][]): Point[][] {
+  let pieces = [outline];
+  for (const h of holes) {
+    if (h.length < 3 || polygonArea(h) < 0.5) continue;
+    const hb = box(h);
+    for (const part of isConvex(h) ? [h] : triangulate(h)) {
+      pieces = pieces.flatMap((p) => {
+        const pb = box(p);
+        if (pb.x1 <= hb.x0 || pb.x0 >= hb.x1 || pb.y1 <= hb.y0 || pb.y0 >= hb.y1) return [p];
+        return minusConvex(p, part);
+      });
+    }
+  }
+  return pieces.filter((p) => polygonArea(p) > 0.5);
 }

@@ -60,7 +60,8 @@ import { FixtureOptions } from './FixtureOptions.tsx';
 import { RoofExtras } from './RoofExtras.tsx';
 import { anchorTarget, angleBetween, angleNeighbours, centrelineForFace, faceSpans, outerSides, stringStyle } from '../calc/faces.ts';
 import { AtticAccessFields, StairOpeningField, StairShapeFields } from './StairStoreyFields.tsx';
-import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
+import { GUARD_DROP, HANDRAIL_MAX, HANDRAIL_MIN, landingAt, MAX_FLIGHT_RISE, stairGeometry, stairRailing } from '../calc/stairs.ts';
+import { isTurning, straightLandings } from '../calc/stairShape.ts';
 import { joinCandidates, rotateWall, splitPoint, wallAngle } from '../model/wallEdit.ts';
 import { CabinetPanel } from './CabinetPanel.tsx';
 import { BAR_HEIGHT, BAR_LEDGE, cornerCabinets, cornerUppers, counterDir, counterLength, counterRoom, counterSpaces, CUTOUT_LABEL, CUTOUT_WIDTH, flipCounter, freeSpaces, kneeSpaceFor, MIN_COUNTER_SPACE, peninsulaJoin, seats, upperSpans } from '../calc/counters.ts';
@@ -750,10 +751,14 @@ export function Inspector({ project, dispatch, selection, setSelection, setTool 
                   <Field label="Floor to floor" hint={f.rise === undefined ? 'Estimated: wall height + joists + subfloor — type the real figure' : `${formatFtIn(g.riser)} risers, ${formatFtIn(g.tread)} treads`}>
                     <LengthInput value={g.rise} min={12} onChange={(v) => up({ rise: v })} />
                   </Field>
-                  <Field label="Landing at riser" hint={`0 = none. A flight may rise ${formatFtIn(MAX_FLIGHT_RISE)} at most between landings (R311.7.3); counted from the foot`}>
-                    <input type="number" min={0} max={(f.risers ?? 13) - 1} value={f.landing ?? 0} onChange={(e) => up({ landing: Math.max(0, Math.round(Number(e.target.value) || 0)) || undefined })} />
-                  </Field>
-                  {!!f.landing && (
+                  {isTurning(f) ? (
+                    <Field label="Landing at riser" hint={`The turn. A flight may rise ${formatFtIn(MAX_FLIGHT_RISE)} at most between landings (R311.7.3); counted from the foot`}>
+                      <input type="number" min={1} max={(f.risers ?? 13) - 1} value={f.landing ?? Math.round((f.risers ?? 13) / 2)} onChange={(e) => up({ landing: Math.max(1, Math.round(Number(e.target.value) || 1)) })} />
+                    </Field>
+                  ) : (
+                    <LandingsField f={f} up={up} />
+                  )}
+                  {landingAt(f) !== undefined && !isTurning(f) && (
                     <label className="link-row">
                       <input type="checkbox" checked={!!f.landingEntry} onChange={(e) => up({ landingEntry: e.target.checked || undefined })} /> A door opens off the landing (it gets a switch too, E3903.3)
                     </label>
@@ -1360,4 +1365,43 @@ export function dimName(project: Project, id: string): string {
   }
   const i = project.dims?.findIndex((d) => d.id === id) ?? -1;
   return i >= 0 ? `Dimension D${i + 1}` : 'Dimension';
+}
+
+/** A straight stair's landings: each so many risers from the foot; add one (splitting the tallest flight) or take one out. */
+function LandingsField({ f, up }: { f: Furniture; up: (patch: Partial<Furniture>) => void }) {
+  const R = f.risers ?? 13;
+  const list = straightLandings(f);
+  const set = (next: number[]) => {
+    const clean = [...new Set(next.map((n) => Math.round(n)).filter((n) => n > 0 && n < R))].sort((a, b) => a - b);
+    up({ landings: clean.length ? clean : undefined, landing: undefined });
+  };
+  // A new landing goes halfway up the flight with the most risers.
+  const add = () => {
+    const ends = [0, ...list, R];
+    let best = 0;
+    for (let i = 1; i < ends.length; i++) if (ends[i] - ends[i - 1] > ends[best + 1] - ends[best]) best = i - 1;
+    const at = Math.round((ends[best] + ends[best + 1]) / 2);
+    if (at > ends[best] && at < ends[best + 1]) set([...list, at]);
+  };
+  return (
+    <Field label="Landings" hint={`Each one so many risers up from the foot, as deep as the stair is wide (36" at least). A flight may rise ${formatFtIn(MAX_FLIGHT_RISE)} at most between landings (R311.7.3). Make the stair deeper to keep 10" treads`}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {list.length === 0 && <span className="muted small">None — one straight flight</span>}
+        {list.map((n, i) => (
+          <div key={`${n}-${i}`} className="row">
+            <span className="small">After riser</span>
+            <input type="number" min={1} max={R - 1} value={n} style={{ width: '4.5em' }} onChange={(e) => set(list.map((x, k) => (k === i ? Number(e.target.value) || x : x)))} />
+            <button title="Remove this landing" onClick={() => set(list.filter((_, k) => k !== i))}>
+              ✕
+            </button>
+          </div>
+        ))}
+        <div className="row">
+          <button onClick={add} disabled={R < 3}>
+            + Add landing
+          </button>
+        </div>
+      </div>
+    </Field>
+  );
 }

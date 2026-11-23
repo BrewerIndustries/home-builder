@@ -1,7 +1,7 @@
 import type { Furniture, Project } from '../model/types.ts';
 import type { Box } from './model3d.ts';
 import { stairGeometry } from './stairs.ts';
-import { isTurning, landingOf, pathLength, pathRects, toPlan, type Rect } from './stairShape.ts';
+import { isTurning, landingOf, pathLength, pathRects, straightSteps, toPlan, type Rect } from './stairShape.ts';
 
 // A stair in 3D: one solid block per step, from the floor up to its tread, laid
 // along the walk line (flights cut across, a landing as one deep step), so it
@@ -15,8 +15,7 @@ export function stepDepths(project: Project, f: Furniture): number[] {
     const [a, b] = g.flightRuns!;
     return [...Array(a.treads).fill(a.tread), landingOf(f)!.len, ...Array(b.treads).fill(b.tread)];
   }
-  const L = g.landingDepth ? Math.round(f.landing ?? 0) : 0;
-  return Array.from({ length: Math.max(0, g.risers - 1) }, (_, i) => (L && i + 1 === L ? g.landingDepth : g.tread));
+  return straightSteps(f).depths;
 }
 
 /** The step blocks of one stair. */

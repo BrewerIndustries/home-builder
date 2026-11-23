@@ -12,7 +12,7 @@ export function StairShapeFields({ f, up }: { f: Furniture; up(patch: Partial<Fu
   const R = f.risers ?? 13;
   const reshape = (s: 'straight' | 'L' | 'U') => {
     const b = f.flight ?? FLIGHT_WIDTH;
-    const n1 = Math.round(f.landing ?? R / 2);
+    const n1 = Math.round(f.landing ?? f.landings?.[0] ?? R / 2);
     const n2 = R - n1;
     if (s === 'straight') return up({ shape: undefined, turn: undefined, flight: undefined, landingDepth: undefined, w: b, d: (R - 1) * 11 });
     if (s === 'L') return up({ shape: 'L', landing: n1, w: b + Math.max(1, n2 - 1) * 11, d: b + Math.max(1, n1 - 1) * 11 });

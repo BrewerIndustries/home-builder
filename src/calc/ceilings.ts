@@ -28,7 +28,8 @@ export interface CeilingInfo {
 }
 
 export function roomWallHeight(project: Project, room: Room): number {
-  const walls = wallsOfRoom(project, room);
+  // Railings and glass screens stop short of the ceiling: only real walls set its height.
+  const walls = wallsOfRoom(project, room).filter((w) => !w.railing && !w.glass);
   return walls.length ? Math.min(...walls.map((w) => w.height)) : project.framing.wallHeight;
 }
 

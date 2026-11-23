@@ -251,6 +251,8 @@ export interface Furniture {
   /** Stairs: floor-to-floor height (else estimated from the wall height and a floor), and a landing so many risers from the foot, with or without a door off it. */
   rise?: number;
   landing?: number;
+  /** Straight stairs: landings, each so many risers from the foot (in place of `landing`, which is the first of them). */
+  landings?: number[];
   landingEntry?: boolean;
   /** Stairs: which sides have a handrail, as you walk up from the foot (right when unset), and its height above the nosings (36" when unset). */
   handrails?: 'none' | 'left' | 'right' | 'both';

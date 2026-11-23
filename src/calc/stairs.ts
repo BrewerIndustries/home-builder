@@ -3,7 +3,7 @@ import type { Fixture, Furniture, Point, Project, Wall } from '../model/types.ts
 import { formatFtIn } from '../model/units.ts';
 import { adjacentStorey, isMultiStorey, storeyHeight } from '../model/storeys.ts';
 import type { CodeCheck } from './irc.ts';
-import { endEdge, flightSides, flightsOf, isTurning, landingOf, openEdge, pathLength, pathRects, rectPolygon, stairSegments, toPlan, turnLanding, walledEdge } from './stairShape.ts';
+import { endEdge, flightSides, flightsOf, isTurning, landingOf, openEdge, pathLength, pathRects, rectPolygon, stairSegments, toPlan, straightLandings, straightSteps, turnLanding, walledEdge } from './stairShape.ts';
 
 // Stairs on a one-storey plan: a flight going up (or down) from this floor.
 //   E3903.3  stairways get a wall-switched lighting outlet; where the flight has
@@ -131,7 +131,7 @@ export function openingGuardLength(f: Furniture, walls: Wall[]): number {
 }
 
 /** The landing's riser count from the foot, if it's a real one (between the first and last riser). */
-export const landingAt = (f: Furniture) => (isTurning(f) ? turnLanding(f) : f.landing && f.landing > 0 && f.landing < risersOf(f) ? Math.round(f.landing) : undefined);
+export const landingAt = (f: Furniture) => (isTurning(f) ? turnLanding(f) : straightLandings(f)[0]);
 
 export interface StairGeometry {
   risers: number;
@@ -140,6 +140,8 @@ export interface StairGeometry {
   tread: number;
   treads: number;
   landingDepth: number;
+  /** Straight stairs: how many landings (L / U stairs have one). */
+  landings: number;
   /** Rise of each flight between floor levels or the landing. */
   flights: number[];
   /** How long the floor opening over the flight has to be for 6' 8" headroom (0 if the whole run already clears), along the walk line. */
@@ -153,14 +155,15 @@ export function stairGeometry(project: Project, f: Furniture): StairGeometry {
   const risers = risersOf(f);
   const rise = floorToFloor(project, f);
   const riser = rise / risers;
-  const L = landingAt(f);
-  const landingDepth = L ? Math.max(MIN_LANDING, f.w) : 0;
-  const treads = Math.max(0, risers - 1 - (L ? 1 : 0));
-  const tread = treads ? Math.max(0, f.d - landingDepth) / treads : f.d;
-  const flights = L ? [L * riser, (risers - L) * riser] : [rise];
-  // Steps up from the bottom (the landing is one, deeper, step); headroom runs out where a step's
+  const steps = straightSteps(f);
+  const Ls = steps.landings;
+  const landingDepth = steps.ld;
+  const treads = Math.max(0, risers - 1 - Ls.length);
+  const tread = treads ? steps.tread : f.d;
+  const flights = [...Ls, risers].map((L, i) => (L - (i ? Ls[i - 1] : 0)) * riser);
+  // Steps up from the bottom (a landing is one, deeper, step); headroom runs out where a step's
   // height comes within 6' 8" of the ceiling, and the opening has to run from there to the top.
-  const depths = Array.from({ length: risers - 1 }, (_, i) => (L && i + 1 === L ? landingDepth : tread));
+  const depths = [...steps.depths];
   if (f.down) depths.reverse();
   const H = project.framing.wallHeight;
   let x = 0;
@@ -172,7 +175,7 @@ export function stairGeometry(project: Project, f: Furniture): StairGeometry {
     }
     x += depths[k - 1];
   }
-  return { risers, rise, riser, tread, treads, landingDepth, flights, opening };
+  return { risers, rise, riser, tread, treads, landingDepth, landings: Ls.length, flights, opening };
 }
 
 /** An L or U stair: each flight from its own run; the landing is one (long) step on the walk line. */
@@ -203,6 +206,7 @@ function turningGeometry(project: Project, f: Furniture): StairGeometry {
     tread: Math.min(...runs.map((r) => r.tread)),
     treads: runs.reduce((t, r) => t + r.treads, 0),
     landingDepth: f.shape === 'U' ? y1 - y0 : Math.min(x1 - x0, y1 - y0),
+    landings: 1,
     flights: runs.map((r) => r.rise),
     opening,
     flightRuns: runs,
@@ -217,8 +221,8 @@ export function landingPoint(project: Project, f: Furniture): Point | null {
   }
   const L = landingAt(f);
   if (!L) return null;
-  const g = stairGeometry(project, f);
-  return local(f, 0, f.d / 2 - ((L - 1) * g.tread + g.landingDepth / 2));
+  const { depths } = straightSteps(f);
+  return local(f, 0, f.d / 2 - (depths.slice(0, L - 1).reduce((s, d) => s + d, 0) + depths[L - 1] / 2));
 }
 
 /** The wall nearest a plan point (within reach), and the spot on its centreline square to it. */
@@ -299,7 +303,7 @@ export function stairChecks(project: Project): CodeCheck[] {
       'Tread depth (10" min)',
       'R311.7.5.2',
       g.tread >= MIN_TREAD - 0.01,
-      `${g.treads} treads in ${formatFtIn(f.d - g.landingDepth)} of run = ${formatFtIn(g.tread)}${g.tread >= MIN_TREAD - 0.01 ? '' : ` — needs ${formatFtIn(g.treads * MIN_TREAD + g.landingDepth)} of run`}`,
+      `${g.treads} treads in ${formatFtIn(f.d - g.landingDepth * g.landings)} of run = ${formatFtIn(g.tread)}${g.tread >= MIN_TREAD - 0.01 ? '' : ` — needs ${formatFtIn(g.treads * MIN_TREAD + g.landingDepth * g.landings)} of run (make the stair that deep)`}`,
     );
     const tall = g.flights.some((r) => r > MAX_FLIGHT_RISE + 0.01);
     add(
@@ -310,7 +314,7 @@ export function stairChecks(project: Project): CodeCheck[] {
     );
     if (landingAt(f)) {
       const deep = f.w <= g.landingDepth;
-      add('Landing size', 'R311.7.6', deep, `landing ${formatFtIn(f.w)} wide × ${formatFtIn(g.landingDepth)} deep (as wide as the stair, 3' 0" deep at least)`);
+      add('Landing size', 'R311.7.6', deep, `${g.landings > 1 ? `${g.landings} landings, each` : 'landing'} ${formatFtIn(f.w)} wide × ${formatFtIn(g.landingDepth)} deep (as wide as the stair, 3' 0" deep at least)`);
     }
     // Handrails and guards.
     if (g.risers >= HANDRAIL_RISERS) {

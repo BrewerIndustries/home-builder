@@ -18,7 +18,7 @@ export type V3 = [number, number, number];
 
 /** Axis-aligned-in-wall-space box: a wall piece or a coffer beam. */
 export interface Box {
-  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door' | 'stair' | 'footing' | 'foundation' | 'girder';
+  kind: 'wall-ext' | 'wall-int' | 'beam' | 'glass' | 'counter' | 'fixture' | 'furniture' | 'door' | 'stair' | 'footing' | 'foundation' | 'girder' | 'rim';
   /** Centre. */
   c: V3;
   /** Size along the wall, height, thickness. */

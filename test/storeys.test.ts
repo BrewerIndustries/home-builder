@@ -8,6 +8,7 @@ import { buildScene } from '../src/calc/model3d.ts';
 import { floorToFloor, stairChecks } from '../src/calc/stairs.ts';
 import { historyReducer, initHistory, projectReducer } from '../src/model/store.ts';
 import { activeStoreyId, addStorey, isMultiStorey, removeStorey, storeyElevation, storeyHeight, storeyList, storeyOf, storeyView, switchStorey, updateStorey } from '../src/model/storeys.ts';
+import { pointInPolygon } from '../src/model/geometry.ts';
 import { DEFAULT_ROOF, type Furniture, type Point, type Project } from '../src/model/types.ts';
 import { box, project } from './helpers.ts';
 
@@ -162,7 +163,12 @@ test('3D stacks the storeys at their heights and cuts the stair opening', () => 
   const h = storeyHeight(p);
   const floors = s.flats.filter((f) => f.kind === 'floor');
   assert.deepEqual([...new Set(floors.map((f) => f.y))].sort((a, b) => a - b), [0, h]);
-  assert.equal(floors.find((f) => f.y === h)!.holes.length, 1);
+  // The upper floor comes as plain pieces with the stair opening cut out between them.
+  const upper = floors.filter((f) => f.y === h);
+  assert.ok(upper.length > 1 && upper.every((f) => !f.holes.length));
+  const st = floorOpenings(p, 'up')[0].polys[0];
+  const mid = { x: st.reduce((t, q) => t + q.x, 0) / st.length, y: st.reduce((t, q) => t + q.y, 0) / st.length };
+  assert.ok(!upper.some((f) => pointInPolygon(mid, f.outline)));
   assert.ok(s.bounds.max[1] > h + 90);
   // Roof faces only over the top storey.
   const roof = s.faces.filter((f) => f.roofPart);

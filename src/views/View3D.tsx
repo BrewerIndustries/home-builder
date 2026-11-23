@@ -251,7 +251,7 @@ export default function View3D({ project }: { project: Project }) {
         cy = (y0 + y1) / 2;
         sy = y1 - y0;
       }
-      const color = below ? c[b.kind as 'footing' | 'foundation' | 'girder'] : b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : b.kind === 'fixture' ? c.fixture : b.kind === 'furniture' ? c.furniture : b.kind === 'door' ? c.door : b.kind === 'stair' ? c.stair : c.beam;
+      const color = below ? c[b.kind as 'footing' | 'foundation' | 'girder'] : b.kind === 'wall-ext' ? c.ext : b.kind === 'wall-int' || b.kind === 'rim' ? c.int : b.kind === 'glass' ? c.glass : b.kind === 'counter' ? c.counter : b.kind === 'fixture' ? c.fixture : b.kind === 'furniture' ? c.furniture : b.kind === 'door' ? c.door : b.kind === 'stair' ? c.stair : c.beam;
       const m = new THREE.Mesh(
         new THREE.BoxGeometry(sx, sy, sz),
         b.kind === 'glass' ? mat(color, { transparent: true, opacity: 0.35, roughness: 0.1 }) : mat(color),

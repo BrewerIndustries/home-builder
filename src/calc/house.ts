@@ -9,7 +9,8 @@ import { foundationOf } from './foundation.ts';
 import { ircChecks, type CodeCheck } from './irc.ts';
 import { detectsSmoke, lightsRoom, SWITCH_HEIGHT } from './lighting.ts';
 import { materialsList, wallAreas, type MaterialLine } from './materials.ts';
-import { buildScene, type Scene3D, type V3 } from './model3d.ts';
+import { buildScene, type Box, type Scene3D, type V3 } from './model3d.ts';
+import { subtractHoles } from './outline.ts';
 import { roofOf } from './roof.ts';
 import { FLOOR_GUARD, openingGuardLength, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
 
@@ -127,6 +128,26 @@ export function houseFloorArea(p: Project): number {
   return storeyViews(p).reduce((t, { view }) => t + wallAreas(view).floor, 0);
 }
 
+/** Boxes filling the floor depth under a storey at elevation e: over the lower storey's outside walls, and round the holes in this floor. */
+function floorBand(p: Project, belowId: string, e: number, holes: Point[][]): Box[] {
+  const below = roleView(p, belowId);
+  const solid = below.walls.filter((w) => !w.railing && !w.glass);
+  if (!solid.length) return [];
+  const top = storeyElevation(p, belowId) + Math.max(...solid.map((w) => w.height));
+  const depth = e - top;
+  if (depth < 0.5) return [];
+  const y = top + depth / 2;
+  const out: Box[] = [];
+  const along = (a: Point, b: Point, t: number, kind: Box['kind']) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 0.5) return;
+    out.push({ kind, c: [(a.x + b.x) / 2, y, (a.y + b.y) / 2], size: [len + (kind === 'rim' ? 0 : t), depth, t], rotY: -Math.atan2(b.y - a.y, b.x - a.x) });
+  };
+  for (const w of solid) if (w.kind === 'exterior') along(w.a, w.b, w.thickness, 'wall-ext');
+  for (const h of holes) h.forEach((a, k) => along(a, h[(k + 1) % h.length], 1.5, 'rim'));
+  return out;
+}
+
 /** The 3D scene with every storey stacked at its height, the roof on the top one and stair openings cut in the floors. */
 export function houseScene(p: Project): Scene3D {
   if (!isMultiStorey(p)) return buildScene(p);
@@ -139,10 +160,19 @@ export function houseScene(p: Project): Scene3D {
     const e = storeyElevation(p, storey.id);
     const up = (q: V3): V3 => [q[0], q[1] + e, q[2]];
     const holes = [...floorOpenings(p, storey.id).flatMap((o) => o.polys), ...openVoids(v)];
-    // A room open to below on the storey above: no ceiling here under it either.
-    const above = views[i + 1] ? openVoids(roleView(p, views[i + 1].storey.id)) : [];
+    // The storey above's stair openings and open-to-below rooms: no ceiling here under them either.
+    const next = views[i + 1]?.storey.id;
+    const above = next ? [...floorOpenings(p, next).flatMap((o) => o.polys), ...openVoids(roleView(p, next))] : [];
     scene.boxes.push(...s.boxes.map((b) => ({ ...b, c: up(b.c) })));
-    scene.flats.push(...s.flats.map((f) => ({ ...f, y: f.y + e, holes: f.kind === 'floor' ? [...f.holes, ...holes] : [...f.holes, ...above] })));
+    // Cut each floor / ceiling into plain pieces: an opening can cross or touch the edge of a floor.
+    for (const f of s.flats) {
+      const cut = f.kind === 'floor' ? [...f.holes, ...holes] : [...f.holes, ...above];
+      const pieces = cut.length ? subtractHoles(f.outline, cut) : [f.outline];
+      for (const outline of pieces) scene.flats.push({ ...f, y: f.y + e, outline, holes: [] });
+    }
+    // The floor's depth between the ceiling below and this floor: a band on the outside walls
+    // under it, and a finished edge round every stair opening and open-to-below void.
+    if (i > 0) scene.boxes.push(...floorBand(p, views[i - 1].storey.id, e, holes));
     scene.faces.push(...s.faces.map((f) => ({ ...f, pts: f.pts.map(up) })));
     for (let k = 0; k < 3; k++) {
       scene.bounds.min[k] = Math.min(scene.bounds.min[k], up(s.bounds.min)[k]);

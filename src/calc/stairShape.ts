@@ -42,6 +42,27 @@ export function flightWidth(f: Furniture): number {
   return Math.max(6, Math.min(b, f.shape === 'U' ? f.w / 2 : f.w - 6, f.d - 6));
 }
 
+/** A straight stair's landings, as riser counts from the foot (sorted, each between the first and last riser). */
+export function straightLandings(f: Furniture): number[] {
+  const R = risers(f);
+  const raw = f.landings ?? (f.landing ? [f.landing] : []);
+  return [...new Set(raw.map((n) => Math.round(n)).filter((n) => n > 0 && n < R))].sort((a, b) => a - b);
+}
+
+/** Depth of a straight stair's landings: as wide as the stair, 36" at least. */
+export const straightLandingDepth = (f: Furniture) => Math.max(36, f.w);
+
+/** A straight stair's steps along the run, foot first: treads, and each landing as one deep step. */
+export function straightSteps(f: Furniture): { depths: number[]; landings: number[]; ld: number; tread: number } {
+  const R = risers(f);
+  const landings = straightLandings(f);
+  const ld = landings.length ? straightLandingDepth(f) : 0;
+  const treads = Math.max(1, R - 1 - landings.length);
+  const tread = Math.max(0, f.d - ld * landings.length) / treads;
+  const depths = Array.from({ length: Math.max(0, R - 1) }, (_, i) => (landings.includes(i + 1) ? ld : tread));
+  return { depths, landings, ld, tread };
+}
+
 /** Risers in the first flight of a turning stair: the landing's riser count, else half. */
 export function turnLanding(f: Furniture): number {
   const R = risers(f);
@@ -62,18 +83,24 @@ export function stairSegments(f: Furniture): StairSeg[] {
   const R = risers(f);
   const [l, t, r, b] = [-f.w / 2, -f.d / 2, f.w / 2, f.d / 2];
   if (!isTurning(f)) {
-    const L = f.landing && f.landing > 0 && f.landing < R ? Math.round(f.landing) : 0;
-    if (!L) return [flight({ x0: l, y0: t, x1: r, y1: b }, { x: 0, y: b }, { x: 0, y: -1 }, f.d, R)];
-    const ld = Math.max(36, f.w);
-    const treads = Math.max(1, R - 2);
-    const tread = Math.max(0, f.d - ld) / treads;
-    const run1 = (L - 1) * tread;
-    const yl = b - run1;
-    return [
-      flight({ x0: l, y0: yl, x1: r, y1: b }, { x: 0, y: b }, { x: 0, y: -1 }, run1, L),
-      { kind: 'landing', rect: { x0: l, y0: yl - ld, x1: r, y1: yl }, from: { x: 0, y: yl }, to: { x: 0, y: yl - ld }, len: ld, dir: { x: 0, y: -1 }, risers: 0 },
-      flight({ x0: l, y0: t, x1: r, y1: yl - ld }, { x: 0, y: yl - ld }, { x: 0, y: -1 }, yl - ld - t, R - L),
-    ];
+    const { depths, landings } = straightSteps(f);
+    if (!landings.length) return [flight({ x0: l, y0: t, x1: r, y1: b }, { x: 0, y: b }, { x: 0, y: -1 }, f.d, R)];
+    // Flights and landings in turn, up from the foot (+y) towards the top (-y).
+    const segs: StairSeg[] = [];
+    let y = b;
+    let from = 0;
+    for (const L of [...landings, R]) {
+      const run = depths.slice(from, L - 1).reduce((s, d) => s + d, 0);
+      const y1 = L === R ? t : y - run;
+      segs.push(flight({ x0: l, y0: y1, x1: r, y1: y }, { x: 0, y }, { x: 0, y: -1 }, y - y1, L - from));
+      y = y1;
+      if (L === R) break;
+      const ld = depths[L - 1];
+      segs.push({ kind: 'landing', rect: { x0: l, y0: y - ld, x1: r, y1: y }, from: { x: 0, y }, to: { x: 0, y: y - ld }, len: ld, dir: { x: 0, y: -1 }, risers: 0 });
+      y -= ld;
+      from = L;
+    }
+    return segs;
   }
   const w = flightWidth(f);
   const n1 = turnLanding(f);
