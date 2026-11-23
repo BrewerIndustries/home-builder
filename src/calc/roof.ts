@@ -50,6 +50,8 @@ export interface RoofWing {
   valleys: boolean;
   /** End kinds at the low-u and high-u walls (u along the ridge). */
   ends: [EndKind, EndKind];
+  /** Long sides that butt a wall above (Roof.butt): no overhang, no eave. */
+  butt: Side[];
   ridgeLength: number;
   hips: number;
   hipLength: number;
@@ -324,7 +326,10 @@ export function roofCalc(project: Project): RoofCalc | null {
     const attachedLow = pl.side === 'e' || pl.side === 's';
     const freeEnd: EndKind = type === 'hip' ? 'hip' : 'gable';
     const attEnd: EndKind = valleys ? 'open' : 'butt';
-    const ends: [EndKind, EndKind] = !parent ? [freeEnd, freeEnd] : attachedLow ? [attEnd, freeEnd] : [freeEnd, attEnd];
+    // A lone roof can butt walls above on some sides (a lower roof against the storey above).
+    const butt = new Set<Side>(!parent && placed.length === 1 ? (roof.butt ?? []) : []);
+    const [endA, endB] = endSides(alongX);
+    const ends: [EndKind, EndKind] = !parent ? [butt.has(endA) ? 'butt' : freeEnd, butt.has(endB) ? 'butt' : freeEnd] : attachedLow ? [attEnd, freeEnd] : [freeEnd, attEnd];
     const nFree = ends.filter((e) => e === 'gable' || e === 'hip').length;
     const hipRun = Math.sqrt(2 + p * p) * runE; // a hip or valley, eave to ridge, at equal pitch
     const w: RoofWing = {
@@ -337,6 +342,7 @@ export function roofCalc(project: Project): RoofCalc | null {
       side: pl.side,
       valleys,
       ends,
+      butt: longSides(alongX).filter((x) => butt.has(x)),
       ridgeLength: 0,
       hips: 0,
       hipLength: 0,
@@ -365,6 +371,7 @@ export function roofCalc(project: Project): RoofCalc | null {
       const out = (e: EndKind) => (e === 'gable' ? roof.rake : e === 'hip' ? o : e === 'open' ? -o : 0);
       const side = L + out(ends[0]) + out(ends[1]);
       w.eaves = { [sa]: side, [sb]: side };
+      for (const b of w.butt) delete w.eaves[b];
       if (type === 'gable') {
         w.rakes = Array.from({ length: 2 * nFree }, () => runE * k);
         w.gableEnds = nFree;
@@ -402,7 +409,7 @@ export function roofCalc(project: Project): RoofCalc | null {
     const [sa, sb] = longSides(w.alongX);
     const [ea, eb] = endSides(w.alongX);
     const by = (e: EndKind) => (e === 'gable' ? roof.rake : e === 'hip' ? o : 0);
-    return expand(w.rect, { [sa]: o, [sb]: o, [ea]: by(w.ends[0]), [eb]: by(w.ends[1]) });
+    return expand(w.rect, { [sa]: w.butt.includes(sa) ? 0 : o, [sb]: w.butt.includes(sb) ? 0 : o, [ea]: by(w.ends[0]), [eb]: by(w.ends[1]) });
   });
   const union = rectUnion(overhung);
   const footprint = rectUnion(wings.map((w) => w.rect)).area;
@@ -787,7 +794,7 @@ export function roofPlan(project: Project): RoofPlan | null {
     if (hi.ridge - lo.ridge > 0.5) plan.ridges.push([P2(lo.ridge, mid), P2(hi.ridge, mid)]);
     for (const [e, end] of [[lo, w.ends[0]], [hi, w.ends[1]]] as const) {
       const r = Math.min(Math.max(e.ridge, lo.ridge), hi.ridge);
-      if (end === 'hip') for (const v of [v0 - o, v1 + o]) plan.hips.push([P2(e.eave, v), P2(r, mid)]);
+      if (end === 'hip') for (const v of [v0 - ov(w, 0, o), v1 + ov(w, 1, o)]) plan.hips.push([P2(e.eave, v), P2(r, mid)]);
     }
     if (w.valleys) {
       const low = w.ends[0] === 'open';
@@ -799,6 +806,9 @@ export function roofPlan(project: Project): RoofPlan | null {
   for (const d of c.dormers) plan.dormers.push({ outline: d.outline, ridge: d.ridge, valleys: d.valleyLines });
   return plan;
 }
+
+/** A wing's eave overhang on its low-v (0) or high-v (1) long side: none where it butts a wall above. */
+const ov = (w: RoofWing, k: 0 | 1, o: number) => (w.butt.includes(longSides(w.alongX)[k]) ? 0 : o);
 
 /** Where a wing's eave and ridge stop at each end, along u. */
 function wingEnds(w: RoofWing, roof: Roof): [{ eave: number; ridge: number }, { eave: number; ridge: number }] {
@@ -842,10 +852,13 @@ export function roofFaces(project: Project): RoofFace[] {
       continue;
     }
     const [lo, hi] = wingEnds(w, roof);
-    faces.push({ kind: 'roof', pts: [P(lo.eave, v0 - o, eave), P(hi.eave, v0 - o, eave), P(hi.ridge, mid, top), P(lo.ridge, mid, top)] });
-    faces.push({ kind: 'roof', pts: [P(lo.eave, v1 + o, eave), P(hi.eave, v1 + o, eave), P(hi.ridge, mid, top), P(lo.ridge, mid, top)] });
+    // A side butting a wall above has no overhang: its eave is at the plate.
+    const [oa, ob] = [ov(w, 0, o), ov(w, 1, o)];
+    const [ea, eb] = [c.plate - oa * p, c.plate - ob * p];
+    faces.push({ kind: 'roof', pts: [P(lo.eave, v0 - oa, ea), P(hi.eave, v0 - oa, ea), P(hi.ridge, mid, top), P(lo.ridge, mid, top)] });
+    faces.push({ kind: 'roof', pts: [P(lo.eave, v1 + ob, eb), P(hi.eave, v1 + ob, eb), P(hi.ridge, mid, top), P(lo.ridge, mid, top)] });
     for (const [e, end, wall] of [[lo, w.ends[0], u0], [hi, w.ends[1], u1]] as const) {
-      if (end === 'hip') faces.push({ kind: 'roof', pts: [P(e.eave, v0 - o, eave), P(e.eave, v1 + o, eave), P(e.ridge, mid, top)] });
+      if (end === 'hip') faces.push({ kind: 'roof', pts: [P(e.eave, v0 - oa, ea), P(e.eave, v1 + ob, eb), P(e.ridge, mid, top)] });
       if (end === 'gable') faces.push({ kind: 'gable', pts: [P(wall, v0, c.plate), P(wall, v1, c.plate), P(wall, mid, top)] });
     }
   }

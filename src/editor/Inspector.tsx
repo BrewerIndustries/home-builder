@@ -12,7 +12,7 @@ import { exclusiveArea } from '../calc/regions.ts';
 import { wallAreas } from '../calc/materials.ts';
 import { roofOf } from '../calc/roof.ts';
 import { activeStorey, activeStoreyId, isMultiStorey } from '../model/storeys.ts';
-import { leanTos, lowerRoofOf, uncoveredRects } from '../calc/lowerRoof.ts';
+import { leanTos, lowerRoofOf, pitchedLowerRoofs, uncoveredRects } from '../calc/lowerRoof.ts';
 import { foundationOf } from '../calc/foundation.ts';
 import { dist, wallLength } from '../model/geometry.ts';
 import { isLight, roomAt, switchRoom, switchWays, VEHICLE_DOOR } from '../calc/lighting.ts';
@@ -1264,17 +1264,18 @@ function LowerRoofFields({ project, dispatch }: { project: Project; dispatch: Di
   const lr = lowerRoofOf(project, id);
   const set = (patch: Partial<LowerRoof>) => dispatch({ type: 'storey', op: { op: 'update', id, patch: { lowerRoof: { ...activeStorey(project).lowerRoof, ...patch } } } });
   const ls = leanTos(project, id);
+  const pr = pitchedLowerRoofs(project, id);
   const area = u.rects.reduce((t, r) => t + (r.x1 - r.x0) * (r.y1 - r.y0), 0) / 144;
   return (
     <>
       <h4>Lower roof</h4>
-      <p className="muted small">
-        {Math.round(area)} sq ft of this floor isn't under the floor above. It gets a lean-to: rafters from a ledger on the wall above down to the outside wall.
-      </p>
+      <p className="muted small">{Math.round(area)} sq ft of this floor isn't under the floor above, so it needs its own roof.</p>
       <div className="row">
         <Field label="Type">
           <select value={lr.type} onChange={(e) => set({ type: e.target.value as LowerRoof['type'] })}>
             <option value="lean-to">Lean-to (shed against the wall above)</option>
+            <option value="hip">Hip</option>
+            <option value="gable">Gable</option>
             <option value="none">None (flat / not drawn)</option>
           </select>
         </Field>
@@ -1290,18 +1291,34 @@ function LowerRoofFields({ project, dispatch }: { project: Project; dispatch: Di
       </div>
       {lr.type !== 'none' && (
         <>
+          {(lr.type === 'gable' || lr.type === 'hip') && (
+            <Field label="Ridge" hint="Along the wall above keeps the roof low where it meets that wall, but the slope behind drains toward it (a cricket or gutter there). Out from the wall puts the roof's peak against it.">
+              <select value={lr.ridge ?? 'parallel'} onChange={(e) => set({ ridge: e.target.value as 'parallel' | 'out' })}>
+                <option value="parallel">Along the wall above</option>
+                <option value="out">Out from the wall above</option>
+              </select>
+            </Field>
+          )}
           <div className="row">
             <Field label="Eave overhang">
               <LengthInput value={lr.overhang} onChange={(v) => set({ overhang: v })} />
             </Field>
-            <Field label="Rake overhang">
-              <LengthInput value={lr.rake} onChange={(v) => set({ rake: v })} />
-            </Field>
+            {lr.type !== 'hip' && (
+              <Field label="Rake overhang">
+                <LengthInput value={lr.rake} onChange={(v) => set({ rake: v })} />
+              </Field>
+            )}
           </div>
           {ls.map((l, i) => (
             <p key={i} className="muted small">
               {ls.length > 1 ? `Lean-to ${i + 1}: ` : ''}
               {formatFtIn(l.run)} run, rises {formatFtIn(l.rise)} to {formatFtIn(l.top)} above this floor where it meets the wall above.
+            </p>
+          ))}
+          {pr.map((r, i) => (
+            <p key={i} className="muted small">
+              {pr.length > 1 ? `Roof ${i + 1}: ` : ''}
+              {formatFtIn(r.calc.W)} span, ridge {formatFtIn(r.calc.rise)} above the plate ({formatFtIn(r.calc.plate + r.calc.rise)} above this floor){r.parallel ? '; meets the wall above at the plate' : ''}.
             </p>
           ))}
         </>

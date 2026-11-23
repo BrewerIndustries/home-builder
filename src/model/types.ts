@@ -653,9 +653,11 @@ export interface Storey extends Partial<StoreyData> {
   lowerRoof?: Partial<LowerRoof>;
 }
 
-/** A lean-to roof over an uncovered part of a lower storey: rising to the wall above, its eave on the outside wall. */
+/** The roof over an uncovered part of a lower storey: a lean-to rising to the wall above, or a gable / hip butting it. */
 export interface LowerRoof {
-  type: 'lean-to' | 'none';
+  type: 'lean-to' | 'gable' | 'hip' | 'none';
+  /** Gable / hip: the ridge runs along the wall above (default) or out from it. */
+  ridge?: 'parallel' | 'out';
   /** Rise per 12 of run. */
   pitch: number;
   /** Eave overhang past the outside wall, and rake overhang at free ends, inches. */
@@ -689,6 +691,8 @@ export interface Roof {
   dormers?: Dormer[];
   /** Roof v2: attic vent area at 1/300 of the attic (the R806.2 exception conditions are met) instead of 1/150. */
   vent300?: boolean;
+  /** Sides (n / s / e / w) that butt a wall above — a lower roof against the storey over it: no overhang, eave or rake there. One-rectangle roofs only. */
+  butt?: ('n' | 's' | 'e' | 'w')[];
 }
 
 /** A dormer on one long face of the main roof. Inches. */

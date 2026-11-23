@@ -1,8 +1,8 @@
 import { adjacentStorey, storeyElevation, storeyList, storeyView } from '../model/storeys.ts';
-import { DEFAULT_LOWER_ROOF, type LowerRoof, type Point, type Project, standardsOf } from '../model/types.ts';
+import { DEFAULT_LOWER_ROOF, type LowerRoof, type Point, type Project, standardsOf, type Wall } from '../model/types.ts';
 import type { CodeCheck } from './irc.ts';
 import type { MaterialLine } from './materials.ts';
-import { distinct, footprintRects, greedyRects, NEXT_SIZE, roofOf, stockFeet, type Rect, type RoofFace, type Side, type V3 } from './roof.ts';
+import { distinct, footprintRects, greedyRects, NEXT_SIZE, roofCalc, roofFaces, roofLines, roofOf, stockFeet, type Rect, type RoofCalc, type RoofFace, type Side, type V3 } from './roof.ts';
 
 // Lower roofs: where the storey above is pulled back (or smaller), the part of
 // a storey it doesn't cover needs its own roof. Each uncovered stretch is roofed
@@ -72,10 +72,20 @@ export function uncoveredRects(p: Project, storeyId: string): { rects: Rect[]; l
   return { rects, lower, upper };
 }
 
-/** The lean-to roofs over the parts of this storey the storey above doesn't cover. Empty for the top storey or roof "none". */
-export function leanTos(p: Project, storeyId: string): LeanTo[] {
-  const lr = lowerRoofOf(p, storeyId);
-  if (lr.type === 'none') return [];
+/** One uncovered rectangle with what lies past each side, the side facing the storey above, and the wall sizes it sits on. */
+export interface UncoveredPart {
+  rect: Rect;
+  sides: Record<Side, SideKind>;
+  /** The side against the wall above (or, touching none, facing the middle of the storey above). */
+  high: Side;
+  /** Half thickness of this storey's and the upper storey's exterior walls; top of this storey's walls. */
+  tLow: number;
+  tUp: number;
+  plate: number;
+}
+
+/** The uncovered rectangles of a storey, each classified side by side. */
+export function uncoveredParts(p: Project, storeyId: string): UncoveredPart[] {
   const u = uncoveredRects(p, storeyId);
   if (!u?.rects.length) return [];
   const view = storeyView(p, storeyId);
@@ -85,10 +95,6 @@ export function leanTos(p: Project, storeyId: string): LeanTo[] {
   const tLow = Math.max(...ext.map((w) => w.thickness)) / 2;
   const tUp = upExt.length ? Math.max(...upExt.map((w) => w.thickness)) / 2 : tLow;
   const plate = Math.max(...ext.map((w) => w.height));
-  const main = roofOf(p);
-  const pitch = lr.pitch / 12;
-  const k = Math.sqrt(1 + pitch * pitch);
-  const { overhang: o, rake } = lr;
   const centre = (() => {
     const a = u.upper.reduce((t, r) => t + (r.x1 - r.x0) * (r.y1 - r.y0), 0);
     return {
@@ -96,7 +102,6 @@ export function leanTos(p: Project, storeyId: string): LeanTo[] {
       y: u.upper.reduce((t, r) => t + ((r.y0 + r.y1) / 2) * (r.x1 - r.x0) * (r.y1 - r.y0), 0) / a,
     };
   })();
-
   return u.rects.map((rect) => {
     // What's past each side, by majority of samples 6" out.
     const count: Record<Side, Record<SideKind, number>> = { n: { wall: 0, roof: 0, free: 0 }, s: { wall: 0, roof: 0, free: 0 }, e: { wall: 0, roof: 0, free: 0 }, w: { wall: 0, roof: 0, free: 0 } };
@@ -110,9 +115,22 @@ export function leanTos(p: Project, storeyId: string): LeanTo[] {
       }
     }
     const sides = Object.fromEntries(SIDES.map((s) => [s, (['wall', 'roof', 'free'] as SideKind[]).sort((a, b) => count[s][b] - count[s][a])[0]])) as Record<Side, SideKind>;
-    // Rise toward the wall above; with none touching, toward the middle of the storey above.
     const mid = { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2 };
-    const high = [...SIDES].sort((a, b) => count[b].wall - count[a].wall || OUT[b].x * (centre.x - mid.x) + OUT[b].y * (centre.y - mid.y) - (OUT[a].x * (centre.x - mid.x) + OUT[a].y * (centre.y - mid.y)))[0];
+    const toward = (s: Side) => OUT[s].x * (centre.x - mid.x) + OUT[s].y * (centre.y - mid.y);
+    const high = [...SIDES].sort((a, b) => count[b].wall - count[a].wall || toward(b) - toward(a))[0];
+    return { rect, sides, high, tLow, tUp, plate };
+  });
+}
+
+/** The lean-to roofs over the parts of this storey the storey above doesn't cover. Empty unless the lower roof is a lean-to. */
+export function leanTos(p: Project, storeyId: string): LeanTo[] {
+  const lr = lowerRoofOf(p, storeyId);
+  if (lr.type !== 'lean-to') return [];
+  const main = roofOf(p);
+  const pitch = lr.pitch / 12;
+  const k = Math.sqrt(1 + pitch * pitch);
+  const { overhang: o, rake } = lr;
+  return uncoveredParts(p, storeyId).map(({ rect, sides, high, tLow, tUp, plate }) => {
     const low: Side = ({ n: 's', s: 'n', e: 'w', w: 'e' } as const)[high];
     const alongX = high === 'n' || high === 's';
     // Local frame: u along the high wall, v rising from the low side to the high side.
@@ -180,16 +198,136 @@ export function leanTos(p: Project, storeyId: string): LeanTo[] {
   });
 }
 
+/**
+ * A gable or hip lower roof: the main roof's engine run on the uncovered rectangle alone, its sides against the
+ * wall above (or more uncovered roof) butting with no overhang. The ridge runs along the wall above (the slope
+ * behind drains toward that wall) or out from it (a gable end, or the hip's ridge, dies into the wall).
+ */
+export interface PitchedLowerRoof {
+  part: UncoveredPart;
+  /** The rectangle as a one-storey project with its own roof, for the roof engine. */
+  project: Project;
+  calc: RoofCalc;
+  faces: RoofFace[];
+  /** The ridge runs along the wall above. */
+  parallel: boolean;
+}
+
+export function pitchedLowerRoofs(p: Project, storeyId: string): PitchedLowerRoof[] {
+  const lr = lowerRoofOf(p, storeyId);
+  if (lr.type !== 'gable' && lr.type !== 'hip') return [];
+  const view = storeyView(p, storeyId);
+  const tpl = view.walls.find((w) => w.kind === 'exterior')!;
+  const out: PitchedLowerRoof[] = [];
+  for (const part of uncoveredParts(p, storeyId)) {
+    const { rect, sides, high, tLow, tUp, plate } = part;
+    // Against the wall above, the roof's wall line steps in so its outer face is the upper wall's outer face.
+    const inset = (s: Side) => (sides[s] === 'wall' ? tUp + tLow : 0);
+    const r = { x0: rect.x0 + inset('w'), x1: rect.x1 - inset('e'), y0: rect.y0 + inset('n'), y1: rect.y1 - inset('s') };
+    const corners: Point[] = [{ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 }, { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 }];
+    const walls: Wall[] = corners.map((a, i) => ({ ...tpl, id: `lr_${i}`, a, b: corners[(i + 1) % 4], kind: 'exterior', height: plate, thickness: 2 * tLow }));
+    const parallel = (lr.ridge ?? 'parallel') === 'parallel';
+    const highAlongX = high === 'n' || high === 's';
+    const roof = {
+      ...roofOf(p),
+      type: lr.type,
+      pitch: lr.pitch,
+      overhang: lr.overhang,
+      rake: lr.rake,
+      ridge: (highAlongX === parallel ? 'x' : 'y') as 'x' | 'y',
+      perWing: false,
+      dormers: [],
+      butt: SIDES.filter((s) => sides[s] !== 'free'),
+    };
+    const project: Project = { ...view, walls, openings: [], roof };
+    const calc = roofCalc(project);
+    if (!calc) continue;
+    out.push({ part, project, calc, faces: roofFaces(project), parallel });
+  }
+  return out;
+}
+
+/** A storey's lower-roof faces, from its own floor. */
+export function lowerRoofFacesOf(p: Project, storeyId: string): RoofFace[] {
+  return [...leanTos(p, storeyId).flatMap((l) => l.faces), ...pitchedLowerRoofs(p, storeyId).flatMap((r) => r.faces)];
+}
+
 /** Every lower roof's 3D faces, lifted to its storey's floor. */
 export function lowerRoofFaces(p: Project): RoofFace[] {
   return storeyList(p).flatMap((s) => {
     const e = storeyElevation(p, s.id);
-    return leanTos(p, s.id).flatMap((l) => l.faces.map((f) => ({ ...f, pts: f.pts.map(([x, y, z]): V3 => [x, y + e, z]) })));
+    return lowerRoofFacesOf(p, s.id).map((f) => ({ ...f, pts: f.pts.map(([x, y, z]): V3 => [x, y + e, z]) }));
   });
+}
+
+/** Where each lower roof meets the wall above: its line, the stretch along it, and the roof's height there (from this storey's floor) at a point along it. */
+export interface WallMeet {
+  side: Side;
+  line: number;
+  u0: number;
+  u1: number;
+  topAt(u: number): number;
+}
+
+export function wallMeets(p: Project, storeyId: string): WallMeet[] {
+  const along = (side: Side, r: Rect) => (side === 'n' || side === 's' ? [r.x0, r.x1] : [r.y0, r.y1]);
+  const lineOf = (side: Side, r: Rect) => (side === 'n' ? r.y0 : side === 's' ? r.y1 : side === 'w' ? r.x0 : r.x1);
+  const out: WallMeet[] = [];
+  for (const l of leanTos(p, storeyId)) {
+    if (l.sides[l.high] !== 'wall') continue;
+    const [u0, u1] = along(l.high, l.rect);
+    out.push({ side: l.high, line: lineOf(l.high, l.rect), u0, u1, topAt: () => l.top });
+  }
+  for (const r of pitchedLowerRoofs(p, storeyId)) {
+    const { part, calc, parallel } = r;
+    if (part.sides[part.high] !== 'wall') continue;
+    const [u0, u1] = along(part.high, part.rect);
+    const pitch = calc.roof.pitch / 12;
+    const w = calc.wings[0];
+    const [a, b] = along(part.high, w.rect);
+    const mid = (a + b) / 2;
+    // Ridge along the wall: the slope behind comes down to the wall at the plate. Out from it: the roof's cross-section.
+    const topAt = parallel ? () => calc.plate : (u: number) => calc.plate + Math.max(0, (b - a) / 2 - Math.abs(u - mid)) * pitch;
+    out.push({ side: part.high, line: lineOf(part.high, part.rect), u0, u1, topAt });
+  }
+  return out;
 }
 
 /** The lower roofs' lines for the estimate, for one storey. */
 export function lowerRoofLines(p: Project, storeyId: string): MaterialLine[] {
+  const lr = lowerRoofOf(p, storeyId);
+  if (lr.type === 'gable' || lr.type === 'hip') return pitchedLines(p, storeyId);
+  return leanToLines(p, storeyId);
+}
+
+function pitchedLines(p: Project, storeyId: string): MaterialLine[] {
+  const rs = pitchedLowerRoofs(p, storeyId);
+  const lines: MaterialLine[] = [];
+  for (const r of rs) {
+    const what = `lower ${r.calc.roof.type} roof`;
+    for (const l of roofLines(r.project, p.framing.waste)) lines.push({ ...l, basis: `${what}: ${l.basis}` });
+    const { part, calc } = r;
+    const w = calc.wings[0];
+    const k = calc.k;
+    const ft = (n: number) => `${Math.round(n / 12)} LF`;
+    const wallSides = SIDES.filter((s) => part.sides[s] === 'wall');
+    for (const s of wallSides) {
+      const longSide = (s === 'n' || s === 's') === w.alongX;
+      const len = s === 'n' || s === 's' ? w.rect.x1 - w.rect.x0 : w.rect.y1 - w.rect.y0;
+      if (longSide) {
+        // The slope runs down into the wall: a cricket / gutter along it, flashed up the wall.
+        lines.push({ category: 'Roof', item: "Apron (headwall) flashing, 10'", qty: Math.ceil((len * 1.05) / 120), unit: 'pieces', basis: `${what}: ${ft(len)} where its back slope meets the wall above` });
+        lines.push({ category: 'Roof', item: 'Ice & water shield, valley roll', qty: Math.ceil(len / 12 / 65), unit: 'rolls', basis: `${what}: a 36" strip along the wall above, where water runs to it` });
+      } else {
+        const slope = w.W * k;
+        lines.push({ category: 'Roof', item: 'Step flashing, 100 pc', qty: Math.ceil(slope / 5 / 100), unit: 'boxes', basis: `${what}: ${ft(slope)} up both slopes where its end meets the wall above` });
+      }
+    }
+  }
+  return lines;
+}
+
+function leanToLines(p: Project, storeyId: string): MaterialLine[] {
   const ls = leanTos(p, storeyId);
   if (!ls.length) return [];
   const lr = lowerRoofOf(p, storeyId);
@@ -216,6 +354,9 @@ export function lowerRoofLines(p: Project, storeyId: string): MaterialLine[] {
   const side = sum((l) => l.sidewall);
   if (side > 0) add('Roof', 'Step flashing, 100 pc', Math.ceil(side / 5 / 100), 'boxes', `${ft(side)} where a lean-to's end runs up a wall, one per ~5" shingle course`);
   add('Roof', 'Hurricane tie', rafters, 'ea', 'one per lean-to rafter on the outside wall');
+  const joists = new Map<number, number>();
+  for (const l of ls) joists.set(stockFeet(l.run), (joists.get(stockFeet(l.run)) ?? 0) + l.rafters);
+  for (const [len, n] of joists) add('Roof', `${main.rafterSize} ceiling joist, ${len}'`, n, 'ea', `under the lean-to, one per rafter, outside wall to the wall above; size per R802 tables`);
 
   const sq = sum((l) => l.area) / 144;
   const squares = sq / 100;
@@ -241,34 +382,30 @@ export const FLASH_UP = 4;
 
 /** Checks for one storey's lower roofs: slope for shingles, and whether the roof runs into the windows above. */
 export function lowerRoofChecks(p: Project, storeyId: string): CodeCheck[] {
-  const ls = leanTos(p, storeyId);
-  if (!ls.length) return [];
+  if (!leanTos(p, storeyId).length && !pitchedLowerRoofs(p, storeyId).length) return [];
   const lr = lowerRoofOf(p, storeyId);
   const out: CodeCheck[] = [];
   const rule = 'Lower roof slope for shingles';
-  if (lr.pitch < 2) out.push({ rule, section: 'R905.2.2', status: 'fail', message: `the lean-to is ${lr.pitch}/12 — asphalt shingles need 2/12 or steeper; raise the pitch or use a low-slope roofing` });
-  else if (lr.pitch < 4) out.push({ rule, section: 'R905.2.2', status: 'warn', message: `the lean-to is ${lr.pitch}/12 — shingles from 2/12 up to 4/12 need two layers of underlayment (counted in the estimate)` });
-  else out.push({ rule, section: 'R905.2.2', status: 'pass', message: `the lean-to is ${lr.pitch}/12` });
+  if (lr.pitch < 2) out.push({ rule, section: 'R905.2.2', status: 'fail', message: `the lower roof is ${lr.pitch}/12 — asphalt shingles need 2/12 or steeper; raise the pitch or use a low-slope roofing` });
+  else if (lr.pitch < 4) out.push({ rule, section: 'R905.2.2', status: 'warn', message: `the lower roof is ${lr.pitch}/12 — shingles from 2/12 up to 4/12 need two layers of underlayment (counted in the estimate)` });
+  else out.push({ rule, section: 'R905.2.2', status: 'pass', message: `the lower roof is ${lr.pitch}/12` });
 
   const up = adjacentStorey(p, 1, storeyId)!;
   const upView = storeyView(p, up.id);
   const lift = storeyElevation(p, up.id) - storeyElevation(p, storeyId);
-  for (const l of ls) {
-    if (l.sides[l.high] !== 'wall') continue;
-    const alongX = l.high === 'n' || l.high === 's';
-    const line = l.high === 'n' ? l.rect.y0 : l.high === 's' ? l.rect.y1 : l.high === 'w' ? l.rect.x0 : l.rect.x1;
-    const [u0, u1] = alongX ? [l.rect.x0, l.rect.x1] : [l.rect.y0, l.rect.y1];
+  for (const m of wallMeets(p, storeyId)) {
+    const alongX = m.side === 'n' || m.side === 's';
     for (const o of upView.openings) {
       const wall = upView.walls.find((x) => x.id === o.wallId);
       if (!wall) continue;
       const [ca, cb] = alongX ? [wall.a.y, wall.b.y] : [wall.a.x, wall.b.x];
-      if (Math.abs(ca - line) > 6 || Math.abs(cb - line) > 6) continue;
+      if (Math.abs(ca - m.line) > 6 || Math.abs(cb - m.line) > 6) continue;
       const len = Math.hypot(wall.b.x - wall.a.x, wall.b.y - wall.a.y);
       const along = (t: number) => (alongX ? wall.a.x + ((wall.b.x - wall.a.x) * t) / len : wall.a.y + ((wall.b.y - wall.a.y) * t) / len);
       const [oa, ob] = [along(o.offset - o.width / 2), along(o.offset + o.width / 2)].sort((a, b) => a - b);
-      if (ob <= u0 || oa >= u1) continue;
-      // Roof top at the wall, from the upper floor.
-      const roofTop = l.top - lift;
+      if (ob <= m.u0 || oa >= m.u1) continue;
+      // Highest the roof gets under the opening, from the upper floor.
+      const roofTop = Math.max(m.topAt(Math.max(oa, m.u0)), m.topAt(Math.min(ob, m.u1)), m.topAt(Math.min(Math.max((oa + ob) / 2, m.u0), m.u1))) - lift;
       const room = o.sill - roofTop;
       if (room < FLASH_UP)
         out.push({
@@ -276,9 +413,14 @@ export function lowerRoofChecks(p: Project, storeyId: string): CodeCheck[] {
           section: '—',
           status: 'warn',
           targetId: o.id,
-          message: `the lean-to meets the wall above ${room < 0 ? `${Math.round(-room)}" above` : `only ${Math.round(room)}" below`} the bottom of a ${o.kind} there — lower the pitch, raise the ${o.kind}, or leave ~${FLASH_UP}" for the flashing`,
+          message: `the lower roof meets the wall above ${room < 0 ? `${Math.round(-room)}" above` : `only ${Math.round(room)}" below`} the bottom of a ${o.kind} there — lower the pitch, raise the ${o.kind}, or leave ~${FLASH_UP}" for the flashing`,
         });
     }
+  }
+  // A slope draining toward the wall above.
+  for (const r of pitchedLowerRoofs(p, storeyId)) {
+    if (r.parallel && r.part.sides[r.part.high] === 'wall')
+      out.push({ rule: 'Lower roof drains toward the wall above', section: 'R903.2', status: 'warn', message: `the back slope of the lower ${r.calc.roof.type} roof runs down into the wall above — it needs a cricket or a gutter along that wall, and flashing up it (counted in the estimate)` });
   }
   return out;
 }

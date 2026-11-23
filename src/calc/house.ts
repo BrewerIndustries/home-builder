@@ -12,7 +12,7 @@ import { materialsList, wallAreas, type MaterialLine } from './materials.ts';
 import { buildScene, type Box, type Scene3D, type V3 } from './model3d.ts';
 import { subtractHoles } from './outline.ts';
 import { roofOf } from './roof.ts';
-import { leanTos, lowerRoofChecks, lowerRoofLines } from './lowerRoof.ts';
+import { lowerRoofChecks, lowerRoofFacesOf, lowerRoofLines } from './lowerRoof.ts';
 import { FLOOR_GUARD, openingGuardLength, nearestSwitchWall, needsTwoSwitches, stairEnd, stairLights, stairTarget } from './stairs.ts';
 
 // The whole house across its storeys (Storeys v1). Each storey is a Project view
@@ -204,8 +204,8 @@ export function houseScene(p: Project, closedDoors?: ReadonlySet<string>): Scene
     // under it, and a finished edge round every stair opening and open-to-below void.
     if (i > 0) scene.boxes.push(...floorBand(p, views[i - 1].storey.id, e, holes, v.walls));
     scene.faces.push(...s.faces.map((f) => ({ ...f, pts: f.pts.map(up) })));
-    // A lean-to over what the storey above doesn't cover.
-    for (const l of leanTos(p, storey.id)) scene.faces.push(...l.faces.map((f) => ({ ...f, pts: f.pts.map(up), roofPart: true })));
+    // The lower roof over what the storey above doesn't cover.
+    scene.faces.push(...lowerRoofFacesOf(p, storey.id).map((f) => ({ ...f, pts: f.pts.map(up), roofPart: true })));
     for (let k = 0; k < 3; k++) {
       scene.bounds.min[k] = Math.min(scene.bounds.min[k], up(s.bounds.min)[k]);
       scene.bounds.max[k] = Math.max(scene.bounds.max[k], up(s.bounds.max)[k]);

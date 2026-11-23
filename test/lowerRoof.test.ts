@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { houseChecks, houseMaterials, houseScene } from '../src/calc/house.ts';
-import { leanTos, uncoveredRects } from '../src/calc/lowerRoof.ts';
+import { leanTos, pitchedLowerRoofs, uncoveredRects } from '../src/calc/lowerRoof.ts';
 import { syncThickness } from '../src/model/store.ts';
 import { addStorey, storeyElevation, updateStorey } from '../src/model/storeys.ts';
 import type { Project, Wall } from '../src/model/types.ts';
@@ -76,4 +76,51 @@ test('a band of floor depth runs under the upper walls, not over the uncovered o
   const bands = scene.boxes.filter((b) => b.kind === 'wall-ext' && b.c[1] > 144 && b.c[1] < storeyElevation(p, 'up'));
   assert.ok(bands.length >= 4);
   assert.ok(bands.every((b) => b.c[2] > 60), 'no band along the pulled-back front wall at y = 0');
+});
+
+/** Ground floor 480 deep; the floor above covers only its back (south) 180". */
+function deep(): Project {
+  let p = project(box(480, 480));
+  p = { ...p, walls: p.walls.map((w) => ({ ...w, height: 144 })), framing: { ...p.framing, wallHeight: 144 } };
+  p = addStorey(p, 1, 'up');
+  const wall = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ ...p.walls[0], id, a: { x: ax, y: ay }, b: { x: bx, y: by }, height: 120 });
+  return syncThickness({ ...p, walls: [wall('n', 0, 300, 480, 300), wall('e', 480, 300, 480, 480), wall('s', 480, 480, 0, 480), wall('w', 0, 480, 0, 300)], openings: [] });
+}
+
+test('a hip lower roof butts the wall above: ridge along it, no overhang past the wall, eave there at the plate', () => {
+  const p = updateStorey(deep(), 'ground', { lowerRoof: { type: 'hip', pitch: 6 } });
+  const [r] = pitchedLowerRoofs(p, 'ground');
+  assert.ok(r.parallel);
+  assert.equal(r.calc.wings[0].alongX, true);
+  assert.deepEqual(r.calc.wings[0].butt, ['s']);
+  const t = p.walls[0].thickness / 2;
+  // Nothing past the upper wall's outer face (y = 300 - t).
+  const ys = r.faces.flatMap((f) => f.pts.map((q) => q[2]));
+  assert.ok(Math.max(...ys) <= 300 - t + 1e-6);
+  // Where it meets the wall above it's at the plate; out front the eave drops below it.
+  const atWall = r.faces.flatMap((f) => f.pts).filter((q) => Math.abs(q[2] - (300 - t)) < 1e-6);
+  assert.ok(atWall.length && atWall.every((q) => Math.abs(q[1] - 144) < 1e-6));
+  // Hip both ends, so no gable faces.
+  assert.ok(!r.faces.some((f) => f.kind === 'gable'));
+  const checks = houseChecks(p);
+  assert.ok(checks.some((c) => c.rule === 'Lower roof drains toward the wall above'));
+  const lines = houseMaterials(p);
+  assert.ok(lines.some((l) => l.item.startsWith('Apron') && l.basis.includes('back slope')));
+  assert.ok(lines.some((l) => l.item.includes('Hip truss') || l.item.includes('hip rafter')));
+  assert.ok(houseScene(p).faces.some((f) => f.roofPart && Math.min(...f.pts.map((q) => q[1])) < 150));
+});
+
+test('a gable lower roof with its ridge out from the wall: gable at the free end only, the peak against the wall checked against windows', () => {
+  let p = updateStorey(deep(), 'ground', { lowerRoof: { type: 'gable', pitch: 6, ridge: 'out' } });
+  const [r] = pitchedLowerRoofs(p, 'ground');
+  assert.equal(r.parallel, false);
+  assert.equal(r.calc.wings[0].alongX, false);
+  assert.deepEqual(r.calc.wings[0].ends, ['gable', 'butt']);
+  assert.equal(r.faces.filter((f) => f.kind === 'gable').length, 1);
+  // A window in the middle of the upper front wall: the 6/12 gable's peak (~10' up) runs into it.
+  p = { ...p, openings: [{ id: 'win', wallId: 'n', kind: 'window', offset: 240, width: 36, height: 48, sill: 34 }] };
+  assert.ok(houseChecks(p).some((c) => c.rule === 'Lower roof clears the windows above' && c.targetId === 'win'));
+  // At the far corner of the wall the roof is at the plate: a window there is clear.
+  p = { ...p, openings: [{ id: 'win', wallId: 'n', kind: 'window', offset: 30, width: 24, height: 48, sill: 34 }] };
+  assert.ok(!houseChecks(p).some((c) => c.rule === 'Lower roof clears the windows above'));
 });
